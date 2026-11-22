@@ -1,11 +1,12 @@
 'use client';
 
-import { MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Table2 } from 'lucide-react';
+import { MessageSquare, PanelLeftClose, PanelLeftOpen, Table2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { SettingsDialog } from './settings-dialog';
 import { ThemeToggle } from './theme-toggle';
 
 const LINKS = [
@@ -43,10 +44,7 @@ export function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         <div data-testid="recent-chats" className="mt-2" />
       </section>
       <div className="flex items-center justify-between gap-2">
-        <Button variant="ghost" className="min-h-11 flex-1 justify-start gap-2">
-          <Settings className="size-4" aria-hidden />
-          Settings
-        </Button>
+        <SettingsDialog />
         <ThemeToggle />
       </div>
     </div>

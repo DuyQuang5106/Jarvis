@@ -33,3 +33,8 @@ test('/login có form email + mật khẩu và không có link đăng ký', asyn
   await expect(page.getByRole('link')).toHaveCount(0);
   await expect(page.getByText(/đăng ký|sign up|register/i)).toHaveCount(0);
 });
+
+test('/api/export không có phiên trả 401 (dữ liệu riêng tư)', async ({ request }) => {
+  const res = await request.get('/api/export');
+  expect(res.status()).toBe(401);
+});

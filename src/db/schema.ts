@@ -223,23 +223,26 @@ export const aiUsage = pgTable('ai_usage', {
   count: integer('count').notNull().default(0),
 }).enableRLS();
 
-export const TABLE_NAMES: readonly string[] = [
-  'areas',
-  'academic_details',
-  'project_details',
-  'topics',
-  'milestones',
-  'blockers',
-  'tasks',
-  'assessments',
-  'notes',
-  'activity_logs',
-  'conversations',
-  'messages',
-  'pending_actions',
-  'settings',
-  'ai_usage',
-];
+/** Every table by its SQL name: the single source for TABLE_NAMES, export and RLS checks. */
+export const TABLES = {
+  areas,
+  academic_details: academicDetails,
+  project_details: projectDetails,
+  topics,
+  milestones,
+  blockers,
+  tasks,
+  assessments,
+  notes,
+  activity_logs: activityLogs,
+  conversations,
+  messages,
+  pending_actions: pendingActions,
+  settings,
+  ai_usage: aiUsage,
+} as const;
+
+export const TABLE_NAMES: readonly string[] = Object.keys(TABLES);
 
 export type AreaRow = typeof areas.$inferSelect;
 export type AcademicDetailsRow = typeof academicDetails.$inferSelect;
