@@ -12,6 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "ai:probe": "tsx scripts/ai-probe.ts",
+    "verify:rls": "tsx scripts/verify-rls.ts",
     "dev:e2e": "cross-env E2E=1 PGLITE_DIR=memory AUTH_MODE=dev DB_DRIVER=pglite AI_PROVIDER=mock AI_ACTION_MODE=tools AI_API_KEY=e2e-secret-ai-key DATABASE_URL=postgres://e2e-secret-db-url next dev -p 3100",
     "test:e2e": "playwright test"
   },
