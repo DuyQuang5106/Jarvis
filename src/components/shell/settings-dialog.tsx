@@ -1,7 +1,7 @@
 'use client';
 
 import { Download, LogOut, Settings } from 'lucide-react';
-import { useId, useState, useTransition } from 'react';
+import { useId, useRef, useState, useTransition } from 'react';
 import { getSettingsAction, updateSettingsAction } from '@/app/(app)/_actions/settings';
 import { signOut } from '@/app/login/actions';
 import { Button } from '@/components/ui/button';
@@ -17,25 +17,42 @@ export function SettingsDialog() {
   const [form, setForm] = useState<Form | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function onOpenChange(next: boolean) {
-    setOpen(next);
-    if (!next) return;
+  const loadId = useRef(0);
+
+  async function load() {
+    const id = ++loadId.current;
     setError(null);
     setSaved(false);
     setForm(null);
-    startTransition(async () => {
-      const res = await getSettingsAction();
-      if (!res.ok) return setError(res.error);
-      const s = res.data;
-      setForm({
-        termGoal: s.termGoal ?? '',
-        staleAfterDays: String(s.staleAfterDays),
-        defaultFocusMinutes: s.defaultFocusMinutes === null ? '' : String(s.defaultFocusMinutes),
-        timezone: s.timezone,
-      });
+    setLoading(true);
+    let res: Awaited<ReturnType<typeof getSettingsAction>>;
+    try {
+      res = await getSettingsAction();
+    } catch {
+      res = { ok: false, error: 'Không tải được cài đặt, thử lại.' };
+    }
+    if (id !== loadId.current) return; // dialog closed or a newer load started
+    setLoading(false);
+    if (!res.ok) return setError(res.error);
+    const s = res.data;
+    setForm({
+      termGoal: s.termGoal ?? '',
+      staleAfterDays: String(s.staleAfterDays),
+      defaultFocusMinutes: s.defaultFocusMinutes === null ? '' : String(s.defaultFocusMinutes),
+      timezone: s.timezone,
     });
+  }
+
+  function onOpenChange(next: boolean) {
+    setOpen(next);
+    if (next) void load();
+    else {
+      loadId.current++;
+      setLoading(false);
+    }
   }
 
   function set<K extends keyof Form>(key: K, value: string) {
@@ -96,10 +113,16 @@ export function SettingsDialog() {
             <span className="text-sm font-medium">Giao diện</span>
             <ThemeToggle />
           </div>
+          {loading && <p role="status" className="text-sm text-muted-foreground">Đang tải…</p>}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          {!ready && !loading && error && (
+            <Button type="button" variant="outline" onClick={() => void load()} className="min-h-11 w-full">
+              Thử lại
+            </Button>
+          )}
           {saved && <p role="status" className="text-sm text-muted-foreground">Đã lưu</p>}
           <Button type="submit" disabled={!ready || pending} className="min-h-11 w-full">
-            {pending && ready ? 'Đang lưu…' : 'Lưu'}
+            {pending ? 'Đang lưu…' : 'Lưu'}
           </Button>
         </form>
         <div className="flex flex-col gap-2 border-t pt-4">
