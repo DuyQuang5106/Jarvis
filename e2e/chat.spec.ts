@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Response } from '@playwright/test';
 import { resetDb } from './helpers';
 
 test.beforeEach(async ({ request }) => { await resetDb(request, { seed: true }); });
@@ -52,9 +52,13 @@ test('sửa bằng UI rồi mở chat mới vẫn đọc state mới (criterion 
   const drawer = page.getByRole('dialog', { name: 'Mobile Programming' });
   await drawer.getByRole('tab', { name: 'Topics' }).click();
   await drawer.getByPlaceholder('Thêm topic…').fill('Navigation');
+  const isAction = (r: Response) => r.request().method() === 'POST' && !!r.request().headers()['next-action'];
+  // Wait for the add, then for the status save: otherwise the add's response can satisfy the wait for the
+  // save, and the full page load below aborts the save's request.
+  const added = page.waitForResponse(isAction);
   await page.keyboard.press('Enter');
-  // Wait for the status save: a full page load right after the change can abort the server action's request.
-  const saved = page.waitForResponse((r) => r.request().method() === 'POST' && !!r.request().headers()['next-action']);
+  await added;
+  const saved = page.waitForResponse(isAction);
   await drawer.getByRole('listitem').filter({ hasText: 'Navigation' }).getByLabel('Trạng thái').selectOption('practiced');
   await saved;
   await page.goto('/chat');
