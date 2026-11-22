@@ -12,6 +12,8 @@ export async function createSupabaseServerClient() {
   return createServerClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
     cookies: {
       getAll: () => cookieStore.getAll(),
+      // The no-cache `headers` arg is not applied here: Server Components/Actions have no response object to set
+      // it on. Responses carrying refreshed cookies are produced by the proxy, which does apply them.
       setAll: (list) => {
         try {
           for (const { name, value, options } of list) cookieStore.set(name, value, options);
