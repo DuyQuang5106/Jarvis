@@ -1,6 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AreaKind } from '@/db/enums';
@@ -11,7 +13,7 @@ import { BlockerList } from './blocker-list';
 import { ActivityTimeline } from './activity-timeline';
 import { MilestoneList } from './milestone-list';
 import { NotesPanel } from './notes-panel';
-import { OverviewForm } from './overview-form';
+import { OverviewDirtyContext, OverviewForm } from './overview-form';
 import { ProjectHealth } from './project-health';
 import { TaskList } from './task-list';
 import { TopicList } from './topic-list';
@@ -50,24 +52,66 @@ const KIND_SECTIONS: Record<AreaKind, string[]> = {
 const CONTENT_CLASS =
   'gap-0 overflow-hidden data-[side=right]:w-full data-[side=right]:sm:max-w-none data-[side=right]:md:w-[40rem] data-[side=right]:md:max-w-[40rem]';
 
+/**
+ * Closing with X, Escape or the overlay asks first while the overview has unsaved edits (ruling P1-R9).
+ * Browser back changes the URL directly and unmounts the drawer; those edits are dropped.
+ */
 function DrawerShell({ title, children }: { title: string; children: ReactNode }) {
   const { closeItem } = useContextParams();
+  const dirty = useRef(false);
+  const [confirming, setConfirming] = useState(false);
+  const reportDirty = useCallback((d: boolean) => {
+    dirty.current = d;
+  }, []);
+
+  function requestClose() {
+    if (dirty.current) setConfirming(true);
+    else closeItem();
+  }
+
   return (
-    <Sheet open onOpenChange={(open) => !open && closeItem()}>
-      <SheetContent
-        className={CONTENT_CLASS}
-        onEscapeKeyDown={(e) => {
-          // Escape inside an inline edit cancels that edit only, not the whole drawer.
-          if (e.target instanceof Element && e.target.closest('[data-inline-edit]')) e.preventDefault();
-        }}
-      >
-        <SheetHeader className="pr-12">
-          <SheetTitle className="text-lg">{title}</SheetTitle>
-          <SheetDescription className="sr-only">Chi tiết mục</SheetDescription>
-        </SheetHeader>
-        {children}
-      </SheetContent>
-    </Sheet>
+    <OverviewDirtyContext.Provider value={reportDirty}>
+      <Sheet open onOpenChange={(open) => !open && requestClose()}>
+        <SheetContent
+          className={CONTENT_CLASS}
+          onEscapeKeyDown={(e) => {
+            // Escape inside an inline edit cancels that edit only, not the whole drawer.
+            if (e.target instanceof Element && e.target.closest('[data-inline-edit]')) e.preventDefault();
+          }}
+        >
+          <SheetHeader className="pr-14">
+            <SheetTitle className="text-lg">{title}</SheetTitle>
+            <SheetDescription className="sr-only">Chi tiết mục</SheetDescription>
+          </SheetHeader>
+          {children}
+        </SheetContent>
+      </Sheet>
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent role="alertdialog" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Bỏ thay đổi chưa lưu?</DialogTitle>
+            <DialogDescription>Các thay đổi ở Tổng quan chưa được lưu.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="min-h-11 px-4" onClick={() => setConfirming(false)}>
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="min-h-11 px-4"
+              onClick={() => {
+                setConfirming(false);
+                dirty.current = false;
+                closeItem();
+              }}
+            >
+              Bỏ thay đổi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </OverviewDirtyContext.Provider>
   );
 }
 

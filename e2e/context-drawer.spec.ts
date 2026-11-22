@@ -212,3 +212,69 @@ test('item không tồn tại hiện thông báo', async ({ page }) => {
 });
 
 // The project `Milestone` select on a task is covered in context-sections.spec.ts.
+
+test('Không gửi cho AI của mục lưu ngay khi bật, không cần bấm Lưu', async ({ page }) => {
+  const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
+  await drawer.getByRole('switch', { name: 'Không gửi cho AI' }).click();
+  await expect(drawer.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect(drawer.getByText('Đang lưu…')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
+  await expect(page.getByRole('listitem').filter({ hasText: 'Computer Networks' }).getByLabel('Không gửi cho AI')).toBeVisible();
+  await page.reload();
+  await page.getByRole('listitem').filter({ hasText: 'Computer Networks' }).click();
+  await expect(drawer.getByRole('switch', { name: 'Không gửi cho AI' })).toBeChecked();
+});
+
+test('Không gửi cho AI của mục lỗi khi lưu: về lại giá trị cũ và báo lỗi', async ({ page }) => {
+  const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
+  await page.route('**/context**', (route) => (route.request().method() === 'POST' ? route.abort() : route.continue()));
+  await drawer.getByRole('switch', { name: 'Không gửi cho AI' }).click();
+  await expect(drawer.getByRole('alert')).toBeVisible();
+  await expect(drawer.getByRole('switch', { name: 'Không gửi cho AI' })).not.toBeChecked();
+});
+
+test('đóng drawer khi Tổng quan có thay đổi chưa lưu thì hỏi lại', async ({ page }, testInfo) => {
+  const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
+  const confirm = page.getByRole('alertdialog', { name: 'Bỏ thay đổi chưa lưu?' });
+  await drawer.getByLabel('Việc tiếp theo').fill('Chưa lưu');
+
+  await page.keyboard.press('Escape');
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Hủy' }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(drawer.getByLabel('Việc tiếp theo')).toHaveValue('Chưa lưu');
+
+  await drawer.getByRole('button', { name: 'Close' }).click();
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Hủy' }).click();
+  await expect(drawer).toBeVisible();
+
+  if (testInfo.project.name === 'desktop') {
+    // The overlay is the strip left of the 40rem drawer.
+    await page.mouse.click(10, 300);
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Hủy' }).click();
+    await expect(drawer).toBeVisible();
+  }
+
+  await page.keyboard.press('Escape');
+  await confirm.getByRole('button', { name: 'Bỏ thay đổi' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).not.toHaveURL(/item=/);
+  await page.getByRole('listitem').filter({ hasText: 'Computer Networks' }).click();
+  await expect(drawer.getByLabel('Việc tiếp theo')).toHaveValue('');
+
+  // A clean form closes straight away.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('lưu lỗi thì thay đổi vẫn tính là chưa lưu khi đóng', async ({ page }) => {
+  const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
+  await drawer.getByLabel('Tên', { exact: true }).fill('x'.repeat(201));
+  await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
+  await expect(drawer.getByRole('alert')).toContainText('tối đa 200');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('alertdialog', { name: 'Bỏ thay đổi chưa lưu?' })).toBeVisible();
+});
