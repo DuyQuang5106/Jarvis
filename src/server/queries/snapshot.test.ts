@@ -3,9 +3,10 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, expect, test } from 'vitest';
 import type { Db } from '@/db/client';
 import type { AreaStatus } from '@/db/enums';
-import { areas } from '@/db/schema';
+import { areas, settings } from '@/db/schema';
 import { createTestDb } from '@/db/testing';
 import { archiveArea, createArea, updateArea } from '../services/areas';
+import { getSettings, updateSettings } from '../services/settings';
 import { assessmentService, blockerService, milestoneService, taskService, topicService } from '../services/entities';
 import { getPortfolioSnapshot } from './snapshot';
 
@@ -91,4 +92,62 @@ test('missing, lastOrigin, bỏ area đã lưu trữ, giữ area ai_excluded', a
   expect(by(gone.id)).toBeUndefined();
   expect(by(seeded.id)).toMatchObject({ lastOrigin: 'seed', missing: ['status_unknown', 'no_topics', 'no_assessment_date'] });
   expect(by(edited.id)).toMatchObject({ lastOrigin: 'manual', aiExcluded: true, missing: ['no_next_action', 'no_topics', 'no_assessment_date'] });
+});
+
+test('task và assessment của area đã lưu trữ không vào cửa sổ', async () => {
+  const kept = await createArea(db, { kind: 'academic', name: 'Còn học' }, manual);
+  const gone = await createArea(db, { kind: 'academic', name: 'Đã lưu trữ' }, manual);
+  for (const a of [kept, gone]) {
+    await taskService.create(db, { areaId: a.id, title: `task ${a.name}`, dueDate: '2026-11-24' }, manual);
+    await assessmentService.create(db, { areaId: a.id, title: `thi ${a.name}`, dueDate: '2026-11-25' }, manual);
+  }
+  await archiveArea(db, gone.id, manual);
+  const snap = await getPortfolioSnapshot(db, NOW);
+  expect(snap.dueTasks.map((t) => t.title)).toEqual(['task Còn học']);
+  expect(snap.upcomingAssessments.map((x) => x.title)).toEqual(['thi Còn học']);
+});
+
+test('staleAfterDays khác mặc định đổi isStale', async () => {
+  await updateSettings(db, { staleAfterDays: 3 });
+  const mk = async (name: string, iso: string) => { const a = await createArea(db, { kind: 'project', name, status: 'active' }, manual); await setUpdatedAt(a.id, iso); return a; };
+  const d4 = await mk('bốn ngày', '2026-11-18T03:00:00Z');
+  const d3 = await mk('ba ngày', '2026-11-19T03:00:00Z');
+  const snap = await getPortfolioSnapshot(db, NOW);
+  const by = (id: string) => snap.areas.find((a) => a.id === id)!;
+  expect([by(d4.id).isStale, by(d3.id).isStale]).toEqual([true, false]);
+});
+
+test('múi giờ khác mặc định đổi today và isStale', async () => {
+  await getSettings(db);
+  await db.update(settings).set({ timezone: 'Asia/Tokyo' }).where(eq(settings.id, 1));
+  const late = new Date('2026-11-22T16:30:00Z'); // 23:30 22/11 ở VN, 01:30 23/11 ở Tokyo
+  const a = await createArea(db, { kind: 'project', name: 'Tokyo', status: 'active' }, manual);
+  await setUpdatedAt(a.id, '2026-11-15T14:30:00Z'); // 21:30 15/11 ở VN, 23:30 15/11 ở Tokyo
+  const snap = await getPortfolioSnapshot(db, late);
+  expect(snap).toMatchObject({ today: '2026-11-23', timezone: 'Asia/Tokyo', weekday: 'Thứ Hai' });
+  expect(snap.areas[0]).toMatchObject({ daysSinceUpdate: 8, isStale: true });
+
+  await db.update(settings).set({ timezone: 'Asia/Ho_Chi_Minh' }).where(eq(settings.id, 1));
+  const vn = await getPortfolioSnapshot(db, late);
+  expect(vn.today).toBe('2026-11-22');
+  expect(vn.areas[0]).toMatchObject({ daysSinceUpdate: 7, isStale: false });
+});
+
+test('deadlineDaysLeft do server tính', async () => {
+  const soon = await createArea(db, { kind: 'project', name: 'Sắp', deadlineDate: '2026-12-01' }, manual);
+  const late = await createArea(db, { kind: 'project', name: 'Trễ', deadlineDate: '2026-11-20' }, manual);
+  const none = await createArea(db, { kind: 'project', name: 'Không hạn' }, manual);
+  const snap = await getPortfolioSnapshot(db, NOW);
+  const by = (id: string) => snap.areas.find((a) => a.id === id)!;
+  expect([by(soon.id).deadlineDaysLeft, by(late.id).deadlineDaysLeft, by(none.id).deadlineDaysLeft]).toEqual([9, -2, null]);
+});
+
+test('dự án active thiếu next action và milestone được đánh dấu', async () => {
+  const bare = await createArea(db, { kind: 'project', name: 'Trống', status: 'active' }, manual);
+  const full = await createArea(db, { kind: 'project', name: 'Đủ', status: 'active', nextAction: 'Viết login' }, manual);
+  await milestoneService.create(db, { areaId: full.id, title: 'Beta' }, manual);
+  const snap = await getPortfolioSnapshot(db, NOW);
+  const by = (id: string) => snap.areas.find((a) => a.id === id)!;
+  expect(by(bare.id).missing).toEqual(['no_next_action', 'no_milestones']);
+  expect(by(full.id).missing).toEqual([]);
 });

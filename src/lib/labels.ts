@@ -28,7 +28,7 @@ export const TOPIC_STATUS_LABEL: Record<TopicStatus, string> = {
 };
 
 export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  todo: 'To do',
+  todo: 'Todo',
   doing: 'Doing',
   done: 'Done',
   blocked: 'Blocked',
