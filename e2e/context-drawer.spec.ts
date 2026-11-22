@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { resetDb } from './helpers';
 
 test.beforeEach(async ({ request, page }) => {
@@ -304,4 +304,18 @@ test('Enter hai lần nhanh khi thêm task chỉ tạo một task', async ({ pag
   await expect(input).toHaveValue('');
   await page.reload();
   await expect(page.getByRole('dialog').getByRole('listitem')).toHaveCount(1);
+});
+
+test('nút đóng drawer và hộp thoại thêm mục rộng ít nhất 44px', async ({ page }) => {
+  const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
+  // Dialogs zoom in from 95%: poll until the open animation has settled.
+  const atLeast44 = async (button: Locator) => {
+    await expect.poll(async () => (await button.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(43.5);
+    await expect.poll(async () => (await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(43.5);
+  };
+  await atLeast44(drawer.getByRole('button', { name: 'Close' }));
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
+  await page.getByRole('button', { name: 'Thêm' }).click();
+  await atLeast44(page.getByRole('dialog').getByRole('button', { name: 'Close' }));
 });

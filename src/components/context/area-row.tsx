@@ -36,7 +36,7 @@ export function AreaRow({ area, onOpen }: { area: AreaSummary; onOpen: (a: AreaS
           {area.aiExcluded && <LockIcon aria-label="Không gửi cho AI" className="size-4 shrink-0 text-muted-foreground" />}
           <Badge variant="secondary">{AREA_STATUS_LABEL[area.status]}</Badge>
         </span>
-        {progress && <span className="text-sm text-muted-foreground">{progress}</span>}
+        {progress && <span className="min-w-0 text-sm wrap-anywhere text-muted-foreground">{progress}</span>}
         <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span>Cập nhật {dayMonth.format(new Date(area.updatedAt))}</span>
           {area.missing.map((m) => (

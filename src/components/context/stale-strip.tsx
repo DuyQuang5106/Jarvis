@@ -14,7 +14,7 @@ export function StaleStrip({ areas, onOpen }: { areas: AreaSummary[]; onOpen: (a
             key={a.id}
             type="button"
             onClick={() => onOpen(a)}
-            className="min-h-11 rounded-full border bg-background px-3 text-sm"
+            className="min-h-11 max-w-full min-w-0 rounded-full border bg-background px-3 text-sm wrap-anywhere"
           >
             {a.name} · {a.daysSinceUpdate} ngày
           </button>
