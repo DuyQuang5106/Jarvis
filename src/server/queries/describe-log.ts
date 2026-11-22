@@ -93,8 +93,8 @@ export function formatFieldValue(field: string, value: unknown): string | null {
   if (Array.isArray(value)) return value.length === 0 ? null : value.map((v) => formatFieldValue(field, v) ?? '').join(', ');
   if (typeof value === 'string') {
     if (value === '') return null;
-    const label = ENUM_LABEL[field]?.[value];
-    if (label) return label;
+    const labels = Object.hasOwn(ENUM_LABEL, field) ? ENUM_LABEL[field] : undefined;
+    if (labels && Object.hasOwn(labels, value)) return labels[value];
     if (DATE_ONLY.test(value)) return formatDateFullVi(value);
     if (TIMESTAMP.test(value)) return `${formatDateTimeVi(value, APP_TZ)}`;
     return value;

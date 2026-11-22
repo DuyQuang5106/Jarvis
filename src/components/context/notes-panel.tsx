@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { createEntityAction, deleteEntityAction, updateEntityAction } from '@/app/(app)/_actions/entities';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -9,12 +10,28 @@ import type { NoteRow } from '@/db/schema';
 import { DeleteButton, RowStatus } from './row-controls';
 
 /** A note typed in this session. It gets an `id` after its first save and keeps its editor across saves. */
-type Draft = { key: string; id: string | null; empty: boolean };
+type Draft = { key: string; id: string | null; empty: boolean; text?: string; aiExcluded?: boolean; error?: string };
+
+/**
+ * Edits whose save failed after their editor was gone (drawer closed or tab switched). They are kept here,
+ * outside React state, so reopening Notes restores the text with its error instead of losing it.
+ */
+const unsaved = new Map<string, Draft[]>();
+
+function stash(areaId: string, d: Draft) {
+  unsaved.set(areaId, [d, ...(unsaved.get(areaId) ?? []).filter((x) => x.key !== d.key)]);
+}
+
+const SAVE_FAILED = 'Không lưu được ghi chú.';
 
 export const AUTOSAVE_MS = 1500;
 
 export function NotesPanel({ areaId, notes }: { areaId: string; notes: NoteRow[] }) {
-  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [drafts, setDrafts] = useState<Draft[]>(() => {
+    const restored = unsaved.get(areaId) ?? [];
+    unsaved.delete(areaId);
+    return restored;
+  });
   const [gone, setGone] = useState<Set<string>>(new Set());
 
   function add() {
@@ -43,7 +60,8 @@ export function NotesPanel({ areaId, notes }: { areaId: string; notes: NoteRow[]
               key={d.key}
               areaId={areaId}
               note={notes.find((n) => n.id === d.id)}
-              autoFocus={d.id === null}
+              draft={d}
+              autoFocus={d.id === null && d.text === undefined}
               onCreated={(id) => patch(d.key, { id })}
               onEmpty={(empty) => patch(d.key, { empty })}
               onRemoved={() => {
@@ -69,6 +87,7 @@ export function NotesPanel({ areaId, notes }: { areaId: string; notes: NoteRow[]
 function NoteEditor({
   areaId,
   note,
+  draft,
   autoFocus,
   onCreated,
   onEmpty,
@@ -76,22 +95,26 @@ function NoteEditor({
 }: {
   areaId: string;
   note?: NoteRow;
+  draft?: Draft;
   autoFocus?: boolean;
   onCreated?: (id: string) => void;
   onEmpty?: (empty: boolean) => void;
   onRemoved: () => void;
 }) {
   const uid = useId();
-  const [text, setText] = useState(note?.text ?? '');
-  const [excluded, setExcluded] = useState(note?.aiExcluded ?? false);
+  const [text, setText] = useState(draft?.text ?? note?.text ?? '');
+  const [excluded, setExcluded] = useState(draft?.aiExcluded ?? note?.aiExcluded ?? false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(draft?.error ?? null);
   const [pending, startTransition] = useTransition();
   const [deleting, startDelete] = useTransition();
 
   const textRef = useRef(text);
   const excludedRef = useRef(excluded);
-  const idRef = useRef<string | null>(note?.id ?? null);
+  const serverExcluded = useRef(note?.aiExcluded ?? false);
+  const idRef = useRef<string | null>(draft?.id ?? note?.id ?? null);
+  const mounted = useRef(true);
+  const keyRef = useRef(draft?.key ?? note?.id ?? crypto.randomUUID());
   const lastSaved = useRef(note?.text ?? '');
   const chain = useRef<Promise<void>>(Promise.resolve());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,16 +126,28 @@ function NoteEditor({
       const next = textRef.current;
       if (removed.current || next.trim() === '' || next === lastSaved.current) return;
       setError(null);
-      const res = idRef.current
-        ? await updateEntityAction('note', idRef.current, { text: next })
-        : await createEntityAction('note', { areaId, text: next, aiExcluded: excludedRef.current });
+      const sentExcluded = excludedRef.current;
+      let res: Awaited<ReturnType<typeof createEntityAction>>;
+      try {
+        res = idRef.current
+          ? await updateEntityAction('note', idRef.current, { text: next })
+          : await createEntityAction('note', { areaId, text: next, aiExcluded: sentExcluded });
+      } catch {
+        res = { ok: false, error: SAVE_FAILED };
+      }
       if (!res.ok) {
-        setError(res.error);
+        if (mounted.current) setError(res.error);
+        else {
+          // The editor is gone: tell the user and keep the text for when Notes is opened again.
+          toast.error(`${res.error} Nội dung được giữ lại trong mục Notes.`);
+          stash(areaId, { key: keyRef.current, id: idRef.current, empty: false, text: next, aiExcluded: excludedRef.current, error: res.error });
+        }
         return;
       }
       lastSaved.current = next;
       if (!idRef.current) {
         idRef.current = res.data.id;
+        serverExcluded.current = sentExcluded;
         onCreated?.(res.data.id);
       }
       setSaved(textRef.current === next);
@@ -139,37 +174,57 @@ function NoteEditor({
 
   // Closing the drawer or switching tab must not lose a pending edit.
   useEffect(
-    () => () => {
+    () => {
+      mounted.current = true;
+      return () => {
+        mounted.current = false;
       if (timer.current) clearTimeout(timer.current);
       void persist();
+      };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
+  /** Runs after any save in flight, so a toggle made during a create is applied to the new note. */
   function toggleExcluded(next: boolean) {
     setExcluded(next);
     excludedRef.current = next;
-    if (idRef.current) {
-      const id = idRef.current;
-      startTransition(async () => {
-        const res = await updateEntityAction('note', id, { aiExcluded: next });
-        if (!res.ok) setError(res.error);
+    startTransition(async () => {
+      chain.current = chain.current.then(async () => {
+        const id = idRef.current;
+        const want = excludedRef.current;
+        if (!id || removed.current || want === serverExcluded.current) return;
+        let res: Awaited<ReturnType<typeof updateEntityAction>>;
+        try {
+          res = await updateEntityAction('note', id, { aiExcluded: want });
+        } catch {
+          res = { ok: false, error: SAVE_FAILED };
+        }
+        if (res.ok) serverExcluded.current = want;
+        else if (mounted.current) setError(res.error);
       });
-    }
+      await chain.current;
+    });
   }
 
   function remove() {
     removed.current = true;
     if (timer.current) clearTimeout(timer.current);
-    const id = idRef.current;
-    if (!id) {
-      onRemoved();
-      return;
-    }
     startDelete(async () => {
+      // A create may still be in flight: wait for it so the note it makes is deleted too.
       await chain.current;
-      const res = await deleteEntityAction('note', id);
+      const id = idRef.current;
+      if (!id) {
+        onRemoved();
+        return;
+      }
+      let res: Awaited<ReturnType<typeof deleteEntityAction>>;
+      try {
+        res = await deleteEntityAction('note', id);
+      } catch {
+        res = { ok: false, error: 'Không xóa được ghi chú.' };
+      }
       if (res.ok) onRemoved();
       else {
         removed.current = false;
