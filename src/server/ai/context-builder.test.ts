@@ -129,6 +129,24 @@ test('recentLogs: note bị loại rồi xóa → bỏ mọi log của note đó
   ]);
 });
 
+test('recentLogs: note đã chuyển sang mục bị loại khỏi AI → bỏ log của note đó ở mục cũ', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Database', status: 'active' }, manual);
+  const secret = await createArea(db, { kind: 'project', name: 'Dự án kín', status: 'active', aiExcluded: true }, manual);
+  const note = await noteService.create(db, { areaId: a.id, text: 'chi tiết hợp đồng' }, manual);
+  await noteService.update(db, note.id, { areaId: secret.id }, manual);
+  const ctx = await build('Database');
+  expect(ctx.json).not.toContain('chi tiết hợp đồng');
+  expect(ctx.state.details[0].recentLogs.map((l) => l.title)).toEqual(['Tạo mục “Database”']);
+});
+
+test('staleAreaIds: tính lại top 3 từ các mục không bị loại', async () => {
+  await createArea(db, { kind: 'project', name: 'A kín', status: 'active', aiExcluded: true }, manual);
+  const b = await createArea(db, { kind: 'project', name: 'B', status: 'active' }, manual);
+  const c = await createArea(db, { kind: 'project', name: 'C', status: 'active' }, manual);
+  const d = await createArea(db, { kind: 'project', name: 'D', status: 'active' }, manual);
+  expect((await build('hôm nay')).state.staleAreaIds).toEqual([b.id, c.id, d.id]);
+});
+
 test('chi tiết: chỉ 10 note và 20 log mới nhất, giữ đúng các trường', async () => {
   const a = await createArea(db, { kind: 'academic', name: 'Database', status: 'active', academic: { term: 'HK1', credits: 3 } }, manual);
   for (let i = 0; i < 12; i++) await noteService.create(db, { areaId: a.id, text: `note ${i}` }, manual);

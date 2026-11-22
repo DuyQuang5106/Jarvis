@@ -73,6 +73,15 @@ const TASK_WINDOW_DAYS = 14;
 const ASSESSMENT_WINDOW_DAYS = 21;
 const MAX_STALE = 3;
 
+/** The open areas longest without an update (at most MAX_STALE), longest first. */
+export function pickStaleAreaIds(summaries: AreaSummary[]): string[] {
+  return summaries
+    .filter((s) => s.status !== 'completed' && s.status !== 'on_hold')
+    .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate || a.name.localeCompare(b.name, 'vi'))
+    .slice(0, MAX_STALE)
+    .map((s) => s.id);
+}
+
 function group<T extends { areaId: string }>(rows: T[]): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const r of rows) {
@@ -194,11 +203,7 @@ export async function getPortfolioSnapshot(db: DbOrTx, now: Date): Promise<Portf
     .filter((x) => x.daysLeft >= 0 && x.daysLeft <= ASSESSMENT_WINDOW_DAYS)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || byTitle(a, b));
 
-  const staleAreaIds = summaries
-    .filter((s) => s.status !== 'completed' && s.status !== 'on_hold')
-    .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate || a.name.localeCompare(b.name, 'vi'))
-    .slice(0, MAX_STALE)
-    .map((s) => s.id);
+  const staleAreaIds = pickStaleAreaIds(summaries);
 
   return {
     today,

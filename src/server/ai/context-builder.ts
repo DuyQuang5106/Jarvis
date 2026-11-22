@@ -13,7 +13,7 @@ import { activityLogs, areas, notes, type ActivityLogRow } from '@/db/schema';
 import { daysUntil } from '@/lib/dates';
 import { getAreaDetails, type AreaDetails } from '../queries/area-details';
 import { describeLog } from '../queries/describe-log';
-import { getPortfolioSnapshot, type AreaSummary, type PortfolioSnapshot } from '../queries/snapshot';
+import { getPortfolioSnapshot, pickStaleAreaIds, type AreaSummary, type PortfolioSnapshot } from '../queries/snapshot';
 import { truncateState } from './context-truncate';
 import { matchAreas } from './match-areas';
 
@@ -91,10 +91,10 @@ const snap = (j: unknown): Record<string, unknown> =>
   j && typeof j === 'object' && !Array.isArray(j) ? (j as Record<string, unknown>) : {};
 
 /**
- * Note ids whose logs must not reach the model: the note is aiExcluded now, or the newest
- * snapshot of its latest log says so (covers deleted notes). One query for all loaded logs.
+ * Note ids whose logs must not reach the model: the note is aiExcluded now or lives in an aiExcluded
+ * area now, or (deleted notes) the newest snapshot of its latest log says either. One query for all loaded logs.
  */
-async function privateNoteIds(db: DbOrTx, logs: ActivityLogRow[]): Promise<Set<string>> {
+async function privateNoteIds(db: DbOrTx, logs: ActivityLogRow[], excludedAreas: Set<string>): Promise<Set<string>> {
   const ids = [...new Set(logs.filter((l) => l.entityType === 'note').map((l) => l.entityId))];
   if (ids.length === 0) return new Set();
   const rows = await db
@@ -103,14 +103,19 @@ async function privateNoteIds(db: DbOrTx, logs: ActivityLogRow[]): Promise<Set<s
       beforeJson: activityLogs.beforeJson,
       afterJson: activityLogs.afterJson,
       noteExcluded: notes.aiExcluded,
+      noteId: notes.id,
+      areaExcluded: areas.aiExcluded,
     })
     .from(activityLogs)
     .leftJoin(notes, eq(notes.id, activityLogs.entityId))
+    .leftJoin(areas, eq(areas.id, notes.areaId))
     .where(and(eq(activityLogs.entityType, 'note'), inArray(activityLogs.entityId, ids)))
     .orderBy(activityLogs.entityId, desc(activityLogs.createdAt), desc(activityLogs.id));
   const out = new Set<string>();
   for (const r of rows) {
-    if (r.noteExcluded === true || snap(r.afterJson ?? r.beforeJson).aiExcluded === true) out.add(r.entityId);
+    const last = snap(r.afterJson ?? r.beforeJson);
+    const deletedInExcludedArea = r.noteId === null && typeof last.areaId === 'string' && excludedAreas.has(last.areaId);
+    if (r.noteExcluded === true || r.areaExcluded === true || last.aiExcluded === true || deletedInExcludedArea) out.add(r.entityId);
   }
   return out;
 }
@@ -186,7 +191,7 @@ export async function buildContext(
     // Re-check privacy on the row actually loaded.
     (d): d is AreaDetails => d !== null && !d.area.aiExcluded,
   );
-  const hidden = await privateNoteIds(db, loaded.flatMap((d) => d.logs));
+  const hidden = await privateNoteIds(db, loaded.flatMap((d) => d.logs), excluded);
 
   const full: WorkspaceState = {
     now: {
@@ -201,7 +206,7 @@ export async function buildContext(
     areas: open.map(({ aiExcluded, ...rest }) => rest),
     dueTasks: snapshot.dueTasks.filter((t) => !excluded.has(t.areaId)),
     upcomingAssessments: snapshot.upcomingAssessments.filter((x) => !excluded.has(x.areaId)),
-    staleAreaIds: snapshot.staleAreaIds.filter((id) => !excluded.has(id)),
+    staleAreaIds: pickStaleAreaIds(open),
     details: loaded.map((d) => toDetail(d, snapshot.today, hidden)),
   };
 
