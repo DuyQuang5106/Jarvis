@@ -49,3 +49,14 @@ test('bấm một dòng đưa id lên URL', async ({ page }) => {
   await page.getByRole('listitem').filter({ hasText: 'Database' }).click();
   await expect(page).toHaveURL(/item=[0-9a-f-]{36}/);
 });
+
+test('mọi ô nhập và select trên /context có cỡ chữ từ 16px', async ({ page }) => {
+  await page.goto('/context');
+  await page.getByRole('button', { name: 'Thêm' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  const sizes = await page.evaluate(() =>
+    [...document.querySelectorAll('input, select, textarea')].map((el) => parseFloat(getComputedStyle(el).fontSize)),
+  );
+  expect(sizes.length).toBeGreaterThanOrEqual(4);
+  for (const s of sizes) expect(s).toBeGreaterThanOrEqual(16);
+});

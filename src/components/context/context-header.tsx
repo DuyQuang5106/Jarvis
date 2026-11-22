@@ -24,7 +24,7 @@ export function ContextHeader({
         <AddAreaDialog tab={tab} />
       </div>
       <Tabs value={tab} onValueChange={(v) => onTab(v as TabId)}>
-        <TabsList className="h-11">
+        <TabsList className="h-11 md:text-base">
           <TabsTrigger value="academic" className="min-h-11 px-4">Academic</TabsTrigger>
           <TabsTrigger value="projects" className="min-h-11 px-4">Projects</TabsTrigger>
         </TabsList>
@@ -37,7 +37,7 @@ export function ContextHeader({
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Tìm theo tên"
           aria-label="Tìm theo tên"
-          className="h-11 pl-9"
+          className="h-11 pl-9 md:text-base"
         />
       </div>
     </header>

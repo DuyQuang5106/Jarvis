@@ -79,7 +79,7 @@ export function AddAreaDialog({ tab }: { tab: TabId }) {
           </DialogHeader>
           <div className="space-y-1.5">
             <label htmlFor={`${uid}-name`} className="text-sm font-medium">Tên</label>
-            <Input id={`${uid}-name`} value={name} onChange={(e) => setName(e.target.value)} className="h-11" autoComplete="off" />
+            <Input id={`${uid}-name`} value={name} onChange={(e) => setName(e.target.value)} className="h-11 md:text-base" autoComplete="off" />
           </div>
           <div className="space-y-1.5">
             <label htmlFor={`${uid}-aliases`} className="text-sm font-medium">Tên gọi tắt</label>
@@ -88,7 +88,7 @@ export function AddAreaDialog({ tab }: { tab: TabId }) {
               value={aliases}
               onChange={(e) => setAliases(e.target.value)}
               placeholder="Cách nhau bằng dấu phẩy"
-              className="h-11"
+              className="h-11 md:text-base"
               autoComplete="off"
             />
           </div>
