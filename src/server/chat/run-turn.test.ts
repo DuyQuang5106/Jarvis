@@ -132,3 +132,13 @@ test('chạm trần trong ngày', async () => {
 test('database trống vẫn trả lời được', async () => {
   expect(textOf(await turn({ message: 'Hôm nay nên làm gì?' }))).toBe('MOCK_STATE today=2026-11-22 | ');
 });
+
+test('signal được chuyển xuống provider', async () => {
+  const ac = new AbortController();
+  let seen: AbortSignal | undefined;
+  const provider: AiProvider = {
+    async *stream(req: StreamRequest) { seen = req.signal; yield { type: 'text', delta: 'x' }; },
+  };
+  await Array.fromAsync(runChatTurn({ db, provider, actionMode: 'off', dailyCap: 200, now: NOW, signal: ac.signal }, { scope: { mode: 'auto' }, message: 'hi' }));
+  expect(seen).toBe(ac.signal);
+});

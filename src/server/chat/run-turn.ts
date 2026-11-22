@@ -14,7 +14,7 @@ export type TurnEvent =
   | { type: 'proposal'; pendingActionId: string } // emitted from Phase 3
   | { type: 'done'; assistantMessageId: string; contextRefs: ContextRef[]; summaryCount: number }
   | { type: 'error'; message: string };
-export type TurnDeps = { db: Db; provider: AiProvider; actionMode: 'tools' | 'json' | 'off'; dailyCap: number; now: Date };
+export type TurnDeps = { db: Db; provider: AiProvider; actionMode: 'tools' | 'json' | 'off'; dailyCap: number; now: Date; signal?: AbortSignal };
 export type TurnInput = { conversationId?: string; message?: string; scope: ContextScope; regenerate?: boolean };
 
 const MAX_MESSAGE = 8000;
@@ -92,7 +92,7 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
   ];
   let reply = '';
   try {
-    for await (const e of deps.provider.stream({ messages, maxOutputTokens: 1500 })) {
+    for await (const e of deps.provider.stream({ messages, maxOutputTokens: 1500, signal: deps.signal })) {
       if (e.type === 'text') {
         reply += e.delta;
         yield { type: 'text', delta: e.delta };
