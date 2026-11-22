@@ -26,14 +26,6 @@ export function TaskList({ details }: { details: AreaDetails }) {
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  const run: Run = (fn) => {
-    setError(null);
-    startTransition(async () => {
-      const res = await fn();
-      if (!res.ok) setError(res.error);
-    });
-  };
-
   function add(e: React.FormEvent) {
     e.preventDefault();
     const t = title.trim();
@@ -70,7 +62,7 @@ export function TaskList({ details }: { details: AreaDetails }) {
       ) : (
         <ul className="space-y-2">
           {tasks.map((t) => (
-            <TaskItem key={`${t.id}:${String(t.updatedAt)}`} task={t} milestones={milestones} run={run} />
+            <TaskItem key={`${t.id}:${String(t.updatedAt)}`} task={t} milestones={milestones} />
           ))}
         </ul>
       )}
@@ -78,8 +70,17 @@ export function TaskList({ details }: { details: AreaDetails }) {
   );
 }
 
-function TaskItem({ task, milestones, run }: { task: TaskRow; milestones: MilestoneRow[] | null; run: Run }) {
+function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRow[] | null }) {
   const uid = useId();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const run: Run = (fn) => {
+    setError(null);
+    startTransition(async () => {
+      const res = await fn();
+      if (!res.ok) setError(res.error);
+    });
+  };
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const done = task.status === 'done';
@@ -93,7 +94,7 @@ function TaskItem({ task, milestones, run }: { task: TaskRow; milestones: Milest
   }
 
   return (
-    <li className="space-y-2 rounded-lg border bg-card p-3">
+    <li aria-busy={pending} className="space-y-2 rounded-lg border bg-card p-3">
       <div className="flex items-center gap-2">
         <select
           aria-label="Trạng thái"
@@ -147,6 +148,8 @@ function TaskItem({ task, milestones, run }: { task: TaskRow; milestones: Milest
           </Button>
         )}
       </div>
+      {pending && <p className="text-xs text-muted-foreground">Đang lưu…</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <label htmlFor={`${uid}-due`} className="text-xs text-muted-foreground">Hạn</label>

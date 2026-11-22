@@ -37,6 +37,7 @@ test('thêm task, đổi trạng thái, xóa', async ({ page }) => {
   await page.keyboard.press('Enter');
   const item = drawer.getByRole('listitem').filter({ hasText: 'Làm lab subnetting' });
   await item.getByLabel('Trạng thái').selectOption('done');
+  await expect(drawer.getByRole('listitem').filter({ hasText: 'Làm lab subnetting' })).not.toHaveAttribute('aria-busy', 'true');
   await page.reload();
   await expect(drawer.getByRole('listitem').filter({ hasText: 'Làm lab subnetting' }).getByLabel('Trạng thái')).toHaveValue('done');
   await drawer.getByRole('listitem').filter({ hasText: 'Làm lab subnetting' }).getByRole('button', { name: 'Xóa' }).click();

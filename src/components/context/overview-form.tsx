@@ -196,7 +196,7 @@ export function OverviewForm({ details }: { details: AreaDetails }) {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={pending} className="min-h-11 px-5">Lưu</Button>
+        <Button type="submit" disabled={pending} className="min-h-11 px-5">{pending ? 'Đang lưu…' : 'Lưu'}</Button>
         {confirmArchive ? (
           <>
             <Button type="button" variant="destructive" disabled={pending} onClick={archive} className="min-h-11 px-4">
