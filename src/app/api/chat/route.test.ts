@@ -59,6 +59,18 @@ test('body quá 64 KB -> 400', async () => {
   expect((await post({ message: 'a'.repeat(70_000), scope: { mode: 'auto' } })).status).toBe(400);
 });
 
+test('content-length khai quá 64 KB -> 400 trước khi đọc body', async () => {
+  const req = new Request('http://localhost/api/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'content-length': String(64 * 1024 + 1) },
+    body: JSON.stringify({ message: 'x', scope: { mode: 'auto' } }),
+  });
+  const text = vi.spyOn(req, 'text');
+  const res = await POST(req);
+  expect(res.status).toBe(400);
+  expect(text).not.toHaveBeenCalled();
+});
+
 test('POST khác origin -> 403', async () => {
   const res = await post({ message: 'x', scope: { mode: 'auto' } }, { headers: { origin: 'http://evil.example' } });
   expect(res.status).toBe(403);

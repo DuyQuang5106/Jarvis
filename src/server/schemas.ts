@@ -201,6 +201,14 @@ export const UpdateSettingsInput = z.object({
     .optional(),
 });
 
+// ---- conversations
+export const ConversationId = uuid('Cuộc trò chuyện');
+export const ConversationTitle = z
+  .string({ error: 'Tiêu đề phải là chuỗi.' })
+  .trim()
+  .min(1, { error: 'Tiêu đề phải dài 1–200 ký tự.' })
+  .max(200, { error: 'Tiêu đề phải dài 1–200 ký tự.' });
+
 export type CreateAreaInput = z.infer<typeof CreateAreaInput>;
 export type UpdateAreaInput = z.infer<typeof UpdateAreaInput>;
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;

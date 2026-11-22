@@ -24,6 +24,8 @@ const bodySchema = z.object({
 const badRequest = () => Response.json({ error: 'bad_request' }, { status: 400 });
 
 const handler = withOwner(async (req) => {
+  // A declared size over the limit is refused unread; the check after reading covers bodies without one.
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY) return badRequest();
   const raw = await req.text();
   if (new TextEncoder().encode(raw).length > MAX_BODY) return badRequest();
   let json: unknown;
