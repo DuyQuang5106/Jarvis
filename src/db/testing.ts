@@ -5,20 +5,25 @@ import { afterAll, onTestFinished } from 'vitest';
 import { MIGRATIONS_FOLDER, type Db } from './client';
 import * as schema from './schema';
 
-// Migrating a PGlite costs about a second, so it happens once per test module: every createTestDb()
-// clones this migrated template instead of migrating a new instance.
-let template: Promise<PGlite> | undefined;
+// Migrating a PGlite costs about a second, so it happens once per test module: the migrated data dir is
+// dumped once, the template instance is closed (it would hold its memory for the whole file), and every
+// createTestDb() starts a new instance from that dump. `pg.clone()` would re-dump the template each time.
+let templateDump: Promise<Blob> | undefined;
 
-function getTemplate(): Promise<PGlite> {
-  template ??= (async () => {
+function getTemplateDump(): Promise<Blob> {
+  templateDump ??= (async () => {
     const pg = new PGlite();
-    await migrate(drizzle(pg, { schema }), { migrationsFolder: MIGRATIONS_FOLDER });
-    return pg;
+    try {
+      await migrate(drizzle(pg, { schema }), { migrationsFolder: MIGRATIONS_FOLDER });
+      return await pg.dumpDataDir('none');
+    } finally {
+      await pg.close();
+    }
   })().catch((err) => {
-    template = undefined;
+    templateDump = undefined;
     throw err;
   });
-  return template;
+  return templateDump;
 }
 
 // Clones made outside a running test (e.g. in beforeAll) live until the end of the file.
@@ -27,10 +32,8 @@ const openOutsideTests = new Set<PGlite>();
 afterAll(async () => {
   const clones = [...openOutsideTests];
   openOutsideTests.clear();
-  const tpl = template;
-  template = undefined;
+  templateDump = undefined;
   await Promise.all(clones.map((c) => c.close()));
-  if (tpl) await (await tpl.catch(() => null))?.close();
 });
 
 /**
@@ -38,7 +41,7 @@ afterAll(async () => {
  * It is closed when the current test finishes (or at the end of the file when created outside a test).
  */
 export async function createTestDb(): Promise<Db> {
-  const client = (await (await getTemplate()).clone()) as PGlite;
+  const client = await PGlite.create({ loadDataDir: await getTemplateDump() });
   try {
     onTestFinished(() => client.close());
   } catch {
