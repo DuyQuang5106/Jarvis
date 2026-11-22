@@ -1,9 +1,10 @@
 'use client';
 
 import { RotateCcwIcon } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { firstChars } from '@/lib/utils';
 import type { ContextScope } from '@/server/ai/context-builder';
 import type { TurnEvent } from '@/server/chat/run-turn';
 import { Composer } from './composer';
@@ -21,9 +22,13 @@ const AUTO: ContextScope = { mode: 'auto' };
 /** Same cut as the server's title of a new conversation (run-turn). */
 const TITLE_LEN = 60;
 
+/** The server's answer to a message it refused as empty or too long (run-turn). */
+const INVALID_MESSAGE = 'Tin nhắn trống hoặc quá dài.';
+
 /** What `Thử lại` does: regenerate the saved turn, or resend a message the server never saved. */
 type Retry = { kind: 'regenerate' } | { kind: 'resend'; text: string; localId: string };
-type Notice = { kind: 'error'; message: string; retry: Retry } | { kind: 'stopped'; retry: Retry };
+/** `retry` is null when trying again unchanged cannot help (the message itself was refused). */
+type Notice = { kind: 'error'; message: string; retry: Retry | null } | { kind: 'stopped'; retry: Retry };
 
 let localSeq = 0;
 const localId = () => `local-${++localSeq}`;
@@ -32,16 +37,23 @@ export function ChatView({
   conversation,
   messages: initialMessages,
   areas,
+  requestedId,
 }: {
   conversation: { id: string; title: string } | null;
   messages: ChatMessageView[];
   areas: ChatAreaOption[];
+  /** The `c` search param the server rendered these props for (null: none). */
+  requestedId: string | null;
 }) {
+  const router = useRouter();
   const urlId = useSearchParams().get('c');
   const stream = useChatStream();
   const streaming = stream.status === 'streaming';
 
   const [conversationId, setConversationId] = useState<string | null>(conversation?.id ?? null);
+  // Recent chats title: the server's, or (a new conversation) the first message cut like the server cuts it.
+  // Later turns and regenerate never change it.
+  const [title, setTitle] = useState<string | null>(conversation?.title ?? null);
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -51,25 +63,46 @@ export function ChatView({
   // Bumped whenever the view switches conversation; events of an older turn are ignored.
   const [generation, setGeneration] = useState(0);
   const generationRef = useRef(0);
+  // The reply `Tạo lại` hides while the new one streams; it comes back if the new one fails or is stopped.
+  const replaced = useRef<ChatMessageView | null>(null);
+
+  function loadServerCopy() {
+    setConversationId(conversation?.id ?? null);
+    setTitle(conversation?.title ?? null);
+    setMessages(initialMessages);
+    setDraft(null);
+    setNotice(null);
+    setScope(AUTO);
+    setGeneration((g) => g + 1);
+  }
 
   // The URL is the source of truth for which conversation is open. Our own replaceState after `meta`
   // gives the id we already hold; anything else (a Recent chats link, `Chat mới`) loads the server's copy.
   const [seenUrlId, setSeenUrlId] = useState(urlId);
   if (urlId !== seenUrlId) {
     setSeenUrlId(urlId);
-    if (urlId !== conversationId) {
-      setConversationId(conversation?.id ?? null);
-      setMessages(initialMessages);
-      setDraft(null);
-      setNotice(null);
-      setScope(AUTO);
-      setGeneration((g) => g + 1);
-    }
+    if (urlId !== conversationId) loadServerCopy();
+  }
+
+  // Back/forward can restore this page from router state saved before our replaceState, i.e. props rendered
+  // for another URL (`/chat` without `c`). Such props are stale: fetch the current URL's once, then load them.
+  const stale = requestedId !== urlId && conversationId !== urlId;
+  const refreshedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!stale || refreshedFor.current === urlId) return;
+    refreshedFor.current = urlId;
+    router.refresh();
+  }, [stale, urlId, router]);
+  const [seenRequestedId, setSeenRequestedId] = useState(requestedId);
+  if (requestedId !== seenRequestedId) {
+    setSeenRequestedId(requestedId);
+    if (requestedId === urlId && urlId !== conversationId && !streaming) loadServerCopy();
   }
   const { abort } = stream;
   useEffect(() => {
     if (generationRef.current === generation) return;
     generationRef.current = generation;
+    replaced.current = null; // a reply hidden by `Tạo lại` belongs to the conversation we left
     abort(); // a turn still streaming belongs to the conversation we left
   }, [generation, abort]);
 
@@ -84,11 +117,13 @@ export function ChatView({
       onEvent(e: TurnEvent) {
         if (gen !== generationRef.current) return;
         switch (e.type) {
-          case 'meta':
+          case 'meta': {
             metaSeen = true;
             setConversationId(e.conversationId);
             // Recent chats: a new conversation appears, an existing one moves up (the server title wins).
-            touchConversation(e.conversationId, conversation?.title ?? (body.message ?? '').trim().slice(0, TITLE_LEN));
+            const t = title ?? firstChars(body.message?.trim() || messages.find((m) => m.role === 'user')?.content || '', TITLE_LEN);
+            setTitle(t);
+            touchConversation(e.conversationId, t);
             if (pendingUserId) setMessages((ms) => ms.map((m) => (m.id === pendingUserId ? { ...m, id: e.userMessageId } : m)));
             if (new URLSearchParams(window.location.search).get('c') !== e.conversationId) {
               // Not a navigation: the view (and this stream) stays mounted. `null` data lets Next sync its
@@ -96,11 +131,13 @@ export function ChatView({
               window.history.replaceState(null, '', `/chat?c=${e.conversationId}`);
             }
             break;
+          }
           case 'text':
             text += e.delta;
             setDraft(text);
             break;
           case 'done':
+            replaced.current = null;
             setDraft(null);
             setMessages((ms) => [
               ...ms,
@@ -110,6 +147,15 @@ export function ChatView({
           case 'error':
             // The server saved nothing of a failed reply, so the partial text goes too.
             setDraft(null);
+            restoreReplaced();
+            if (!metaSeen && pendingUserId && e.message === INVALID_MESSAGE) {
+              // Refused before saving: the text goes back into the composer to be edited.
+              const typed = body.message ?? '';
+              setMessages((ms) => ms.filter((m) => m.id !== pendingUserId));
+              setInput((cur) => (cur === '' ? typed : cur));
+              setNotice({ kind: 'error', message: e.message, retry: null });
+              break;
+            }
             setNotice({
               kind: 'error',
               message: e.message,
@@ -130,10 +176,21 @@ export function ChatView({
     void runTurn({ conversationId: conversationId ?? undefined, message: text, scope }, id);
   }
 
+  function restoreReplaced() {
+    const old = replaced.current;
+    replaced.current = null;
+    if (old) setMessages((ms) => (ms.some((m) => m.id === old.id) ? ms : [...ms, old]));
+  }
+
   function regenerate() {
     if (streaming || !conversationId) return;
-    // The server replaces the last reply; drop ours now so the new one streams in its place.
-    setMessages((ms) => (ms.at(-1)?.role === 'assistant' ? ms.slice(0, -1) : ms));
+    // The server replaces the last reply only once the new one is saved; hide ours so the new one
+    // streams in its place, and keep it to put back if the new one fails or is stopped.
+    const last = messages.at(-1);
+    if (last?.role === 'assistant') {
+      replaced.current = last;
+      setMessages((ms) => ms.slice(0, -1));
+    }
     void runTurn({ conversationId, regenerate: true, scope }, null);
   }
 
@@ -146,6 +203,7 @@ export function ChatView({
   function stop() {
     stream.abort();
     setDraft(null);
+    restoreReplaced();
     // The user message is kept (the server saved it before streaming); the partial reply is dropped.
     const lastUser = messages.findLast((m) => m.role === 'user');
     const saved = lastUser && !lastUser.id.startsWith('local-');
@@ -155,7 +213,7 @@ export function ChatView({
     });
   }
 
-  const missing = urlId !== null && conversation === null && conversationId === null;
+  const missing = urlId !== null && !stale && conversation === null && conversationId === null;
 
   return (
     <div className="absolute inset-0 flex flex-col">
@@ -166,13 +224,20 @@ export function ChatView({
         pinKey={pinKey}
         onRegenerate={streaming ? undefined : regenerate}
         empty={
-          <div className="m-auto flex max-w-xl flex-col items-center gap-4 py-8 text-center">
-            {missing && <p className="text-sm text-muted-foreground">Không tìm thấy cuộc chat này. Bắt đầu cuộc chat mới bên dưới.</p>}
-            <p className="text-lg font-medium">Hôm nay mình giúp gì được?</p>
-            <SuggestedPrompts onPick={sendMessage} disabled={streaming} />
-          </div>
+          // Stale props (see above) are about to be replaced: no prompts to click in the meantime.
+          !stale && (
+            <div className="m-auto flex max-w-xl flex-col items-center gap-4 py-8 text-center">
+              {missing && <p className="text-sm text-muted-foreground">Không tìm thấy cuộc chat này. Bắt đầu cuộc chat mới bên dưới.</p>}
+              <p className="text-lg font-medium">Hôm nay mình giúp gì được?</p>
+              <SuggestedPrompts onPick={sendMessage} disabled={streaming} />
+            </div>
+          )
         }
-        after={notice && <NoticeBlock notice={notice} onRetry={() => retry(notice.retry)} disabled={streaming} />}
+        after={
+          notice && (
+            <NoticeBlock notice={notice} onRetry={notice.retry ? () => retry(notice.retry!) : undefined} disabled={streaming} />
+          )
+        }
       />
       <Composer
         value={input}
@@ -186,8 +251,8 @@ export function ChatView({
   );
 }
 
-function NoticeBlock({ notice, onRetry, disabled }: { notice: Notice; onRetry: () => void; disabled: boolean }) {
-  const retryButton = (
+function NoticeBlock({ notice, onRetry, disabled }: { notice: Notice; onRetry?: () => void; disabled: boolean }) {
+  const retryButton = onRetry && (
     <Button type="button" variant="outline" className="min-h-11 gap-1.5" onClick={onRetry} disabled={disabled}>
       <RotateCcwIcon aria-hidden />
       Thử lại

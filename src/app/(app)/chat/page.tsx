@@ -47,6 +47,7 @@ async function ChatContent({ searchParams }: { searchParams: SearchParams }) {
       conversation={found ? { id: found.conversation.id, title: found.conversation.title } : null}
       messages={(found?.messages ?? []).map(toView).filter((m) => m !== null)}
       areas={snapshot.areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind, aiExcluded: a.aiExcluded }))}
+      requestedId={typeof c === 'string' ? c : null}
     />
   );
 }

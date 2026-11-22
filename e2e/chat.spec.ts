@@ -25,11 +25,25 @@ test('hỏi về một môn: trả lời từ DB, có nguồn, cuộc chat vào 
   const refs = lastAssistant(page).getByTestId('context-refs');
   await expect(refs).toContainText('Dựa trên:');
   await expect(refs).toContainText('Tổng quan 14 mục');
-  await refs.getByRole('link', { name: /Mobile Programming/ }).click();
+  const chatUrl = page.url();
+  const chip = refs.getByRole('link', { name: /Mobile Programming/ });
+  if (isMobile) expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await chip.click();
   await expect(page.getByRole('dialog', { name: 'Mobile Programming' })).toBeVisible();
   await page.goBack();
+  await expect(page).toHaveURL(chatUrl);
+  await expect(page.locator('[data-role="user"]')).toHaveText(['Mobile Programming đang ở tình trạng nào?']);
+  await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
+  // Sending again after Back continues the same conversation.
+  await send(page, 'còn Database thì sao?');
+  await expect(page.locator('[data-role="assistant"]')).toHaveCount(2);
+  await expect(lastAssistant(page)).toContainText('detail:Database');
+  await expect(page).toHaveURL(chatUrl);
+  await expect(page.locator('[data-role="user"]')).toHaveText(['Mobile Programming đang ở tình trạng nào?', 'còn Database thì sao?']);
   if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await expect(page.getByTestId('recent-chats')).toContainText('Mobile Programming đang ở tình trạng nào?');
+  const recent = page.getByTestId('recent-chats').getByRole('link');
+  await expect(recent).toHaveCount(1);
+  await expect(recent).toHaveText('Mobile Programming đang ở tình trạng nào?');
 });
 
 test('sửa bằng UI rồi mở chat mới vẫn đọc state mới (criterion 6)', async ({ page }) => {
@@ -171,6 +185,24 @@ test('ảnh markdown trong câu trả lời chỉ là link, không được tả
   await expect(lastAssistant(page).getByRole('link', { name: '[ảnh: x]' })).toBeVisible();
   await expect(lastAssistant(page).locator('img')).toHaveCount(0);
   expect(leaked).toEqual([]);
+});
+
+test('tin nhắn quá dài: server từ chối, chữ vẫn nằm trong ô nhập, có bộ đếm', async ({ page }) => {
+  await page.goto('/chat');
+  const box = page.getByPlaceholder('Nhắn gì đó…');
+  await expect(box).toHaveAttribute('maxlength', '8000');
+  await box.fill('x'.repeat(7000));
+  await expect(page.getByTestId('composer-count')).toHaveText('7000/8000');
+  // fill() honours maxlength; setting the value from script does not (stands in for text the browser let through).
+  await box.evaluate((el: HTMLTextAreaElement, v) => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(el, v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, 'x'.repeat(8001));
+  await page.getByRole('button', { name: 'Gửi' }).click();
+  await expect(chatAlert(page)).toContainText('Tin nhắn trống hoặc quá dài.');
+  await expect(box).toHaveValue('x'.repeat(8001));
+  await expect(page.locator('[data-role="user"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Thử lại' })).toHaveCount(0);
 });
 
 test('trang có CSP chặn ảnh ngoài site', async ({ request }) => {

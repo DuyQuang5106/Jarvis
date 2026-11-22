@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
 const MAX_LINES = 6;
+/** Same limit as the server (run-turn). */
+const MAX_MESSAGE = 8000;
+/** The character count shows from here on. */
+const COUNT_FROM = 7000;
 
 /** Grows with its content up to MAX_LINES, then scrolls (field-sizing is not in every iOS Safari yet). */
 function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
@@ -71,6 +75,7 @@ export function Composer({
             }}
             placeholder="Nhắn gì đó…"
             aria-label="Tin nhắn"
+            maxLength={MAX_MESSAGE}
             enterKeyHint="enter"
             className="field-sizing-fixed max-h-none min-h-11 resize-none overflow-y-auto leading-6"
           />
@@ -84,7 +89,14 @@ export function Composer({
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-2">{toolbar}</div>
+        <div className="flex items-center gap-2">
+          {toolbar}
+          {value.length >= COUNT_FROM && (
+            <span className="ml-auto text-xs text-muted-foreground tabular-nums" data-testid="composer-count">
+              {value.length}/{MAX_MESSAGE}
+            </span>
+          )}
+        </div>
       </div>
     </form>
   );
