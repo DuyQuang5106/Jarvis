@@ -1,10 +1,7 @@
 'use client';
 
-import { Trash2Icon } from 'lucide-react';
-import { useId, useRef, useState, useTransition } from 'react';
-import type { ActionResult } from '@/app/(app)/_actions/result';
+import { useId, useState, useTransition } from 'react';
 import { createEntityAction, deleteEntityAction, updateEntityAction } from '@/app/(app)/_actions/entities';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DEADLINE_TYPES, TASK_STATUSES } from '@/db/enums';
 import type { MilestoneRow, TaskRow } from '@/db/schema';
@@ -12,10 +9,9 @@ import { DEADLINE_TYPE_LABEL, TASK_STATUS_LABEL } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import type { AreaDetails } from '@/server/queries/area-details';
 import { shouldSaveDateOnChange } from './date-input';
+import { DeleteButton, InlineTitle, RowStatus, useRowAction } from './row-controls';
 import { NATIVE_SELECT } from './styles';
 import { SyncedInput } from './synced-input';
-
-type Run = (fn: () => Promise<ActionResult<unknown>>) => void;
 
 /** Done tasks go last; the order inside each group is the server's. */
 function sortTasks(list: TaskRow[]): TaskRow[] {
@@ -74,28 +70,10 @@ export function TaskList({ details }: { details: AreaDetails }) {
 
 function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRow[] | null }) {
   const uid = useId();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const run: Run = (fn) => {
-    setError(null);
-    startTransition(async () => {
-      const res = await fn();
-      if (!res.ok) setError(res.error);
-    });
-  };
-  const [editing, setEditing] = useState(false);
-  const cancelled = useRef(false);
-  const [confirming, setConfirming] = useState(false);
+  const { pending, error, run } = useRowAction();
   const done = task.status === 'done';
 
   const update = (patch: Record<string, unknown>) => run(() => updateEntityAction('task', task.id, patch));
-
-  function commitTitle(value: string) {
-    setEditing(false);
-    if (cancelled.current) return;
-    const next = value.trim();
-    if (next && next !== task.title) update({ title: next });
-  }
 
   return (
     <li aria-busy={pending} className="space-y-2 rounded-lg border bg-card p-3">
@@ -110,55 +88,15 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
             <option key={s} value={s}>{TASK_STATUS_LABEL[s]}</option>
           ))}
         </select>
-        {editing ? (
-          <Input
-            autoFocus
-            data-inline-edit
-            aria-label="Tiêu đề task"
-            defaultValue={task.title}
-            onBlur={(e) => commitTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') e.currentTarget.blur();
-              if (e.key === 'Escape') {
-                // The drawer ignores this Escape (see DrawerShell); discard the edit without saving.
-                cancelled.current = true;
-                setEditing(false);
-              }
-            }}
-            className="h-11 min-w-0 flex-1"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              cancelled.current = false;
-              setEditing(true);
-            }}
-            className={cn(
-              'min-h-11 min-w-0 flex-1 rounded-lg px-2 text-left text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-              done && 'text-muted-foreground line-through',
-            )}
-          >
-            {task.title}
-          </button>
-        )}
-        {confirming ? (
-          <div className="flex shrink-0 gap-1">
-            <Button type="button" variant="destructive" className="min-h-11 px-3" onClick={() => run(() => deleteEntityAction('task', task.id))}>
-              Xác nhận xóa
-            </Button>
-            <Button type="button" variant="ghost" className="min-h-11 px-3" onClick={() => setConfirming(false)}>
-              Hủy
-            </Button>
-          </div>
-        ) : (
-          <Button type="button" variant="ghost" aria-label="Xóa" className="size-11 shrink-0" onClick={() => setConfirming(true)}>
-            <Trash2Icon aria-hidden />
-          </Button>
-        )}
+        <InlineTitle
+          value={task.title}
+          label="Tiêu đề task"
+          onCommit={(v) => update({ title: v })}
+          className={cn(done && 'text-muted-foreground line-through')}
+        />
+        <DeleteButton onDelete={() => run(() => deleteEntityAction('task', task.id))} />
       </div>
-      {pending && <p className="text-xs text-muted-foreground">Đang lưu…</p>}
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <RowStatus pending={pending} error={error} />
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <label htmlFor={`${uid}-due`} className="text-xs text-muted-foreground">Hạn</label>

@@ -2,6 +2,7 @@
 
 import { ENTITY_SERVICES } from '@/server/services/entities';
 import { ValidationError } from '@/server/errors';
+import { moveTopic } from '@/server/services/topic-order';
 import { runAction, type ActionResult } from './result';
 
 type EntityType = keyof typeof ENTITY_SERVICES;
@@ -30,6 +31,14 @@ export async function updateEntityAction(type: EntityType, id: string, patch: un
 export async function deleteEntityAction(type: EntityType, id: string): Promise<ActionResult> {
   return runAction(async (db) => {
     await service(type).remove(db, id, manual);
+    return undefined;
+  });
+}
+
+export async function moveTopicAction(topicId: string, direction: 'up' | 'down'): Promise<ActionResult> {
+  return runAction(async (db) => {
+    if (direction !== 'up' && direction !== 'down') throw new ValidationError('Hướng không hợp lệ.');
+    await moveTopic(db, topicId, direction, manual);
     return undefined;
   });
 }

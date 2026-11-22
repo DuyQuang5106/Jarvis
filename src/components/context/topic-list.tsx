@@ -2,7 +2,7 @@
 
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { useId, useState, useTransition } from 'react';
-import { createEntityAction, deleteEntityAction, updateEntityAction } from '@/app/(app)/_actions/entities';
+import { createEntityAction, deleteEntityAction, moveTopicAction, updateEntityAction } from '@/app/(app)/_actions/entities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TOPIC_STATUSES } from '@/db/enums';
@@ -52,7 +52,7 @@ export function TopicList({ areaId, topics }: { areaId: string; topics: TopicRow
       ) : (
         <ul className="space-y-2">
           {topics.map((t, i) => (
-            <TopicItem key={t.id} topic={t} prev={topics[i - 1] ?? null} next={topics[i + 1] ?? null} />
+            <TopicItem key={t.id} topic={t} first={i === 0} last={i === topics.length - 1} />
           ))}
         </ul>
       )}
@@ -60,29 +60,19 @@ export function TopicList({ areaId, topics }: { areaId: string; topics: TopicRow
   );
 }
 
-function TopicItem({ topic, prev, next }: { topic: TopicRow; prev: TopicRow | null; next: TopicRow | null }) {
+function TopicItem({ topic, first, last }: { topic: TopicRow; first: boolean; last: boolean }) {
   const uid = useId();
   const { pending, error, run } = useRowAction();
   const update = (patch: Record<string, unknown>) => run(() => updateEntityAction('topic', topic.id, patch));
-
-  /** Swaps `sortOrder` with a neighbour (two writes); equal values are pulled apart by one. */
-  function swap(other: TopicRow, dir: -1 | 1) {
-    const mine = topic.sortOrder === other.sortOrder ? other.sortOrder + dir : other.sortOrder;
-    run(async () => {
-      const a = await updateEntityAction('topic', topic.id, { sortOrder: mine });
-      if (!a.ok) return a;
-      return updateEntityAction('topic', other.id, { sortOrder: topic.sortOrder });
-    });
-  }
 
   return (
     <li aria-busy={pending} className="space-y-2 rounded-lg border bg-card p-3">
       <div className="flex items-center gap-1">
         <InlineTitle value={topic.title} label="Tiêu đề topic" onCommit={(v) => update({ title: v })} />
-        <Button type="button" variant="ghost" aria-label="Lên" disabled={!prev || pending} className="size-11 shrink-0" onClick={() => prev && swap(prev, -1)}>
+        <Button type="button" variant="ghost" aria-label="Lên" disabled={first || pending} className="size-11 shrink-0" onClick={() => run(() => moveTopicAction(topic.id, 'up'))}>
           <ArrowUpIcon aria-hidden />
         </Button>
-        <Button type="button" variant="ghost" aria-label="Xuống" disabled={!next || pending} className="size-11 shrink-0" onClick={() => next && swap(next, 1)}>
+        <Button type="button" variant="ghost" aria-label="Xuống" disabled={last || pending} className="size-11 shrink-0" onClick={() => run(() => moveTopicAction(topic.id, 'down'))}>
           <ArrowDownIcon aria-hidden />
         </Button>
         <DeleteButton onDelete={() => run(() => deleteEntityAction('topic', topic.id))} />
