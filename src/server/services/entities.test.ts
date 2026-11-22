@@ -5,7 +5,7 @@ import { activityLogs, areas, tasks } from '@/db/schema';
 import { logsFor, makeArea } from '@/db/test-helpers';
 import { createTestDb } from '@/db/testing';
 import { NotFoundError, ValidationError } from '../errors';
-import { blockerService, milestoneService, noteService, taskService, topicService } from './entities';
+import { assessmentService, blockerService, ENTITY_SERVICES, milestoneService, noteService, taskService, topicService } from './entities';
 
 let db: Db;
 const manual = { origin: 'manual' as const };
@@ -59,7 +59,14 @@ test('id không tồn tại ném NotFoundError', async () => {
 });
 
 test('lỗi giữa chừng không để lại bản ghi hay log', async () => {
-  await expect(taskService.create(db, { areaId: '00000000-0000-4000-8000-000000000000', title: 'x' }, manual)).rejects.toThrow();
+  const err = await taskService
+    .create(db, { areaId: '00000000-0000-4000-8000-000000000000', title: 'x' }, manual)
+    .then(() => null, (e: unknown) => e as Error & { cause?: { message?: string } });
+  // A database-level FK violation (not a validation error), wrapped by drizzle as a failed insert.
+  expect(err).not.toBeNull();
+  expect(err).not.toBeInstanceOf(ValidationError);
+  expect(err!.message).toContain('Failed query: insert into "tasks"');
+  expect(err!.cause?.message).toMatch(/foreign key/i);
   expect(await db.select().from(tasks)).toEqual([]);
   expect(await db.select().from(activityLogs)).toEqual([]);
 });
@@ -102,4 +109,72 @@ test('service chạy được trong transaction bên ngoài và rollback cùng n
   })).rejects.toThrow('hủy');
   expect(await db.select().from(tasks)).toEqual([]);
   expect(await db.select().from(activityLogs)).toEqual([]);
+});
+
+test('task update với milestone của area khác bị từ chối', async () => {
+  const a = await makeArea(db, { kind: 'project', name: 'A' });
+  const b = await makeArea(db, { kind: 'project', name: 'B' });
+  const ms = await milestoneService.create(db, { areaId: b.id, title: 'M' }, manual);
+  const task = await taskService.create(db, { areaId: a.id, title: 't' }, manual);
+  await expect(taskService.update(db, task.id, { milestoneId: ms.id }, manual)).rejects.toThrow('Milestone không thuộc mục này.');
+  expect(await logsFor(db, task.id)).toHaveLength(1);
+});
+
+test('task update milestoneId null gỡ liên kết và ghi một log', async () => {
+  const area = await makeArea(db, { kind: 'project', name: 'Question House' });
+  const ms = await milestoneService.create(db, { areaId: area.id, title: 'Login' }, manual);
+  const task = await taskService.create(db, { areaId: area.id, title: 'Fix login', milestoneId: ms.id }, manual);
+  const updated = await taskService.update(db, task.id, { milestoneId: null }, manual);
+  expect(updated.milestoneId).toBeNull();
+  const logs = await logsFor(db, task.id);
+  expect(logs).toHaveLength(2);
+  expect(logs[1]).toMatchObject({ action: 'update' });
+  expect(logs[1].beforeJson).toMatchObject({ milestoneId: ms.id });
+  expect(logs[1].afterJson).toMatchObject({ milestoneId: null });
+});
+
+test('update dueTime giữ nguyên (HH:MM so với HH:MM:SS) là no-op', async () => {
+  const area = await makeArea(db);
+  const task = await taskService.create(db, { areaId: area.id, title: 'Lab', dueTime: '09:30' }, manual);
+  const same = await taskService.update(db, task.id, { dueTime: '09:30' }, manual);
+  expect(same.updatedAt).toEqual(task.updatedAt);
+  expect(await logsFor(db, task.id)).toHaveLength(1);
+});
+
+test('update đặt null vào trường đã null là no-op', async () => {
+  const area = await makeArea(db);
+  const task = await taskService.create(db, { areaId: area.id, title: 'Lab' }, manual);
+  const same = await taskService.update(db, task.id, { dueDate: null, estimateMinutes: null }, manual);
+  expect(same.updatedAt).toEqual(task.updatedAt);
+  expect(await logsFor(db, task.id)).toHaveLength(1);
+});
+
+test('blocker resolved hai lần giữ resolved_at đầu tiên và không ghi log thứ hai', async () => {
+  const area = await makeArea(db, { kind: 'project', name: 'Question House' });
+  const blocker = await blockerService.create(db, { areaId: area.id, title: 'Login' }, manual);
+  const first = await blockerService.update(db, blocker.id, { status: 'resolved' }, manual);
+  const second = await blockerService.update(db, blocker.id, { status: 'resolved' }, manual);
+  expect(second.resolvedAt).toEqual(first.resolvedAt);
+  expect(await logsFor(db, blocker.id)).toHaveLength(2);
+});
+
+test('assessment create và update ghi log entityType assessment', async () => {
+  const area = await makeArea(db);
+  const a = await assessmentService.create(db, { areaId: area.id, title: 'Midterm', weight: 30 }, manual);
+  const updated = await assessmentService.update(db, a.id, { score: 8, maxScore: 10 }, manual);
+  expect(updated).toMatchObject({ score: 8, maxScore: 10 });
+  const logs = await logsFor(db, a.id);
+  expect(logs.map((l) => [l.entityType, l.action])).toEqual([['assessment', 'create'], ['assessment', 'update']]);
+  expect(logs[1].beforeJson).toMatchObject({ score: null });
+  expect(logs[1].afterJson).toMatchObject({ score: 8, maxScore: 10 });
+});
+
+test('ENTITY_SERVICES có đúng sáu khóa ánh xạ đúng service', () => {
+  expect(Object.keys(ENTITY_SERVICES).sort()).toEqual(['assessment', 'blocker', 'milestone', 'note', 'task', 'topic']);
+  expect(ENTITY_SERVICES.task).toBe(taskService);
+  expect(ENTITY_SERVICES.topic).toBe(topicService);
+  expect(ENTITY_SERVICES.assessment).toBe(assessmentService);
+  expect(ENTITY_SERVICES.milestone).toBe(milestoneService);
+  expect(ENTITY_SERVICES.blocker).toBe(blockerService);
+  expect(ENTITY_SERVICES.note).toBe(noteService);
 });
