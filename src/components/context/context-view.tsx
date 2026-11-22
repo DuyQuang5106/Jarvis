@@ -13,11 +13,13 @@ import { KIND_TAB, TAB_KIND, useContextParams } from './use-context-params';
 
 export function ContextView({
   areas,
+  today,
   archived,
   loadedItem,
   details,
 }: {
   areas: AreaSummary[];
+  today: string;
   archived: Record<'academic' | 'project', AreaRow[]>;
   /** The `?item=` the server loaded `details` for; null details with a loadedItem means not found. */
   loadedItem: string | null;
@@ -44,7 +46,7 @@ export function ContextView({
         searching={query.trim() !== ''}
         onOpen={(a) => openItem(a.id)}
       />
-      {item !== null && item === loadedItem && (details ? <AreaDrawer key={details.area.id} details={details} section={section} /> : <MissingAreaDrawer />)}
+      {item !== null && item === loadedItem && (details ? <AreaDrawer key={details.area.id} details={details} section={section} summary={areas.find((a) => a.id === details.area.id) ?? null} today={today} /> : <MissingAreaDrawer />)}
     </div>
   );
 }

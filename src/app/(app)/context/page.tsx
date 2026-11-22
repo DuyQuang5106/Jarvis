@@ -31,5 +31,5 @@ async function ContextContent({ searchParams }: { searchParams: Promise<{ item?:
     listArchivedAreas(db, 'project'),
     itemId && UUID.test(itemId) ? getAreaDetails(db, itemId) : null,
   ]);
-  return <ContextView areas={snapshot.areas} archived={{ academic, project }} loadedItem={itemId} details={details} />;
+  return <ContextView areas={snapshot.areas} today={snapshot.today} archived={{ academic, project }} loadedItem={itemId} details={details} />;
 }

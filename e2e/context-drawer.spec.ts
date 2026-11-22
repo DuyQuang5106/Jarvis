@@ -211,4 +211,4 @@ test('item không tồn tại hiện thông báo', async ({ page }) => {
   await expect(page.getByRole('dialog')).toContainText('Không tìm thấy mục này.');
 });
 
-// The project `Milestone` select on a task is covered in Task 6: milestones have no UI to create them yet.
+// The project `Milestone` select on a task is covered in context-sections.spec.ts.

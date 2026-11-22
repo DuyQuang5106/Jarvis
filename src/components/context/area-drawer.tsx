@@ -5,23 +5,39 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AreaKind } from '@/db/enums';
 import type { AreaDetails } from '@/server/queries/area-details';
+import type { AreaSummary } from '@/server/queries/snapshot';
+import { AssessmentList } from './assessment-list';
+import { BlockerList } from './blocker-list';
+import { MilestoneList } from './milestone-list';
 import { OverviewForm } from './overview-form';
+import { ProjectHealth } from './project-health';
 import { TaskList } from './task-list';
+import { TopicList } from './topic-list';
 import { useContextParams } from './use-context-params';
 
 const SOON = <p className="text-sm text-muted-foreground">Sắp có.</p>;
 
 /**
  * Single registry of drawer sections, keyed by `?section=`.
- * Tasks 6 and 7 replace the `SOON` placeholders below with their real components, one entry each.
+ * Task 7 replaces the remaining `SOON` placeholders below with its real components, one entry each.
  */
-const SECTIONS: Record<string, { label: string; render: (d: AreaDetails) => ReactNode }> = {
-  overview: { label: 'Tổng quan', render: (d) => <OverviewForm details={d} /> },
+type Ctx = { summary: AreaSummary | null; today: string };
+
+const SECTIONS: Record<string, { label: string; render: (d: AreaDetails, ctx: Ctx) => ReactNode }> = {
+  overview: {
+    label: 'Tổng quan',
+    render: (d, { summary, today }) => (
+      <>
+        {d.area.kind === 'project' && summary && <ProjectHealth summary={summary} milestones={d.milestones} today={today} />}
+        <OverviewForm details={d} />
+      </>
+    ),
+  },
   tasks: { label: 'Tasks', render: (d) => <TaskList details={d} /> },
-  topics: { label: 'Topics', render: () => SOON },
-  assessments: { label: 'Assessments', render: () => SOON },
-  milestones: { label: 'Milestones', render: () => SOON },
-  blockers: { label: 'Blockers', render: () => SOON },
+  topics: { label: 'Topics', render: (d) => <TopicList areaId={d.area.id} topics={d.topics} /> },
+  assessments: { label: 'Assessments', render: (d) => <AssessmentList areaId={d.area.id} assessments={d.assessments} /> },
+  milestones: { label: 'Milestones', render: (d) => <MilestoneList areaId={d.area.id} milestones={d.milestones} /> },
+  blockers: { label: 'Blockers', render: (d) => <BlockerList areaId={d.area.id} blockers={d.blockers} /> },
   notes: { label: 'Notes', render: () => SOON },
   activity: { label: 'Activity', render: () => SOON },
 };
@@ -56,7 +72,18 @@ function DrawerShell({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-export function AreaDrawer({ details, section }: { details: AreaDetails; section: string }) {
+export function AreaDrawer({
+  details,
+  section,
+  summary,
+  today,
+}: {
+  details: AreaDetails;
+  section: string;
+  summary: AreaSummary | null;
+  today: string;
+}) {
+  const ctx: Ctx = { summary, today };
   const { setSection } = useContextParams();
   const ids = KIND_SECTIONS[details.area.kind];
   const active = ids.includes(section) ? section : 'overview';
@@ -79,11 +106,11 @@ export function AreaDrawer({ details, section }: { details: AreaDetails; section
           hidden={active !== 'overview'}
           className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-2"
         >
-          {SECTIONS.overview.render(details)}
+          {SECTIONS.overview.render(details, ctx)}
         </TabsContent>
         {active !== 'overview' && (
           <TabsContent value={active} className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-2">
-            {SECTIONS[active].render(details)}
+            {SECTIONS[active].render(details, ctx)}
           </TabsContent>
         )}
       </Tabs>
