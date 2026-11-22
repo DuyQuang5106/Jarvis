@@ -46,7 +46,7 @@ Mọi việc khác làm được hoàn toàn trên máy local với `DB_DRIVER=p
 src/
   app/
     login/                      màn đăng nhập
-    (app)/layout.tsx            khung có sidebar, gọi requireOwner()
+    (app)/layout.tsx            khung có sidebar; gọi requireOwner() nhưng chỉ là lớp ngoài (xem luật 7)
     (app)/chat/page.tsx         /chat và /chat?c=<conversationId>
     (app)/context/page.tsx      /context?tab=academic|projects&item=<areaId>
     (app)/_actions/*.ts         server actions (mutations từ UI)
@@ -77,10 +77,11 @@ scripts/        ai-probe.ts, verify-rls.ts, migrate.ts, seed.ts
 4. Enum khai báo một lần ở `src/db/enums.ts`, dùng chung cho schema Drizzle và Zod.
 5. Tên cột DB dạng `snake_case`, thuộc tính TypeScript và mọi JSON trao đổi với model dạng `camelCase`.
 6. Chuỗi hiển thị cho người dùng viết bằng tiếng Việt.
+7. Mọi page trong `(app)` và mọi server component đọc dữ liệu riêng tư (kể cả phần sidebar như `Recent chats`) tự gọi `await requireOwner()` (trong `Suspense` + `await connection()`); gate ở `(app)/layout.tsx` và redirect của `src/proxy.ts` không đủ, vì segment của page có thể được prefetch hoặc soft-navigate tới mà layout không chạy lại.
 
 **Test:**
 - Unit/integration: Vitest, file `*.test.ts` đặt cạnh mã nguồn. Test có DB dùng `createTestDb()` (PGlite trong bộ nhớ, đã migrate), mỗi test một DB mới.
-- E2E: Playwright trong `e2e/`, hai project `desktop` (Chromium) và `iphone` (`devices['iPhone 14']`). Server chạy bằng `pnpm dev:e2e` ở cổng 3100. Mỗi test gọi `POST /api/test/reset` trong `beforeEach`.
+- E2E: Playwright trong `e2e/`, hai project `desktop` (Chromium) và `iphone` (`devices['iPhone 14']`). Server chạy bằng `pnpm dev:e2e` ở cổng 3100. Mỗi test gọi `POST /api/test/reset` trong `beforeEach`. Spec `e2e/*.supabase.spec.ts` (chỉ project `desktop`) chạy trên server thứ hai `pnpm dev:e2e:supabase` ở cổng 3101: `AUTH_MODE=supabase` với URL Supabase không với tới được, để kiểm tra chặn truy cập khi chưa đăng nhập mà không cần mạng.
 - Không test nào được gọi mạng ra ngoài.
 
 **Lệnh:**

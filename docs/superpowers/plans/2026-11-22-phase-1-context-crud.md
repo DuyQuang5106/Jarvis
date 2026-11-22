@@ -554,6 +554,7 @@ git commit -m "feat(queries): add portfolio snapshot and area details"
   - `runAction<T>(fn: (db: Db) => Promise<T>, paths?: string[]): Promise<ActionResult<T>>` — gọi `requireOwner()`, `getDb()`, chạy `fn`, `revalidatePath` từng path (mặc định `['/context']`); `ValidationError`/`NotFoundError` thành `{ ok: false, error: message }`; lỗi khác ghi `console.error` và trả `error: 'Có lỗi xảy ra, thử lại.'`
   - `createAreaAction(input: unknown)`, `updateAreaAction(id: string, patch: unknown)`, `archiveAreaAction(id: string)`, `unarchiveAreaAction(id: string)`, `addProgressLogAction(areaId: string, text: string)` — đều trả `Promise<ActionResult<...>>`, origin `manual`
   - `createEntityAction(type: keyof typeof ENTITY_SERVICES, input: unknown)`, `updateEntityAction(type, id: string, patch: unknown)`, `deleteEntityAction(type, id: string)`
+  - `src/app/(app)/context/page.tsx` và mọi server component đọc dữ liệu tự gọi `await requireOwner()` (luật kiến trúc 7); không dựa vào gate ở layout.
   - `src/lib/labels.ts`: `AREA_STATUS_LABEL`, `TOPIC_STATUS_LABEL`, `TASK_STATUS_LABEL`, `DEADLINE_TYPE_LABEL`, `MILESTONE_STATUS_LABEL` (`Not started / In progress / Done`), `PRIORITY_LABEL` (`High / Medium / Low`), `MISSING_LABEL` (`status_unknown: 'Chưa rõ trạng thái'`, `no_next_action: 'Chưa có việc tiếp theo'`, `no_topics: 'Chưa có topic'`, `no_assessment_date: 'Chưa có ngày thi'`, `no_milestones: 'Chưa có milestone'`)
 
 **Yêu cầu giao diện (spec 3.3):**
@@ -653,6 +654,7 @@ git commit -m "feat(context): add server actions and area list with search and s
 **Interfaces:**
 - Consumes: `getAreaDetails`, `updateAreaAction`, `archiveAreaAction`, `createEntityAction`, `updateEntityAction`, `deleteEntityAction`, nhãn ở `labels.ts`
 - Produces: component `AreaDrawer({ details: AreaDetails, section: string })` với các section đặt tên theo `?section=`: `overview` (mặc định), `tasks`, `topics`, `assessments`, `milestones`, `blockers`, `notes`, `activity`. Task 6 và 7 thêm nội dung cho các section còn lại.
+- Server component tải `getAreaDetails` cho drawer tự gọi `await requireOwner()` trước khi đọc (luật kiến trúc 7); gate ở layout không đủ.
 
 **Yêu cầu giao diện:**
 - Drawer là `Sheet` bên phải trên desktop, toàn màn hình khi hẹp hơn 768px; `role="dialog"` có tên là tên area. Đóng drawer xóa `item` và `section` khỏi URL. Tải lại trang với `?item=<id>` mở lại đúng drawer; `item` không tồn tại hiện “Không tìm thấy mục này.”.
