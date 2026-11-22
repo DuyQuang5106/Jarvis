@@ -16,6 +16,7 @@ export function useContextParams() {
   const raw = params.get('tab');
   const tab: TabId = raw === 'projects' ? 'projects' : 'academic';
   const item = params.get('item');
+  const section = params.get('section') ?? 'overview';
 
   const update = useCallback(
     (changes: Record<string, string | null>, mode: 'push' | 'replace') => {
@@ -33,6 +34,9 @@ export function useContextParams() {
     tab,
     item,
     setTab: (next: TabId) => update({ tab: next }, 'replace'),
+    section,
+    setSection: (next: string) => update({ section: next }, 'replace'),
+    closeItem: () => update({ item: null, section: null }, 'replace'),
     openItem: (id: string, nextTab?: TabId) => update(nextTab ? { item: id, tab: nextTab } : { item: id }, 'push'),
   };
 }

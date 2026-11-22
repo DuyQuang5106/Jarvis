@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import type { AreaRow } from '@/db/schema';
 import type { AreaSummary } from '@/server/queries/snapshot';
+import type { AreaDetails } from '@/server/queries/area-details';
+import { AreaDrawer, MissingAreaDrawer } from './area-drawer';
 import { AreaList } from './area-list';
 import { ContextHeader } from './context-header';
 import { matchesQuery } from './search';
@@ -12,11 +14,16 @@ import { KIND_TAB, TAB_KIND, useContextParams } from './use-context-params';
 export function ContextView({
   areas,
   archived,
+  loadedItem,
+  details,
 }: {
   areas: AreaSummary[];
   archived: Record<'academic' | 'project', AreaRow[]>;
+  /** The `?item=` the server loaded `details` for; null details with a loadedItem means not found. */
+  loadedItem: string | null;
+  details: AreaDetails | null;
 }) {
-  const { tab, setTab, openItem } = useContextParams();
+  const { tab, setTab, openItem, item, section } = useContextParams();
   const [query, setQuery] = useState('');
   const kind = TAB_KIND[tab];
 
@@ -37,6 +44,7 @@ export function ContextView({
         searching={query.trim() !== ''}
         onOpen={(a) => openItem(a.id)}
       />
+      {item !== null && item === loadedItem && (details ? <AreaDrawer details={details} section={section} /> : <MissingAreaDrawer />)}
     </div>
   );
 }
