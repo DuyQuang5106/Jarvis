@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import {
+  AREA_KINDS,
+  AREA_STATUSES,
   BLOCKER_STATUSES,
   DEADLINE_TYPES,
   INBOX_STATUSES,
   MILESTONE_STATUSES,
+  PRIORITIES,
   TASK_STATUSES,
   TOPIC_STATUSES,
 } from '@/db/enums';
@@ -131,7 +134,78 @@ export const CreateNoteInput = z.object({
 });
 export const UpdateNoteInput = CreateNoteInput.partial();
 
-export type CreateTaskInput = z.infer<typeof CreateTaskInput>;
+// ---- areas
+const nullableText = (label: string) => text(label).nullable().optional();
+
+const AcademicDetailsInput = z.object({
+  term: nullableText('Học kỳ'),
+  credits: z
+    .number({ error: 'Số tín chỉ phải là một số.' })
+    .int({ error: 'Số tín chỉ phải là số nguyên.' })
+    .min(0, { error: 'Số tín chỉ tối thiểu 0.' })
+    .max(30, { error: 'Số tín chỉ tối đa 30.' })
+    .nullable()
+    .optional(),
+  targetGrade: nullableText('Điểm mục tiêu'),
+  gradingScheme: nullableText('Cách tính điểm'),
+  examFormat: nullableText('Hình thức thi'),
+  courseOutline: nullableText('Đề cương môn học'),
+});
+
+const ProjectDetailsInput = z.object({
+  role: nullableText('Vai trò'),
+  collaborators: nullableText('Người cộng tác'),
+  scope: nullableText('Phạm vi'),
+  cadence: nullableText('Nhịp làm việc'),
+});
+
+const Aliases = z
+  .array(Alias, { error: 'Tên gọi khác phải là danh sách.' })
+  .max(10, { error: 'Tối đa 10 tên gọi khác.' })
+  .refine((list) => new Set(list.map((a) => a.toLowerCase())).size === list.length, {
+    error: 'Tên gọi khác bị trùng nhau.',
+  });
+
+export const CreateAreaInput = z.object({
+  kind: choice('Loại mục', AREA_KINDS),
+  name: Name,
+  aliases: Aliases.optional(),
+  summary: nullableText('Tóm tắt'),
+  goal: nullableText('Mục tiêu'),
+  status: choice('Trạng thái mục', AREA_STATUSES).optional(),
+  priority: choice('Mức ưu tiên', PRIORITIES).optional(),
+  startDate: dateStr('Ngày bắt đầu').nullable().optional(),
+  deadlineDate: dateStr('Ngày hạn chót').nullable().optional(),
+  nextAction: nullableText('Bước tiếp theo'),
+  aiExcluded: z.boolean({ error: 'Loại khỏi AI phải là đúng/sai.' }).optional(),
+  academic: AcademicDetailsInput.optional(),
+  project: ProjectDetailsInput.optional(),
+});
+export const UpdateAreaInput = CreateAreaInput.omit({ kind: true }).partial();
+
+// ---- settings
+export const UpdateSettingsInput = z.object({
+  staleAfterDays: z
+    .number({ error: 'Số ngày cũ phải là một số.' })
+    .int({ error: 'Số ngày cũ phải là số nguyên.' })
+    .min(1, { error: 'Số ngày cũ tối thiểu 1.' })
+    .max(90, { error: 'Số ngày cũ tối đa 90.' })
+    .optional(),
+  termGoal: nullableText('Mục tiêu học kỳ'),
+  defaultFocusMinutes: z
+    .number({ error: 'Số phút tập trung phải là một số.' })
+    .int({ error: 'Số phút tập trung phải là số nguyên.' })
+    .min(5, { error: 'Số phút tập trung tối thiểu 5.' })
+    .max(240, { error: 'Số phút tập trung tối đa 240.' })
+    .nullable()
+    .optional(),
+});
+
+export type CreateAreaInput = z.infer<typeof CreateAreaInput>;
+export type UpdateAreaInput = z.infer<typeof UpdateAreaInput>;
+export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
+
+export type CreateTaskInput =z.infer<typeof CreateTaskInput>;
 export type UpdateTaskInput = z.infer<typeof UpdateTaskInput>;
 export type CreateTopicInput = z.infer<typeof CreateTopicInput>;
 export type UpdateTopicInput = z.infer<typeof UpdateTopicInput>;
