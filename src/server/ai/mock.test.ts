@@ -21,6 +21,21 @@ test('MOCK_PARTIAL_ERROR phát một phần rồi ném lỗi', async () => {
   expect(seen).toEqual(['Đang trả lời']);
 });
 
+test('MOCK_SLOW dừng ngay khi signal bị hủy', async () => {
+  const ctrl = new AbortController();
+  const seen: string[] = [];
+  const run = (async () => {
+    for await (const e of createMockProvider().stream({ messages: [{ role: 'user', content: 'MOCK_SLOW' }], maxOutputTokens: 100, signal: ctrl.signal })) {
+      if (e.type === 'text') {
+        seen.push(e.delta);
+        ctrl.abort();
+      }
+    }
+  })();
+  await expect(run).rejects.toBeInstanceOf(AiProviderError);
+  expect(seen).toEqual(['MOCK_SLOW_CHUNK_1 ']);
+});
+
 test('MOCK_STATE ghép area và detail từ khối workspace_state', async () => {
   const state = {
     now: { date: '2026-11-22' },
