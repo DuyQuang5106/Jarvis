@@ -76,7 +76,7 @@
 
 **Quy tắc `describeStored`:**
 - `label` tiếng Việt: `Tạo task “…”`, `Sửa task “…”`, `Sửa mục “…”`, `Tạo topic “…”`, `Sửa topic “…”`, tương tự cho milestone và assessment, `Thêm ghi chú`, `Thêm log tiến độ`, `Tạo blocker “…”`, `Gỡ blocker “…”`. Tên trong ngoặc là tiêu đề hiện tại của bản ghi (cập nhật) hoặc tiêu đề đề xuất (tạo mới).
-- `changes`: với cập nhật, mỗi trường trong patch mà giá trị khác hiện tại cho một dòng `trước → sau`; với tạo mới, mỗi trường có giá trị cho một dòng với `before: null`. Nhãn trường và nhãn enum lấy từ `FIELD_LABEL` / `formatFieldValue`.
+- `changes`: với cập nhật, mỗi trường trong patch mà giá trị khác hiện tại cho một dòng `trước → sau`; với tạo mới, mỗi trường có giá trị cho một dòng với `before: null`. Nhãn trường và nhãn enum lấy từ `FIELD_LABEL` / `formatFieldValue`. `milestoneId` hiện bằng tiêu đề milestone (tra trong DB), không hiện uuid.
 - `conflict`: `missing` khi bản ghi đích không còn; `changed` khi `updatedAt` hiện tại khác `baseUpdatedAt`; còn lại `none`. Hành động tạo mới: `missing` khi area không còn hoặc đã lưu trữ, ngược lại `none`.
 
 - [ ] **Step 1: Viết test thất bại**
@@ -485,7 +485,7 @@ git commit -m "feat(proposals): extract proposals from model output and store as
 1. `UPDATE pending_actions SET status = 'applied', resolved_at = now WHERE id = $id AND status = 'pending' RETURNING *`. Không có dòng → trả `already_resolved`.
 2. `selectedKeys` rỗng hoặc chứa key không tồn tại → ném lỗi nội bộ để rollback, trả `invalid`.
 3. Với mỗi key có trong `edits`: parse bằng schema `ProposedAction`; `type`, `id` và `areaId` phải giữ nguyên so với hành động gốc; sai → rollback, trả `invalid` kèm thông báo. Hành động đã sửa thay cho bản gốc nhưng **giữ `baseUpdatedAt` gốc**.
-4. Kiểm tra xung đột cho các hành động được chọn bằng `describeStored`. Có cái nào khác `none` → rollback, trả `conflict`.
+4. Khóa các bản ghi đích của hành động được chọn bằng `SELECT … FOR UPDATE` (trong cùng transaction), **rồi** kiểm tra xung đột bằng `describeStored`. Có cái nào khác `none` → rollback, trả `conflict`. Lưu ý: ghi vào bản ghi con làm đổi `areas.updated_at`, và `moveTopic` đổi `updatedAt` của các topic cùng area, nên `update_area` hay `upsert_topic` của topic bên cạnh có thể báo xung đột dù trường cần sửa không đổi — đó là xung đột lành tính, an toàn, và vẫn hiện như xung đột (`Vẫn áp dụng` để tiếp tục).
 5. Tạo một `batchId` (uuid); gọi `applyAction` lần lượt với `{ origin: 'ai_approved', batchId }`. Service ném `ValidationError`/`NotFoundError` → rollback, trả `invalid`.
 6. Nếu số key được chọn ít hơn tổng số hành động, đặt `status = 'partially_applied'`. Ghi `appliedKeys` vào `actions_json`.
 7. Nếu dòng pending có `note_id`: cập nhật note đó `inboxStatus: 'processed'` qua `noteService` cùng `batchId`.
