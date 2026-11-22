@@ -22,6 +22,7 @@ pnpm dev
 |---|---|
 | `pnpm dev` | Dev local: PGlite lưu ở `./.pglite`, `AUTH_MODE=dev`, `AI_PROVIDER=mock` |
 | `pnpm dev:e2e` | Như trên nhưng PGlite trong bộ nhớ, `E2E=1`, cổng 3100, `AI_ACTION_MODE=tools` |
+| `pnpm dev:e2e:supabase` | Server e2e thứ hai ở cổng 3101 với `AUTH_MODE=supabase` (Supabase giả, không với tới); Playwright tự chạy |
 | `pnpm build` / `pnpm start` | Build và chạy bản production |
 | `pnpm test` | Vitest chạy một lần |
 | `pnpm test:e2e` | Playwright |
