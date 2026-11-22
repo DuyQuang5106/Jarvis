@@ -1,8 +1,12 @@
 import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { MobileNav } from '@/components/shell/mobile-nav';
+import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { Sidebar } from '@/components/shell/sidebar';
+import { getDb } from '@/db/client';
 import { requireOwner } from '@/server/auth';
+import { SEED_ITEMS, SEED_TERM_GOAL } from '@/server/seed/seed-data';
+import { getSettings } from '@/server/services/settings';
 
 export default function AppLayout({ children }: LayoutProps<'/'>) {
   // The frame is static; only the page content waits for the session (cacheComponents).
@@ -29,5 +33,12 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
 async function OwnerGate({ children }: { children: React.ReactNode }) {
   await connection(); // request-time only: never read the session during `next build`
   await requireOwner();
-  return children;
+  // Inside the gate (rule 7): settings are private data, never read while the static frame prerenders.
+  const { onboardedAt } = await getSettings(await getDb());
+  return (
+    <>
+      {children}
+      {onboardedAt === null && <OnboardingDialog items={SEED_ITEMS} termGoal={SEED_TERM_GOAL} />}
+    </>
+  );
 }

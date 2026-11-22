@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { resetDb } from './helpers';
 
-test('bundle frontend không chứa key AI hay DATABASE_URL', async ({ page, isMobile }) => {
+test('bundle frontend không chứa key AI hay DATABASE_URL', async ({ page, request, isMobile }) => {
+  await resetDb(request); // onboarded: otherwise the onboarding dialog hides the page from the a11y tree
   const reads: Promise<{ url: string; body?: string; error?: string }>[] = [];
   page.on('response', (res) => {
     if (res.request().resourceType() !== 'script') return;
