@@ -20,3 +20,17 @@ test('MOCK_PARTIAL_ERROR phát một phần rồi ném lỗi', async () => {
   await expect((async () => { for await (const e of ask('MOCK_PARTIAL_ERROR')) if (e.type === 'text') seen.push(e.delta); })()).rejects.toBeInstanceOf(AiProviderError);
   expect(seen).toEqual(['Đang trả lời']);
 });
+
+test('MOCK_STATE ghép area và detail từ khối workspace_state', async () => {
+  const state = {
+    now: { date: '2026-11-22' },
+    areas: [{ name: 'Mobile', status: 'active' }, { name: 'Web', status: 'not_started' }],
+    details: [{ name: 'Mobile', topics: [{ title: 'Nav', status: 'practiced' }, { title: 'State', status: 'new' }] }],
+  };
+  const system = `intro\n\n<workspace_state>\n${JSON.stringify(state)}\n</workspace_state>`;
+  const { text } = await collect(createMockProvider().stream({
+    messages: [{ role: 'system', content: system }, { role: 'user', content: 'hi' }],
+    maxOutputTokens: 100,
+  }));
+  expect(text).toBe('MOCK_STATE today=2026-11-22 | Mobile=active; Web=not_started | detail:Mobile topics:Nav=practiced,State=new');
+});
