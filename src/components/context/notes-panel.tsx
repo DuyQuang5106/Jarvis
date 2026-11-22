@@ -23,6 +23,8 @@ function stash(areaId: string, d: Draft) {
 }
 
 const SAVE_FAILED = 'Không lưu được ghi chú.';
+const TOGGLE_FAILED = 'Không lưu được “Không gửi cho AI” của ghi chú.';
+const EMPTY_HINT = 'Ghi chú trống sẽ không được lưu — dùng Xóa để xóa ghi chú.';
 
 export const AUTOSAVE_MS = 1500;
 
@@ -186,6 +188,26 @@ function NoteEditor({
     [],
   );
 
+  // iOS may freeze or kill a backgrounded page before the debounce fires: save as soon as it is hidden.
+  useEffect(
+    () => {
+      const flushIfUnsaved = () => {
+        if (textRef.current !== lastSaved.current) flush();
+      };
+      const onVisibility = () => {
+        if (document.visibilityState === 'hidden') flushIfUnsaved();
+      };
+      document.addEventListener('visibilitychange', onVisibility);
+      window.addEventListener('pagehide', flushIfUnsaved);
+      return () => {
+        document.removeEventListener('visibilitychange', onVisibility);
+        window.removeEventListener('pagehide', flushIfUnsaved);
+      };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   /** Runs after any save in flight, so a toggle made during a create is applied to the new note. */
   function toggleExcluded(next: boolean) {
     setExcluded(next);
@@ -201,8 +223,18 @@ function NoteEditor({
         } catch {
           res = { ok: false, error: SAVE_FAILED };
         }
-        if (res.ok) serverExcluded.current = want;
-        else if (mounted.current) setError(res.error);
+        if (res.ok) {
+          serverExcluded.current = want;
+          return;
+        }
+        // Back to what the server has, so the switch never shows a privacy state that was not saved.
+        excludedRef.current = serverExcluded.current;
+        if (mounted.current) {
+          setExcluded(serverExcluded.current);
+          setError(res.error);
+        } else {
+          toast.error(`${TOGGLE_FAILED} Hãy thử lại trong mục Notes.`);
+        }
       });
       await chain.current;
     });
@@ -234,6 +266,8 @@ function NoteEditor({
   }
 
   const busy = pending || deleting;
+  // A saved note emptied in the editor is not saved (autosave skips blank text); say so instead of failing silently.
+  const persisted = Boolean(note || draft?.id);
   return (
     <li aria-busy={busy} className="space-y-2 rounded-lg border bg-card p-3">
       <Textarea
@@ -256,6 +290,7 @@ function NoteEditor({
         </span>
         <DeleteButton onDelete={remove} />
       </div>
+      {persisted && text.trim() === '' && <p className="text-xs text-muted-foreground">{EMPTY_HINT}</p>}
       <RowStatus pending={busy} error={error} />
     </li>
   );

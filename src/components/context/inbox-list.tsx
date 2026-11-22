@@ -1,8 +1,9 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { deleteEntityAction, updateEntityAction } from '@/app/(app)/_actions/entities';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import type { NoteRow } from '@/db/schema';
 import { formatDateTimeVi } from '@/lib/dates';
 import { DeleteButton, RowStatus, useRowAction } from './row-controls';
@@ -36,10 +37,31 @@ export function InboxList({ notes, areas }: { notes: NoteRow[]; areas: AreaOptio
 function InboxItem({ note, areas }: { note: NoteRow; areas: AreaOption[] }) {
   const uid = useId();
   const { pending, error, run } = useRowAction();
+  const [excluded, setExcluded] = useState(note.aiExcluded);
+
+  // Saves on toggle; a failed save puts the switch back so it never shows an unsaved privacy state.
+  function toggleExcluded(next: boolean) {
+    setExcluded(next);
+    run(async () => {
+      let res: Awaited<ReturnType<typeof updateEntityAction>>;
+      try {
+        res = await updateEntityAction('note', note.id, { aiExcluded: next });
+      } catch {
+        res = { ok: false, error: 'Không lưu được thay đổi.' };
+      }
+      if (!res.ok) setExcluded(!next);
+      return res;
+    });
+  }
+
   return (
     <div aria-busy={pending} className="space-y-2 rounded-lg border p-3">
       <p className="whitespace-pre-wrap break-words text-base">{note.text}</p>
       <p className="text-xs text-muted-foreground">{formatDateTimeVi(note.createdAt)}</p>
+      <label htmlFor={`${uid}-ai`} className="flex min-h-11 w-fit items-center gap-2 text-sm">
+        <Switch id={`${uid}-ai`} checked={excluded} disabled={pending} onCheckedChange={toggleExcluded} />
+        Không gửi cho AI
+      </label>
       <div className="flex items-center gap-2">
         <select
           id={`${uid}-area`}
