@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, max } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { z } from 'zod';
 import type { Tx, DbOrTx } from '@/db/client';
@@ -181,6 +181,17 @@ export const topicService = makeEntityService<TopicRow, typeof CreateTopicInput,
   entityType: 'topic',
   createSchema: CreateTopicInput,
   updateSchema: UpdateTopicInput,
+  hooks: {
+    // Without an explicit sortOrder a new topic goes after the area's last one.
+    async onCreate(tx, input) {
+      if (input.sortOrder !== undefined) return {};
+      const [{ last }] = await tx
+        .select({ last: max(topics.sortOrder) })
+        .from(topics)
+        .where(eq(topics.areaId, input.areaId as string));
+      return { sortOrder: (last ?? -1) + 1 };
+    },
+  },
 });
 
 export const assessmentService = makeEntityService<AssessmentRow, typeof CreateAssessmentInput, typeof UpdateAssessmentInput>({

@@ -178,3 +178,14 @@ test('ENTITY_SERVICES có đúng sáu khóa ánh xạ đúng service', () => {
   expect(ENTITY_SERVICES.blocker).toBe(blockerService);
   expect(ENTITY_SERVICES.note).toBe(noteService);
 });
+
+test('topic không có sortOrder được thêm vào cuối của đúng area', async () => {
+  const area = await makeArea(db);
+  const other = await makeArea(db);
+  await topicService.create(db, { areaId: other.id, title: 'Khác', sortOrder: 50 }, manual);
+  const first = await topicService.create(db, { areaId: area.id, title: 'Một' }, manual);
+  expect(first.sortOrder).toBe(0);
+  await topicService.create(db, { areaId: area.id, title: 'Có thứ tự', sortOrder: 7 }, manual);
+  const last = await topicService.create(db, { areaId: area.id, title: 'Cuối' }, manual);
+  expect(last.sortOrder).toBe(8);
+});
