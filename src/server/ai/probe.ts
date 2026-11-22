@@ -69,9 +69,18 @@ export async function runProbe(provider: AiProvider): Promise<ProbeReport> {
     notes: [],
   };
 
+  // finish_reason bất thường (length, content_filter...) giải thích vì sao một lần thử trượt.
+  const finishNote = (label: string) => (reason: string | null) => {
+    if (reason && reason !== 'stop' && reason !== 'tool_calls') report.notes.push(`${label}: finish_reason=${reason}`);
+  };
+
   try {
     const { text } = await collect(
-      provider.stream({ messages: [{ role: 'user', content: 'Trả lời đúng một từ: xin chào' }], maxOutputTokens: 50 }),
+      provider.stream({
+        messages: [{ role: 'user', content: 'Trả lời đúng một từ: xin chào' }],
+        maxOutputTokens: 50,
+        onFinishReason: finishNote('chat'),
+      }),
     );
     report.chat = text.trim().length > 0;
     if (!report.chat) report.notes.push('chat: câu trả lời rỗng');
@@ -84,6 +93,7 @@ export async function runProbe(provider: AiProvider): Promise<ProbeReport> {
     for await (const e of provider.stream({
       messages: [{ role: 'user', content: 'Đếm từ 1 đến 20, mỗi số một dòng' }],
       maxOutputTokens: 200,
+      onFinishReason: finishNote('streaming'),
     })) {
       if (e.type === 'text') textEvents += 1;
     }
@@ -100,9 +110,12 @@ export async function runProbe(provider: AiProvider): Promise<ProbeReport> {
           messages: [{ role: 'user', content: TASK_PROMPT }],
           tools: [PROPOSE_TOOL],
           maxOutputTokens: 400,
+          onFinishReason: finishNote(`tools #${i + 1}`),
         }),
       );
-      if (toolCalls.length === 1 && isGoodPayload(parseJson(toolCalls[0].argsJson))) report.tools.passed += 1;
+      const call = toolCalls.length === 1 ? toolCalls[0] : undefined;
+      if (call && call.name === PROPOSE_TOOL.name && isGoodPayload(parseJson(call.argsJson))) report.tools.passed += 1;
+      else if (call && call.name !== PROPOSE_TOOL.name) report.notes.push(`tools #${i + 1}: gọi sai tool "${call.name}"`);
       else report.notes.push(`tools #${i + 1}: ${toolCalls.length} tool call, nội dung không đạt`);
     } catch (err) {
       report.notes.push(`tools #${i + 1}: ${describe(err)}`);
@@ -118,6 +131,7 @@ export async function runProbe(provider: AiProvider): Promise<ProbeReport> {
             { role: 'user', content: TASK_PROMPT },
           ],
           maxOutputTokens: 600,
+          onFinishReason: finishNote(`json #${i + 1}`),
         }),
       );
       const m = /<proposed_actions>([\s\S]*?)<\/proposed_actions>/.exec(text);

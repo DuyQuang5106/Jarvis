@@ -44,3 +44,32 @@ test('body 200 không phải stream thành AiProviderError', async () => {
   const provider = make(async () => new Response('<html>gateway</html>', { status: 200, headers: { 'content-type': 'text/html' } }));
   await expect(collect(provider.stream(req))).rejects.toBeInstanceOf(AiProviderError);
 });
+
+const tools = [{ name: 'propose_changes', description: 'd', parameters: { type: 'object' } }];
+const finish = (reason: string) => ({ id: 'x', object: 'chat.completion.chunk', choices: [{ index: 0, delta: {}, finish_reason: reason }] });
+
+test('gateway gửi lại nguyên tên tool ở mỗi delta: giữ một tên', async () => {
+  const provider = make(async () => sse([
+    chunk({ tool_calls: [{ index: 0, id: 'c1', function: { name: 'propose_changes', arguments: '{"a":' } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { name: 'propose_changes', arguments: '1}' } }] }),
+  ]));
+  const out = await collect(provider.stream({ ...req, tools }));
+  expect(out.toolCalls).toEqual([{ name: 'propose_changes', argsJson: '{"a":1}' }]);
+});
+
+test('tool call không có tên: không phát ra tên rỗng mà ném AiProviderError', async () => {
+  const provider = make(async () => sse([chunk({ tool_calls: [{ index: 0, function: { arguments: '{}' } }] })]));
+  const seen: string[] = [];
+  const run = async () => {
+    for await (const e of provider.stream({ ...req, tools })) if (e.type === 'tool_call') seen.push(e.name);
+  };
+  await expect(run()).rejects.toBeInstanceOf(AiProviderError);
+  expect(seen).toEqual([]);
+});
+
+test('báo finish_reason cuối stream qua onFinishReason', async () => {
+  const reasons: (string | null)[] = [];
+  const provider = make(async () => sse([chunk({ content: 'a' }), finish('length')]));
+  await collect(provider.stream({ ...req, onFinishReason: (r) => reasons.push(r) }));
+  expect(reasons).toEqual(['length']);
+});

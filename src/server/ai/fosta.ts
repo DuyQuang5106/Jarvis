@@ -24,6 +24,7 @@ export function createFostaProvider(opts: Opts): AiProvider {
     async *stream(req: StreamRequest): AsyncGenerator<ProviderEvent> {
       const calls = new Map<number, { name: string; args: string }>();
       let chunks = 0;
+      let finishReason: string | null = null;
       try {
         const stream = await client.chat.completions.create(
           {
@@ -44,12 +45,15 @@ export function createFostaProvider(opts: Opts): AiProvider {
         );
         for await (const part of stream) {
           chunks += 1;
-          const delta = part.choices?.[0]?.delta;
+          const choice = part.choices?.[0];
+          if (choice?.finish_reason) finishReason = choice.finish_reason;
+          const delta = choice?.delta;
           if (!delta) continue;
           if (delta.content) yield { type: 'text', delta: delta.content };
           for (const tc of delta.tool_calls ?? []) {
             const cur = calls.get(tc.index) ?? { name: '', args: '' };
-            if (tc.function?.name) cur.name += tc.function.name;
+            // Tên đến một lần; có gateway gửi lại nguyên tên ở mỗi delta, nên chỉ giữ tên đầu tiên.
+            if (tc.function?.name && !cur.name) cur.name = tc.function.name;
             if (tc.function?.arguments) cur.args += tc.function.arguments;
             calls.set(tc.index, cur);
           }
@@ -59,7 +63,11 @@ export function createFostaProvider(opts: Opts): AiProvider {
       }
       // Body 200 không phải SSE (HTML của gateway, JSON không stream...) không sinh chunk nào.
       if (chunks === 0) throw new AiProviderError('Provider AI không trả về stream hợp lệ.');
-      for (const [, c] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
+      req.onFinishReason?.(finishReason);
+      const ordered = [...calls.entries()].sort((a, b) => a[0] - b[0]);
+      // Tool call không có tên là phản hồi hỏng: báo lỗi, không phát ra tool call tên rỗng.
+      if (ordered.some(([, c]) => !c.name)) throw new AiProviderError('Provider AI trả về tool call không có tên.');
+      for (const [, c] of ordered) {
         yield { type: 'tool_call', name: c.name, argsJson: c.args };
       }
     },

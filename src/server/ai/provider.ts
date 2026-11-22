@@ -7,7 +7,14 @@ export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: stri
 /** `parameters` là JSON Schema. */
 export type ToolDef = { name: string; description: string; parameters: Record<string, unknown> };
 export type ProviderEvent = { type: 'text'; delta: string } | { type: 'tool_call'; name: string; argsJson: string };
-export type StreamRequest = { messages: ChatMessage[]; tools?: ToolDef[]; maxOutputTokens: number; signal?: AbortSignal };
+export type StreamRequest = {
+  messages: ChatMessage[];
+  tools?: ToolDef[];
+  maxOutputTokens: number;
+  signal?: AbortSignal;
+  /** Chẩn đoán: provider báo `finish_reason` cuối cùng (null nếu không có) khi stream kết thúc bình thường. */
+  onFinishReason?: (reason: string | null) => void;
+};
 
 export interface AiProvider {
   stream(req: StreamRequest): AsyncIterable<ProviderEvent>;

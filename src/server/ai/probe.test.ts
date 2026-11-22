@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { AiProviderError } from '../errors';
+import { createFostaProvider } from './fosta';
 import { recommendMode, runProbe } from './probe';
 import type { AiProvider, ProviderEvent, StreamRequest } from './provider';
 
@@ -65,4 +66,61 @@ test('provider ném AiProviderError mỗi lần gọi: chat false và có note',
   expect(r.tools.passed).toBe(0);
   expect(r.json.passed).toBe(0);
   expect(r.notes.length).toBeGreaterThan(0);
+});
+
+test('tool call sai tên: lần thử trượt', async () => {
+  const p = fake((req) => {
+    if (req.tools?.length) return [{ type: 'tool_call', name: 'other_tool', argsJson: JSON.stringify(payload()) }];
+    return [{ type: 'text', delta: 'a' }, { type: 'text', delta: 'b' }];
+  });
+  const r = await runProbe(p);
+  expect(r.tools.passed).toBe(0);
+  expect(r.notes.filter((n) => n.startsWith('tools #'))).toHaveLength(3);
+  expect(recommendMode(r)).not.toBe('tools');
+});
+
+test('tên tool lặp lại qua các delta (Fosta) vẫn đạt; tool call không tên không được tính', async () => {
+  const sse = (chunks: object[]) =>
+    new Response(chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n', {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  const tc = (fn: object) => ({ id: 'x', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: fn }] } }] });
+  const args = JSON.stringify(payload());
+  const half = Math.floor(args.length / 2);
+  let call = 0;
+  const fetchImpl = (async (_u: unknown, init: RequestInit) => {
+    const body = JSON.parse(String(init.body)) as { tools?: unknown[] };
+    if (!body.tools) return sse([{ id: 'x', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { content: 'a' } }] }]);
+    call += 1;
+    if (call === 3) return sse([tc({ arguments: args })]); // không có tên
+    return sse([
+      tc({ name: 'propose_changes', arguments: args.slice(0, half) }),
+      tc({ name: 'propose_changes', arguments: args.slice(half) }),
+    ]);
+  }) as typeof fetch;
+  const r = await runProbe(createFostaProvider({ baseUrl: 'https://example.test/v1', apiKey: 'k', model: 'm', fetch: fetchImpl }));
+  expect(r.tools).toEqual({ passed: 2, total: 3 });
+  expect(r.notes.some((n) => n.startsWith('tools #3'))).toBe(true);
+});
+
+test('finish_reason khác stop/tool_calls được ghi vào notes', async () => {
+  const p: AiProvider = {
+    async *stream(req) {
+      req.onFinishReason?.('length');
+      yield { type: 'text', delta: 'a' };
+    },
+  };
+  const r = await runProbe(p);
+  expect(r.notes).toContain('chat: finish_reason=length');
+});
+
+test('finish_reason stop/tool_calls không sinh note', async () => {
+  const p = fake((req) => {
+    req.onFinishReason?.(req.tools?.length ? 'tool_calls' : 'stop');
+    if (req.tools?.length) return [{ type: 'tool_call', name: 'propose_changes', argsJson: JSON.stringify(payload()) }];
+    if (req.messages.some((m) => m.role === 'system')) return [{ type: 'text', delta: `<proposed_actions>${JSON.stringify(payload())}</proposed_actions>` }];
+    return [{ type: 'text', delta: 'a' }, { type: 'text', delta: 'b' }];
+  });
+  expect((await runProbe(p)).notes).toEqual([]);
 });
