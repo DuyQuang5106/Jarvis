@@ -44,7 +44,7 @@ export function ContextView({
         searching={query.trim() !== ''}
         onOpen={(a) => openItem(a.id)}
       />
-      {item !== null && item === loadedItem && (details ? <AreaDrawer details={details} section={section} /> : <MissingAreaDrawer />)}
+      {item !== null && item === loadedItem && (details ? <AreaDrawer key={details.area.id} details={details} section={section} /> : <MissingAreaDrawer />)}
     </div>
   );
 }

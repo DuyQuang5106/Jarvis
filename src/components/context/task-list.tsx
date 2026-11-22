@@ -1,7 +1,7 @@
 'use client';
 
 import { Trash2Icon } from 'lucide-react';
-import { useId, useState, useTransition } from 'react';
+import { useId, useRef, useState, useTransition } from 'react';
 import type { ActionResult } from '@/app/(app)/_actions/result';
 import { createEntityAction, deleteEntityAction, updateEntityAction } from '@/app/(app)/_actions/entities';
 import { Button } from '@/components/ui/button';
@@ -62,7 +62,7 @@ export function TaskList({ details }: { details: AreaDetails }) {
       ) : (
         <ul className="space-y-2">
           {tasks.map((t) => (
-            <TaskItem key={`${t.id}:${String(t.updatedAt)}`} task={t} milestones={milestones} />
+            <TaskItem key={t.id} task={t} milestones={milestones} />
           ))}
         </ul>
       )}
@@ -82,6 +82,7 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
     });
   };
   const [editing, setEditing] = useState(false);
+  const cancelled = useRef(false);
   const [confirming, setConfirming] = useState(false);
   const done = task.status === 'done';
 
@@ -89,6 +90,7 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
 
   function commitTitle(value: string) {
     setEditing(false);
+    if (cancelled.current) return;
     const next = value.trim();
     if (next && next !== task.title) update({ title: next });
   }
@@ -109,13 +111,15 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
         {editing ? (
           <Input
             autoFocus
+            data-inline-edit
             aria-label="Tiêu đề task"
             defaultValue={task.title}
             onBlur={(e) => commitTitle(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') e.currentTarget.blur();
               if (e.key === 'Escape') {
-                e.stopPropagation();
+                // The drawer ignores this Escape (see DrawerShell); discard the edit without saving.
+                cancelled.current = true;
                 setEditing(false);
               }
             }}
@@ -124,7 +128,10 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
         ) : (
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              cancelled.current = false;
+              setEditing(true);
+            }}
             className={cn(
               'min-h-11 min-w-0 flex-1 rounded-lg px-2 text-left text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
               done && 'text-muted-foreground line-through',
@@ -156,7 +163,13 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
           <Input
             id={`${uid}-due`}
             type="date"
+            key={`due:${task.dueDate ?? ''}`}
             defaultValue={task.dueDate ?? ''}
+            // A complete date saves on change (iOS' picker can close without blur); clearing saves on blur,
+            // because a half-typed date also reads as empty.
+            onChange={(e) => {
+              if (e.target.value !== '' && e.target.value !== task.dueDate) update({ dueDate: e.target.value });
+            }}
             onBlur={(e) => {
               if (e.target.value !== (task.dueDate ?? '')) update({ dueDate: e.target.value || null });
             }}
@@ -183,6 +196,7 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
             type="number"
             inputMode="numeric"
             min={1}
+            key={`est:${task.estimateMinutes ?? ''}`}
             defaultValue={task.estimateMinutes ?? ''}
             onBlur={(e) => {
               const raw = e.target.value.trim();

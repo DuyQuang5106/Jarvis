@@ -39,7 +39,13 @@ function DrawerShell({ title, children }: { title: string; children: ReactNode }
   const { closeItem } = useContextParams();
   return (
     <Sheet open onOpenChange={(open) => !open && closeItem()}>
-      <SheetContent className={CONTENT_CLASS}>
+      <SheetContent
+        className={CONTENT_CLASS}
+        onEscapeKeyDown={(e) => {
+          // Escape inside an inline edit cancels that edit only, not the whole drawer.
+          if (e.target instanceof Element && e.target.closest('[data-inline-edit]')) e.preventDefault();
+        }}
+      >
         <SheetHeader className="pr-12">
           <SheetTitle className="text-lg">{title}</SheetTitle>
           <SheetDescription className="sr-only">Chi tiết mục</SheetDescription>
@@ -66,9 +72,20 @@ export function AreaDrawer({ details, section }: { details: AreaDetails; section
             ))}
           </TabsList>
         </div>
-        <TabsContent value={active} className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-2">
-          {SECTIONS[active].render(details)}
+        {/* The overview stays mounted (hidden) so unsaved edits survive switching tabs. */}
+        <TabsContent
+          value="overview"
+          forceMount
+          hidden={active !== 'overview'}
+          className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-2"
+        >
+          {SECTIONS.overview.render(details)}
         </TabsContent>
+        {active !== 'overview' && (
+          <TabsContent value={active} className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-2">
+            {SECTIONS[active].render(details)}
+          </TabsContent>
+        )}
       </Tabs>
     </DrawerShell>
   );
