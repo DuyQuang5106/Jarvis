@@ -1,7 +1,7 @@
 'use client';
 
 import { CheckIcon, CopyIcon, RefreshCwIcon } from 'lucide-react';
-import { useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { createContext, useContext, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
@@ -73,9 +73,33 @@ function CodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
   );
 }
 
+/** Set inside a markdown link, where an image must not become a second (nested) link. */
+const InLink = createContext(false);
+
+/**
+ * A markdown image is never loaded: fetching a URL the model wrote could carry data out in it. It shows as
+ * a link to open on purpose, or as plain text inside another link.
+ */
+function ImageAsLink(props: ComponentProps<'img'> & { node?: unknown }) {
+  const { src, alt } = withoutNode(props);
+  const inLink = useContext(InLink);
+  const label = `[ảnh: ${alt ?? ''}]`;
+  if (inLink || typeof src !== 'string' || !src) return <span>{label}</span>;
+  return (
+    <a href={src} target="_blank" rel="noreferrer noopener">
+      {label}
+    </a>
+  );
+}
+
 const MARKDOWN: Components = {
   // Model output is untrusted: no raw HTML (no rehype-raw), and links leave the app in a new tab.
-  a: (props) => <a {...withoutNode(props)} target="_blank" rel="noreferrer" />,
+  a: (props) => (
+    <InLink.Provider value>
+      <a {...withoutNode(props)} target="_blank" rel="noreferrer noopener" />
+    </InLink.Provider>
+  ),
+  img: ImageAsLink,
   pre: CodeBlock,
   table: (props) => (
     <div className="overflow-x-auto">

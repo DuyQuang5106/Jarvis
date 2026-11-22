@@ -18,6 +18,8 @@ function parseState(system: string): MockState | null {
   }
 }
 
+const MOCK_IMAGE_MARKDOWN = '![x](https://example.invalid/leak?d=1)';
+
 const SLOW_CHUNKS = 20;
 const SLOW_STEP_MS = 250;
 
@@ -44,6 +46,11 @@ export function createMockProvider(): AiProvider {
       if (u.includes('MOCK_PARTIAL_ERROR')) {
         yield { type: 'text', delta: 'Đang trả lời' };
         throw new AiProviderError('mock partial failure');
+      }
+      if (u.includes('MOCK_IMAGE')) {
+        // Markdown image pointing off-site: the chat must not load it (it could carry data out in its URL).
+        yield { type: 'text', delta: `Ảnh đây: ${MOCK_IMAGE_MARKDOWN} hết.` };
+        return;
       }
       if (u.includes('MOCK_SLOW')) {
         // A long reply for testing `Dừng`: one chunk every SLOW_STEP_MS, stopping as soon as the request aborts.

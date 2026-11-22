@@ -155,6 +155,29 @@ test('đổi tên cuộc chat qua menu, còn sau khi tải lại', async ({ page
   await expect(page.getByTestId('recent-chats').getByRole('link', { name: 'Lời chào' })).toBeVisible();
 });
 
+test('ảnh markdown trong câu trả lời chỉ là link, không được tải', async ({ page }) => {
+  const leaked: string[] = [];
+  page.on('request', (r) => { if (r.url().includes('example.invalid')) leaked.push(r.url()); });
+  await page.goto('/chat');
+  await send(page, 'MOCK_IMAGE');
+  const bubble = lastAssistant(page);
+  await expect(bubble).toContainText('hết.');
+  await expect(bubble.locator('img')).toHaveCount(0);
+  const link = bubble.getByRole('link', { name: '[ảnh: x]' });
+  await expect(link).toHaveAttribute('href', 'https://example.invalid/leak?d=1');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noreferrer noopener');
+  await page.reload(); // the saved reply renders the same way
+  await expect(lastAssistant(page).getByRole('link', { name: '[ảnh: x]' })).toBeVisible();
+  await expect(lastAssistant(page).locator('img')).toHaveCount(0);
+  expect(leaked).toEqual([]);
+});
+
+test('trang có CSP chặn ảnh ngoài site', async ({ request }) => {
+  const res = await request.get('/login');
+  expect(res.headers()['content-security-policy']).toContain("img-src 'self' data: blob:");
+});
+
 test('scope được giữ trong cuộc chat và gửi kèm mỗi lượt', async ({ page }) => {
   await page.goto('/chat');
   await page.getByRole('button', { name: 'Auto' }).click();

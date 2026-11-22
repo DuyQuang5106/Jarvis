@@ -11,6 +11,12 @@ test('mặc định lặp lại tin nhắn trong hai chunk', async () => {
   expect(events).toEqual([{ type: 'text', delta: 'MOCK_REPLY: ' }, { type: 'text', delta: 'xin chào' }]);
 });
 
+test('MOCK_IMAGE trả về markdown có ảnh ngoài site', async () => {
+  const events = [];
+  for await (const e of ask('MOCK_IMAGE')) events.push(e);
+  expect(events).toEqual([{ type: 'text', delta: 'Ảnh đây: ![x](https://example.invalid/leak?d=1) hết.' }]);
+});
+
 test('MOCK_ERROR ném lỗi trước khi phát gì', async () => {
   await expect(collect(ask('MOCK_ERROR'))).rejects.toBeInstanceOf(AiProviderError);
 });
