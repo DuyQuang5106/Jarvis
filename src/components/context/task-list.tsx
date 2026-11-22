@@ -11,7 +11,9 @@ import type { MilestoneRow, TaskRow } from '@/db/schema';
 import { DEADLINE_TYPE_LABEL, TASK_STATUS_LABEL } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import type { AreaDetails } from '@/server/queries/area-details';
+import { shouldSaveDateOnChange } from './date-input';
 import { NATIVE_SELECT } from './styles';
+import { SyncedInput } from './synced-input';
 
 type Run = (fn: () => Promise<ActionResult<unknown>>) => void;
 
@@ -160,19 +162,12 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <label htmlFor={`${uid}-due`} className="text-xs text-muted-foreground">Hạn</label>
-          <Input
+          <SyncedInput
             id={`${uid}-due`}
             type="date"
-            key={`due:${task.dueDate ?? ''}`}
-            defaultValue={task.dueDate ?? ''}
-            // A complete date saves on change (iOS' picker can close without blur); clearing saves on blur,
-            // because a half-typed date also reads as empty.
-            onChange={(e) => {
-              if (e.target.value !== '' && e.target.value !== task.dueDate) update({ dueDate: e.target.value });
-            }}
-            onBlur={(e) => {
-              if (e.target.value !== (task.dueDate ?? '')) update({ dueDate: e.target.value || null });
-            }}
+            value={task.dueDate ?? ''}
+            saveOnChange={shouldSaveDateOnChange}
+            onSave={(v) => update({ dueDate: v || null })}
             className="h-11"
           />
         </div>
@@ -191,18 +186,13 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
         </div>
         <div className="space-y-1">
           <label htmlFor={`${uid}-est`} className="text-xs text-muted-foreground">Ước lượng (phút)</label>
-          <Input
+          <SyncedInput
             id={`${uid}-est`}
             type="number"
             inputMode="numeric"
             min={1}
-            key={`est:${task.estimateMinutes ?? ''}`}
-            defaultValue={task.estimateMinutes ?? ''}
-            onBlur={(e) => {
-              const raw = e.target.value.trim();
-              const next = raw === '' ? null : Number(raw);
-              if (next !== task.estimateMinutes) update({ estimateMinutes: next });
-            }}
+            value={task.estimateMinutes === null ? '' : String(task.estimateMinutes)}
+            onSave={(v) => update({ estimateMinutes: v.trim() === '' ? null : Number(v) })}
             className="h-11"
           />
         </div>

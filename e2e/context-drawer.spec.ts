@@ -114,6 +114,18 @@ test('Hạn, Loại deadline và Ước lượng được lưu', async ({ page }
   await expect(row.getByLabel('Ước lượng (phút)')).toHaveValue('90');
 });
 
+test('gõ từng ký tự vào Hạn chỉ lưu ngày đã gõ', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Typing into a date field is a desktop behaviour');
+  await addTask(page, 'Task gõ ngày');
+  const due = item(page, 'Task gõ ngày').getByLabel('Hạn');
+  await due.click();
+  await due.pressSequentially('12012026');
+  await due.blur();
+  await settled(page, 'Task gõ ngày');
+  await page.reload();
+  await expect(item(page, 'Task gõ ngày').getByLabel('Hạn')).toHaveValue('2026-12-01');
+});
+
 test('task Done xếp cuối và gạch ngang', async ({ page }) => {
   const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
   await addTask(page, 'Việc A');
