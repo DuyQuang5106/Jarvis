@@ -1,7 +1,10 @@
 import { connection } from 'next/server';
 import { Suspense } from 'react';
+import { ContextView } from '@/components/context/context-view';
+import { getDb } from '@/db/client';
 import { requireOwner } from '@/server/auth';
-import { ContextTabs } from './context-tabs';
+import { listArchivedAreas } from '@/server/queries/area-details';
+import { getPortfolioSnapshot } from '@/server/queries/snapshot';
 
 export const metadata = { title: 'Context' };
 
@@ -15,14 +18,13 @@ export default function ContextPage() {
 }
 
 async function ContextContent() {
-  await connection(); // request-time only: never read the session during `next build`
+  await connection(); // request-time only: never read the session or the DB during `next build`
   await requireOwner();
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Context</h1>
-      <Suspense fallback={null}>
-        <ContextTabs />
-      </Suspense>
-    </div>
-  );
+  const db = await getDb();
+  const [snapshot, academic, project] = await Promise.all([
+    getPortfolioSnapshot(db, new Date()),
+    listArchivedAreas(db, 'academic'),
+    listArchivedAreas(db, 'project'),
+  ]);
+  return <ContextView areas={snapshot.areas} archived={{ academic, project }} />;
 }
