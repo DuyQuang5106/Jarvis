@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
-import { useId, useState, useTransition } from 'react';
+import { useId, useRef, useState, useTransition } from 'react';
 import { createEntityAction, deleteEntityAction, moveTopicAction, updateEntityAction } from '@/app/(app)/_actions/entities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,18 +16,25 @@ import { SyncedInput } from './synced-input';
 export function TopicList({ areaId, topics }: { areaId: string; topics: TopicRow[] }) {
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
+  // A ref, not `pending`: a second Enter can arrive before the transition re-renders.
+  const adding = useRef(false);
 
   function add(e: React.FormEvent) {
     e.preventDefault();
     const t = title.trim();
-    if (!t) return;
+    if (!t || adding.current) return;
+    adding.current = true;
     setError(null);
     startTransition(async () => {
-      const next = topics.reduce((m, x) => Math.max(m, x.sortOrder), -1) + 1;
-      const res = await createEntityAction('topic', { areaId, title: t, sortOrder: next });
-      if (res.ok) setTitle('');
-      else setError(res.error);
+      try {
+        // No sortOrder: the service puts a new topic after the area's last one.
+        const res = await createEntityAction('topic', { areaId, title: t });
+        if (res.ok) setTitle('');
+        else setError(res.error);
+      } finally {
+        adding.current = false;
+      }
     });
   }
 
@@ -36,7 +43,7 @@ export function TopicList({ areaId, topics }: { areaId: string; topics: TopicRow
   return (
     <div className="space-y-3">
       <ProgressSummary done={practiced} total={topics.length} suffix="topics từ Practiced trở lên" />
-      <form onSubmit={add}>
+      <form onSubmit={add} aria-busy={pending}>
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -46,7 +53,7 @@ export function TopicList({ areaId, topics }: { areaId: string; topics: TopicRow
           autoComplete="off"
         />
       </form>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <RowStatus pending={pending} error={error} />
       {topics.length === 0 ? (
         <p className="text-sm text-muted-foreground">Chưa có topic nào.</p>
       ) : (

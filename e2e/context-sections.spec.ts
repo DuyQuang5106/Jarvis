@@ -104,3 +104,24 @@ test('project health: bốn dòng dữ kiện, milestone trễ', async ({ page }
   await expect(health).toContainText('Blocker đang mở: 0');
   await expect(health).toContainText('Cập nhật cách đây: 0 ngày');
 });
+
+test('Enter hai lần nhanh khi thêm topic chỉ tạo một topic', async ({ page }) => {
+  const drawer = await openNew(page, 'Academic', 'Mobile Programming');
+  await drawer.getByRole('tab', { name: 'Topics' }).click();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route('**/context**', async (route) => {
+    if (route.request().method() === 'POST') await gate;
+    await route.continue();
+  });
+  const input = drawer.getByPlaceholder('Thêm topic…');
+  await input.fill('Navigation');
+  await input.press('Enter');
+  await input.press('Enter');
+  await expect(drawer.getByText('Đang lưu…')).toBeVisible();
+  release();
+  await expect(drawer.getByRole('listitem').filter({ hasText: 'Navigation' })).toBeVisible();
+  await expect(input).toHaveValue('');
+  await page.reload();
+  await expect(page.getByRole('dialog').getByRole('listitem')).toHaveCount(1);
+});

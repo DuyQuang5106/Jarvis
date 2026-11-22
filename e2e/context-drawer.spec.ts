@@ -213,6 +213,17 @@ test('item không tồn tại hiện thông báo', async ({ page }) => {
 
 // The project `Milestone` select on a task is covered in context-sections.spec.ts.
 
+/** Holds every server-action POST until `release()` is called. */
+async function holdWrites(page: Page) {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route('**/context**', async (route) => {
+    if (route.request().method() === 'POST') await gate;
+    await route.continue();
+  });
+  return release;
+}
+
 test('Không gửi cho AI của mục lưu ngay khi bật, không cần bấm Lưu', async ({ page }) => {
   const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
   await drawer.getByRole('switch', { name: 'Không gửi cho AI' }).click();
@@ -277,4 +288,20 @@ test('lưu lỗi thì thay đổi vẫn tính là chưa lưu khi đóng', async 
   await expect(drawer.getByRole('alert')).toContainText('tối đa 200');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('alertdialog', { name: 'Bỏ thay đổi chưa lưu?' })).toBeVisible();
+});
+
+test('Enter hai lần nhanh khi thêm task chỉ tạo một task', async ({ page }) => {
+  const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
+  await drawer.getByRole('tab', { name: 'Tasks' }).click();
+  const release = await holdWrites(page);
+  const input = drawer.getByPlaceholder('Thêm task…');
+  await input.fill('Một task');
+  await input.press('Enter');
+  await input.press('Enter');
+  await expect(drawer.getByText('Đang lưu…')).toBeVisible();
+  release();
+  await expect(drawer.getByRole('listitem').filter({ hasText: 'Một task' })).toBeVisible();
+  await expect(input).toHaveValue('');
+  await page.reload();
+  await expect(page.getByRole('dialog').getByRole('listitem')).toHaveCount(1);
 });

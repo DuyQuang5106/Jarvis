@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { createEntityAction } from '@/app/(app)/_actions/entities';
 import { Button } from '@/components/ui/button';
@@ -11,18 +11,25 @@ export function QuickCapture() {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Cmd/Ctrl+Enter calls requestSubmit(), which ignores the disabled button; a ref guards against a second save.
+  const saving = useRef(false);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const t = text.trim();
-    if (!t) return;
+    if (!t || saving.current) return;
+    saving.current = true;
     setError(null);
     startTransition(async () => {
-      const res = await createEntityAction('note', { text: t, inboxStatus: 'inbox' });
-      if (res.ok) {
-        setText('');
-        toast.success('Đã lưu vào Inbox');
-      } else setError(res.error);
+      try {
+        const res = await createEntityAction('note', { text: t, inboxStatus: 'inbox' });
+        if (res.ok) {
+          setText('');
+          toast.success('Đã lưu vào Inbox');
+        } else setError(res.error);
+      } finally {
+        saving.current = false;
+      }
     });
   }
 

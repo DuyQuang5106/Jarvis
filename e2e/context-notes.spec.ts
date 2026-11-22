@@ -185,3 +185,18 @@ test('bật Không gửi cho AI lỗi: công tắc về lại giá trị server 
   await expect(drawer.getByRole('alert')).toBeVisible();
   await expect(drawer.getByRole('switch', { name: 'Không gửi cho AI' })).not.toBeChecked();
 });
+
+test('Ctrl+Enter hai lần nhanh chỉ tạo một note', async ({ page }) => {
+  await page.goto('/context');
+  const release = await holdWrites(page);
+  const box = page.getByPlaceholder('Ghi nhanh…');
+  await fillCapture(page, 'Một lần thôi');
+  await box.press('Control+Enter');
+  await box.press('Control+Enter');
+  await expect(page.getByRole('button', { name: 'Đang lưu…' })).toBeVisible();
+  release();
+  await expect(box).toHaveValue('');
+  await expect(page.getByText('Inbox (1)')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Inbox (1)')).toBeVisible();
+});

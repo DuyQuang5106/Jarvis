@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState, useTransition } from 'react';
+import { useId, useRef, useState, useTransition } from 'react';
 import { createEntityAction, deleteEntityAction, updateEntityAction } from '@/app/(app)/_actions/entities';
 import { Input } from '@/components/ui/input';
 import { DEADLINE_TYPES, TASK_STATUSES } from '@/db/enums';
@@ -22,19 +22,26 @@ export function TaskList({ details }: { details: AreaDetails }) {
   const { area } = details;
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
+  // A ref, not `pending`: a second Enter can arrive before the transition re-renders.
+  const adding = useRef(false);
 
   function add(e: React.FormEvent) {
     e.preventDefault();
     const t = title.trim();
-    if (!t) return;
+    if (!t || adding.current) return;
+    adding.current = true;
     setError(null);
     startTransition(async () => {
-      const res = await createEntityAction('task', { areaId: area.id, title: t });
-      if (res.ok) {
-        setTitle('');
-      } else {
-        setError(res.error);
+      try {
+        const res = await createEntityAction('task', { areaId: area.id, title: t });
+        if (res.ok) {
+          setTitle('');
+        } else {
+          setError(res.error);
+        }
+      } finally {
+        adding.current = false;
       }
     });
   }
@@ -44,7 +51,7 @@ export function TaskList({ details }: { details: AreaDetails }) {
 
   return (
     <div className="space-y-3">
-      <form onSubmit={add}>
+      <form onSubmit={add} aria-busy={pending}>
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -54,7 +61,7 @@ export function TaskList({ details }: { details: AreaDetails }) {
           autoComplete="off"
         />
       </form>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <RowStatus pending={pending} error={error} />
       {tasks.length === 0 ? (
         <p className="text-sm text-muted-foreground">Chưa có task nào.</p>
       ) : (
