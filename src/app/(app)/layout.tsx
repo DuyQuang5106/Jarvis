@@ -24,6 +24,8 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
   );
 }
 
+// Not enough on its own: a page segment can be prefetched or soft-navigated to without this layout re-running,
+// so every page (and every server component reading private data) also calls requireOwner() itself.
 async function OwnerGate({ children }: { children: React.ReactNode }) {
   await connection(); // request-time only: never read the session during `next build`
   await requireOwner();
