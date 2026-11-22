@@ -33,3 +33,33 @@ test('nhãn chưa xác minh lại biến mất sau lần sửa đầu tiên', as
   await page.keyboard.press('Escape');
   await expect(page.getByRole('listitem').filter({ hasText: 'Database' })).not.toContainText('chưa xác minh lại');
 });
+
+test('mục tiêu chạm trong hộp thoại đủ 44px', async ({ page, request }) => {
+  await resetDb(request, { onboarded: false });
+  await page.goto('/context');
+  const dialog = page.getByRole('dialog', { name: 'Review & import' });
+  await expect(dialog).toBeVisible();
+  const small = await dialog.evaluate((root) => {
+    const bad: string[] = [];
+    const box = (el: Element) => el.getBoundingClientRect();
+    for (const cb of root.querySelectorAll('[role="checkbox"]')) {
+      const hit = cb.closest('label') ?? cb;
+      const r = box(hit);
+      if (r.width < 43.5 || r.height < 43.5) bad.push(`checkbox ${cb.getAttribute('aria-label')} ${r.width}x${r.height}`);
+    }
+    for (const input of root.querySelectorAll('input:not([aria-hidden])')) {
+      const r = box(input);
+      if (r.height < 43.5) bad.push(`input ${input.getAttribute('aria-label') ?? input.id} h=${r.height}`);
+    }
+    for (const b of root.querySelectorAll('button')) {
+      const r = box(b);
+      if (b.getAttribute('role') !== 'checkbox' && r.height < 43.5) bad.push(`button ${b.textContent} h=${r.height}`);
+    }
+    return bad;
+  });
+  expect(small).toEqual([]);
+  // 43.5: h-11 is 2.75rem, a hair under 44px after rounding. Clicking the wrapper (not the 16px box) toggles the checkbox.
+  const algebra = dialog.getByRole('checkbox', { name: 'Algebra' });
+  await algebra.locator('xpath=ancestor::label').click({ position: { x: 3, y: 3 } });
+  await expect(algebra).not.toBeChecked();
+});

@@ -82,21 +82,22 @@ export function OnboardingDialog({ items, termGoal: initialGoal }: Props) {
                 <h3 id={`${uid}-${g.kind}`} className="text-sm font-semibold">{g.title}</h3>
                 <ul className="space-y-2">
                   {items.filter((s) => s.kind === g.kind).map((s) => (
-                    <li key={s.key} className="flex items-start gap-3 rounded-lg border p-2.5">
-                      <Checkbox
-                        aria-label={s.name}
-                        checked={checked[s.key]}
-                        onCheckedChange={(v) => setChecked((c) => ({ ...c, [s.key]: v === true }))}
-                        disabled={pending}
-                        className="mt-3"
-                      />
+                    <li key={s.key} className="flex items-start gap-2 rounded-lg border p-2.5">
+                      <label className="-ml-1 flex size-11 shrink-0 items-center justify-center">
+                        <Checkbox
+                          aria-label={s.name}
+                          checked={checked[s.key]}
+                          onCheckedChange={(v) => setChecked((c) => ({ ...c, [s.key]: v === true }))}
+                          disabled={pending}
+                        />
+                      </label>
                       <div className="min-w-0 flex-1 space-y-1">
                         <Input
                           aria-label={`Tên ${s.name}`}
                           value={names[s.key]}
                           onChange={(e) => setNames((n) => ({ ...n, [s.key]: e.target.value }))}
                           disabled={pending}
-                          className="h-10 md:text-base"
+                          className="h-11 md:text-base"
                           autoComplete="off"
                         />
                         <p className="text-xs text-muted-foreground">
