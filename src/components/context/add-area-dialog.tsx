@@ -58,12 +58,7 @@ export function AddAreaDialog({ tab }: { tab: TabId }) {
   }
 
   return (
-    <>
-    {/* Non-modal on purpose: a modal focus trap steals focus back from the search box while a slow
-        create is in flight. The backdrop below keeps the page behind from being clicked. */}
-    {open && <div aria-hidden className="fixed inset-0 z-40 bg-black/10" />}
     <Dialog
-      modal={false}
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
@@ -124,6 +119,5 @@ export function AddAreaDialog({ tab }: { tab: TabId }) {
         </form>
       </DialogContent>
     </Dialog>
-    </>
   );
 }

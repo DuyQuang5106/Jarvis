@@ -3,11 +3,12 @@ import { resetDb } from './helpers';
 
 test.beforeEach(async ({ request }) => { await resetDb(request); });
 
-async function addArea(page: Page, name: string, aliases = '') {
+async function addArea(page: Page, name: string, aliases = '', { expectClose = true } = {}) {
   await page.getByRole('button', { name: 'Thêm' }).click();
   await page.getByLabel('Tên', { exact: true }).fill(name);
   if (aliases) await page.getByLabel('Tên gọi tắt').fill(aliases);
   await page.getByRole('button', { name: 'Tạo' }).click();
+  if (expectClose) await expect(page.getByRole('dialog')).toBeHidden();
 }
 
 test('trạng thái rỗng', async ({ page }) => {
@@ -27,7 +28,7 @@ test('thêm môn, thấy trong danh sách với trạng thái Unknown và nhãn 
 
 test('tên toàn khoảng trắng bị từ chối ngay trong hộp thoại', async ({ page }) => {
   await page.goto('/context');
-  await addArea(page, '   ');
+  await addArea(page, '   ', '', { expectClose: false });
   await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
   await expect(page.getByRole('listitem')).toHaveCount(0);
 });
