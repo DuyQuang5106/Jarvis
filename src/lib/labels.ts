@@ -1,5 +1,8 @@
 import type {
   AreaStatus,
+  BlockerStatus,
+  InboxStatus,
+  Origin,
   DeadlineType,
   MilestoneStatus,
   Priority,
@@ -55,4 +58,22 @@ export const MISSING_LABEL: Record<MissingFlag, string> = {
   no_topics: 'Chưa có topic',
   no_assessment_date: 'Chưa có ngày thi',
   no_milestones: 'Chưa có milestone',
+};
+
+export const BLOCKER_STATUS_LABEL: Record<BlockerStatus, string> = {
+  open: 'Open',
+  resolved: 'Resolved',
+};
+
+export const INBOX_STATUS_LABEL: Record<InboxStatus, string> = {
+  none: 'Không',
+  inbox: 'Inbox',
+  processed: 'Đã xử lý',
+};
+
+export const ORIGIN_LABEL: Record<Origin, string> = {
+  manual: 'Thủ công',
+  ai_approved: 'AI (đã duyệt)',
+  seed: 'Seed',
+  undo: 'Hoàn tác',
 };

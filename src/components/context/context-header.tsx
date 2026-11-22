@@ -4,6 +4,7 @@ import { SearchIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddAreaDialog } from './add-area-dialog';
+import { QuickCapture } from './quick-capture';
 import type { TabId } from './use-context-params';
 
 export function ContextHeader({
@@ -23,6 +24,7 @@ export function ContextHeader({
         <h1 className="text-xl font-semibold">Context</h1>
         <AddAreaDialog tab={tab} />
       </div>
+      <QuickCapture />
       <Tabs value={tab} onValueChange={(v) => onTab(v as TabId)}>
         <TabsList className="h-11 md:text-base">
           <TabsTrigger value="academic" className="min-h-11 px-4">Academic</TabsTrigger>

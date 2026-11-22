@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { ContextView } from '@/components/context/context-view';
 import { getDb } from '@/db/client';
 import { requireOwner } from '@/server/auth';
-import { getAreaDetails, listArchivedAreas } from '@/server/queries/area-details';
+import { getAreaDetails, listArchivedAreas, listInboxNotes } from '@/server/queries/area-details';
 import { getPortfolioSnapshot } from '@/server/queries/snapshot';
 
 export const metadata = { title: 'Context' };
@@ -25,11 +25,12 @@ async function ContextContent({ searchParams }: { searchParams: Promise<{ item?:
   const { item } = await searchParams;
   const itemId = typeof item === 'string' ? item : null;
   const db = await getDb();
-  const [snapshot, academic, project, details] = await Promise.all([
+  const [snapshot, academic, project, details, inbox] = await Promise.all([
     getPortfolioSnapshot(db, new Date()),
     listArchivedAreas(db, 'academic'),
     listArchivedAreas(db, 'project'),
     itemId && UUID.test(itemId) ? getAreaDetails(db, itemId) : null,
+    listInboxNotes(db),
   ]);
-  return <ContextView areas={snapshot.areas} today={snapshot.today} archived={{ academic, project }} loadedItem={itemId} details={details} />;
+  return <ContextView areas={snapshot.areas} today={snapshot.today} archived={{ academic, project }} loadedItem={itemId} details={details} inbox={inbox} />;
 }

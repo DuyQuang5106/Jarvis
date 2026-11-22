@@ -1,12 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { AreaRow } from '@/db/schema';
+import { Toaster } from '@/components/ui/sonner';
+import type { AreaRow, NoteRow } from '@/db/schema';
 import type { AreaSummary } from '@/server/queries/snapshot';
 import type { AreaDetails } from '@/server/queries/area-details';
 import { AreaDrawer, MissingAreaDrawer } from './area-drawer';
 import { AreaList } from './area-list';
 import { ContextHeader } from './context-header';
+import { InboxList } from './inbox-list';
 import { matchesQuery } from './search';
 import { StaleStrip } from './stale-strip';
 import { KIND_TAB, TAB_KIND, useContextParams } from './use-context-params';
@@ -17,6 +19,7 @@ export function ContextView({
   archived,
   loadedItem,
   details,
+  inbox,
 }: {
   areas: AreaSummary[];
   today: string;
@@ -24,6 +27,7 @@ export function ContextView({
   /** The `?item=` the server loaded `details` for; null details with a loadedItem means not found. */
   loadedItem: string | null;
   details: AreaDetails | null;
+  inbox: NoteRow[];
 }) {
   const { tab, setTab, openItem, item, section } = useContextParams();
   const [query, setQuery] = useState('');
@@ -37,7 +41,9 @@ export function ContextView({
 
   return (
     <div className="space-y-4">
+      <Toaster position="top-center" />
       <ContextHeader tab={tab} onTab={setTab} query={query} onQuery={setQuery} />
+      <InboxList notes={inbox} areas={areas} />
       <StaleStrip areas={stale} onOpen={(a) => openItem(a.id, KIND_TAB[a.kind])} />
       <AreaList
         areas={visible}

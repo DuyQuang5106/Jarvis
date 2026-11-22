@@ -56,3 +56,18 @@ export function isValidDateStr(s: string): boolean {
   if (!DATE_RE.test(s)) return false;
   return format(parse(s)) === s;
 }
+
+/** 'YYYY-MM-DD' -> 'DD/MM/YYYY'. */
+export function formatDateFullVi(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/** An instant as `dd/MM HH:mm` in `tz` (the activity timeline). */
+export function formatDateTimeVi(at: Date | string, tz: string = APP_TZ): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(at));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('day')}/${get('month')} ${get('hour')}:${get('minute')}`;
+}

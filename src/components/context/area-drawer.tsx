@@ -8,18 +8,17 @@ import type { AreaDetails } from '@/server/queries/area-details';
 import type { AreaSummary } from '@/server/queries/snapshot';
 import { AssessmentList } from './assessment-list';
 import { BlockerList } from './blocker-list';
+import { ActivityTimeline } from './activity-timeline';
 import { MilestoneList } from './milestone-list';
+import { NotesPanel } from './notes-panel';
 import { OverviewForm } from './overview-form';
 import { ProjectHealth } from './project-health';
 import { TaskList } from './task-list';
 import { TopicList } from './topic-list';
 import { useContextParams } from './use-context-params';
 
-const SOON = <p className="text-sm text-muted-foreground">Sắp có.</p>;
-
 /**
  * Single registry of drawer sections, keyed by `?section=`.
- * Task 7 replaces the remaining `SOON` placeholders below with its real components, one entry each.
  */
 type Ctx = { summary: AreaSummary | null; today: string };
 
@@ -38,8 +37,8 @@ const SECTIONS: Record<string, { label: string; render: (d: AreaDetails, ctx: Ct
   assessments: { label: 'Assessments', render: (d) => <AssessmentList areaId={d.area.id} assessments={d.assessments} /> },
   milestones: { label: 'Milestones', render: (d) => <MilestoneList areaId={d.area.id} milestones={d.milestones} /> },
   blockers: { label: 'Blockers', render: (d) => <BlockerList areaId={d.area.id} blockers={d.blockers} /> },
-  notes: { label: 'Notes', render: () => SOON },
-  activity: { label: 'Activity', render: () => SOON },
+  notes: { label: 'Notes', render: (d) => <NotesPanel areaId={d.area.id} notes={d.notes} /> },
+  activity: { label: 'Activity', render: (d) => <ActivityTimeline areaId={d.area.id} logs={d.logs} /> },
 };
 
 /** Which sections each kind shows, in tab order. */
