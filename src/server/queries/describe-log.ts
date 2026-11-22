@@ -11,7 +11,8 @@ import {
   TOPIC_STATUS_LABEL,
 } from '@/lib/labels';
 
-export type LogChange = { field: string; before: string | null; after: string | null };
+/** `summary` replaces before/after (both null) for long or private text, e.g. `đã sửa (120 ký tự)`. */
+export type LogChange = { field: string; before: string | null; after: string | null; summary?: string };
 export type DescribedLog = { title: string; changes: LogChange[] };
 
 /** Fields that never appear in a diff. */
@@ -116,12 +117,38 @@ function flatten(json: unknown): Flat {
   return out;
 }
 
+/** Free-text fields whose long values are summarised by length in change lines (ruling P1-R10). */
+const LONG_TEXT = new Set([
+  'text',
+  'courseOutline',
+  'summary',
+  'goal',
+  'evidence',
+  'acceptanceCriteria',
+  'lastAttempt',
+  'nextAction',
+  'externalDependency',
+  'gradingScheme',
+  'examFormat',
+]);
+const LONG_TEXT_MAX = 80;
+export const PRIVATE_NOTE = 'ghi chú riêng tư';
+
+/** A note log is private when either snapshot has `aiExcluded: true` (covers later-excluded notes). */
+function isPrivateNote(log: Pick<ActivityLogRow, 'entityType' | 'beforeJson' | 'afterJson'>): boolean {
+  if (log.entityType !== 'note') return false;
+  return [log.beforeJson, log.afterJson].some((j) => flatten(j).aiExcluded === true);
+}
+
+const textLength = (v: unknown) => (typeof v === 'string' ? v.length : 0);
+
 const norm = (v: unknown) => (v === undefined || v === '' || (Array.isArray(v) && v.length === 0) ? null : v);
 
 const NAME_MAX = 40;
 
-/** The quoted part of a title: the record's title/name, or the first 40 characters of a note. */
-export function entityName(log: Pick<ActivityLogRow, 'beforeJson' | 'afterJson'>): string | null {
+/** The quoted part of a title: the record's title/name, or the first 40 characters of a note (`ghi chú riêng tư` if private). */
+export function entityName(log: Pick<ActivityLogRow, 'entityType' | 'beforeJson' | 'afterJson'>): string | null {
+  if (isPrivateNote(log)) return PRIVATE_NOTE;
   for (const json of [log.afterJson, log.beforeJson]) {
     const f = flatten(json);
     for (const key of ['title', 'name']) if (typeof f[key] === 'string' && f[key]) return f[key] as string;
@@ -148,16 +175,24 @@ export function describeLog(log: ActivityLogRow): DescribedLog {
   const before = flatten(log.beforeJson);
   const after = flatten(log.afterJson);
   const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => !EXCLUDED.has(k));
+  const hidden = isPrivateNote(log);
   const changes: LogChange[] = [];
   for (const k of keys) {
     const b = norm(before[k]);
     const a = norm(after[k]);
     if (JSON.stringify(b) === JSON.stringify(a)) continue;
+    const long = LONG_TEXT.has(k) && (textLength(b) > LONG_TEXT_MAX || textLength(a) > LONG_TEXT_MAX);
+    if (long || (hidden && k === 'text')) {
+      const n = textLength(log.action === 'delete' ? b : a);
+      changes.push({ field: fieldLabel(k), before: null, after: null, summary: `đã sửa (${n} ký tự)` });
+      continue;
+    }
     changes.push({ field: fieldLabel(k), before: formatFieldValue(k, b), after: formatFieldValue(k, a) });
   }
 
   if (log.action === 'progress') return { title: 'Ghi nhận tiến độ', changes };
   if (log.action === 'archive') return { title: 'Lưu trữ mục', changes };
+  if (hidden) return { title: `${VERB[log.action] ?? log.action} ${PRIVATE_NOTE}`, changes };
   const noun = NOUN[log.entityType] ?? log.entityType;
   const name = entityName(log);
   return { title: `${VERB[log.action] ?? log.action} ${noun}${name ? ` “${name}”` : ''}`, changes };

@@ -71,7 +71,7 @@ function LogItem({ log }: { log: ActivityLogRow }) {
         <ul className="space-y-0.5 text-sm text-muted-foreground">
           {shown.map((c) => (
             <li key={c.field} className="break-words">
-              <span className="font-medium text-foreground">{c.field}:</span> {c.before ?? '—'} → {c.after ?? '—'}
+              <span className="font-medium text-foreground">{c.field}:</span> {c.summary ?? `${c.before ?? '—'} → ${c.after ?? '—'}`}
             </li>
           ))}
         </ul>

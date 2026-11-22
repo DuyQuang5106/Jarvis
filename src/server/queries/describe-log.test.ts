@@ -35,3 +35,62 @@ test('bỏ trường kỹ thuật, nhãn ngày/boolean/null, làm phẳng detail
     { field: 'Hình thức thi', before: 'Viết', after: 'Trắc nghiệm' },
   ]);
 });
+
+// Ruling P1-R10: long free text never lands in a change line; private notes never show their text.
+test('trường văn bản dài hơn 80 ký tự hiện dạng “đã sửa (n ký tự)”, ngắn thì giữ nguyên', () => {
+  const long = 'a'.repeat(81);
+  const longer = 'b'.repeat(120);
+  const out = describeLog({ ...base, entityType: 'area', action: 'update',
+    beforeJson: { name: 'DB', summary: long, goal: 'ngắn', nextAction: 'x'.repeat(80), details: { courseOutline: null } },
+    afterJson: { name: 'DB', summary: longer, goal: 'vẫn ngắn', nextAction: 'y'.repeat(80), details: { courseOutline: 'c'.repeat(200) } } } as any);
+  expect(out.changes).toEqual([
+    { field: 'Tóm tắt', before: null, after: null, summary: 'đã sửa (120 ký tự)' },
+    { field: 'Mục tiêu', before: 'ngắn', after: 'vẫn ngắn' },
+    { field: 'Việc tiếp theo', before: 'x'.repeat(80), after: 'y'.repeat(80) },
+    { field: 'Đề cương', before: null, after: null, summary: 'đã sửa (200 ký tự)' },
+  ]);
+});
+
+test('mọi trường văn bản dài trong danh sách đều được rút gọn', () => {
+  const fields = ['text', 'courseOutline', 'summary', 'goal', 'evidence', 'acceptanceCriteria', 'lastAttempt', 'nextAction', 'externalDependency', 'gradingScheme', 'examFormat'];
+  for (const f of fields) {
+    const out = describeLog({ ...base, entityType: 'blocker', action: 'update', beforeJson: { title: 'T', [f]: null }, afterJson: { title: 'T', [f]: 'z'.repeat(90) } } as any);
+    expect(out.changes, f).toEqual([{ field: expect.any(String), before: null, after: null, summary: 'đã sửa (90 ký tự)' }]);
+  }
+  // A field outside the list (title) keeps its full value.
+  const title = describeLog({ ...base, entityType: 'task', action: 'update', beforeJson: { title: 'T' }, afterJson: { title: 't'.repeat(150) } } as any);
+  expect(title.changes).toEqual([{ field: 'Tiêu đề', before: 'T', after: 't'.repeat(150) }]);
+});
+
+test('create đếm độ dài sau, delete đếm độ dài trước', () => {
+  const created = describeLog({ ...base, entityType: 'note', action: 'create', beforeJson: null, afterJson: { text: 'n'.repeat(100), aiExcluded: false } } as any);
+  expect(created.changes).toContainEqual({ field: 'Nội dung', before: null, after: null, summary: 'đã sửa (100 ký tự)' });
+  const deleted = describeLog({ ...base, entityType: 'note', action: 'delete', beforeJson: { text: 'n'.repeat(95), aiExcluded: false }, afterJson: null } as any);
+  expect(deleted.changes).toContainEqual({ field: 'Nội dung', before: null, after: null, summary: 'đã sửa (95 ký tự)' });
+  const progress = describeLog({ ...base, entityType: 'area', action: 'progress', beforeJson: null, afterJson: { text: 'p'.repeat(81) } } as any);
+  expect(progress.changes).toEqual([{ field: 'Nội dung', before: null, after: null, summary: 'đã sửa (81 ký tự)' }]);
+});
+
+test('ghi chú riêng tư: tiêu đề không chứa nội dung, dòng text chỉ ghi số ký tự', () => {
+  const mk = (action: string, beforeJson: any, afterJson: any) => describeLog({ ...base, entityType: 'note', action, beforeJson, afterJson } as any);
+  const created = mk('create', null, { text: 'bí mật', aiExcluded: true });
+  expect(created.title).toBe('Tạo ghi chú riêng tư');
+  expect(JSON.stringify(created)).not.toContain('bí mật');
+  expect(created.changes).toContainEqual({ field: 'Nội dung', before: null, after: null, summary: 'đã sửa (6 ký tự)' });
+
+  const edited = mk('update', { text: 'bí mật', aiExcluded: true }, { text: 'bí mật hơn', aiExcluded: true });
+  expect(edited).toEqual({ title: 'Sửa ghi chú riêng tư', changes: [{ field: 'Nội dung', before: null, after: null, summary: 'đã sửa (10 ký tự)' }] });
+
+  // Turned private after the fact: the snapshot that has aiExcluded=true is enough.
+  const toggled = mk('update', { text: 'bí mật', aiExcluded: false }, { text: 'bí mật', aiExcluded: true });
+  expect(toggled.title).toBe('Sửa ghi chú riêng tư');
+  expect(JSON.stringify(toggled)).not.toContain('bí mật');
+  expect(toggled.changes).toEqual([{ field: 'Không gửi cho AI', before: 'Không', after: 'Có' }]);
+
+  const deleted = mk('delete', { text: 'bí mật', aiExcluded: true }, null);
+  expect(deleted.title).toBe('Xóa ghi chú riêng tư');
+  expect(JSON.stringify(deleted)).not.toContain('bí mật');
+
+  // An ordinary note still shows its text.
+  expect(mk('create', null, { text: 'công khai', aiExcluded: false }).title).toBe('Tạo ghi chú “công khai”');
+});
