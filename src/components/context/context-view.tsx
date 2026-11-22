@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Toaster } from '@/components/ui/sonner';
 import type { AreaRow, NoteRow } from '@/db/schema';
 import type { AreaSummary } from '@/server/queries/snapshot';
 import type { AreaDetails } from '@/server/queries/area-details';
@@ -41,7 +40,6 @@ export function ContextView({
 
   return (
     <div className="space-y-4">
-      <Toaster position="top-center" />
       <ContextHeader tab={tab} onTab={setTab} query={query} onQuery={setQuery} />
       <InboxList notes={inbox} areas={areas} />
       <StaleStrip areas={stale} onOpen={(a) => openItem(a.id, KIND_TAB[a.kind])} />

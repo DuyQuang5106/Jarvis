@@ -1,12 +1,12 @@
 'use client';
 
 import { Menu } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { SidebarBody } from './sidebar';
 
-export function MobileNav() {
+export function MobileNav({ recentChats }: { recentChats: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -20,7 +20,7 @@ export function MobileNav() {
           <SheetTitle>Personal AI</SheetTitle>
           <SheetDescription className="sr-only">Điều hướng chính</SheetDescription>
         </SheetHeader>
-        <SidebarBody onNavigate={() => setOpen(false)} />
+        <SidebarBody onNavigate={() => setOpen(false)} recentChats={recentChats} />
       </SheetContent>
     </Sheet>
   );

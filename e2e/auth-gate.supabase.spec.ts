@@ -38,3 +38,8 @@ test('/api/export không có phiên trả 401 (dữ liệu riêng tư)', async (
   const res = await request.get('/api/export');
   expect(res.status()).toBe(401);
 });
+
+test('/api/chat không có phiên trả 401', async ({ request }) => {
+  const res = await request.post('/api/chat', { data: { message: 'xin chào', scope: { mode: 'auto' } } });
+  expect(res.status()).toBe(401);
+});
