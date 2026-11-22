@@ -9,7 +9,9 @@ import {
   deleteConversation,
   getConversation,
   listConversations,
+  listMessagesBefore,
   renameConversation,
+  replaceReplies,
 } from './conversations';
 
 let db: Db;
@@ -41,6 +43,34 @@ test('rename: kiểm tra độ dài và NotFound', async () => {
   await expect(renameConversation(db, c.id, '   ')).rejects.toBeInstanceOf(ValidationError);
   await expect(renameConversation(db, c.id, 'x'.repeat(201))).rejects.toBeInstanceOf(ValidationError);
   await expect(renameConversation(db, MISSING, 'ok')).rejects.toBeInstanceOf(NotFoundError);
+});
+
+test('rename không đẩy cuộc chat lên đầu Recent chats', async () => {
+  const a = await createConversation(db, 'A');
+  const b = await createConversation(db, 'B');
+  await appendMessage(db, b.id, 'user', 'chạm B');
+  await renameConversation(db, a.id, 'A mới');
+  expect((await listConversations(db)).map((x) => x.id)).toEqual([b.id, a.id]);
+});
+
+test('listMessagesBefore: chỉ các tin trước tin đã cho', async () => {
+  const c = await createConversation(db, 'C');
+  await appendMessage(db, c.id, 'user', 'một');
+  await appendMessage(db, c.id, 'assistant', 'hai');
+  const three = await appendMessage(db, c.id, 'user', 'ba');
+  await appendMessage(db, c.id, 'assistant', 'bốn');
+  expect((await listMessagesBefore(db, c.id, three.id)).map((m) => m.content)).toEqual(['một', 'hai']);
+});
+
+test('replaceReplies: xóa các trả lời sau tin người dùng rồi lưu trả lời mới', async () => {
+  const c = await createConversation(db, 'C');
+  await appendMessage(db, c.id, 'user', 'một');
+  await appendMessage(db, c.id, 'assistant', 'cũ 1');
+  const u2 = await appendMessage(db, c.id, 'user', 'hai');
+  await appendMessage(db, c.id, 'assistant', 'cũ 2');
+  const saved = await replaceReplies(db, c.id, u2.id, 'mới', { x: 1 });
+  expect((await getConversation(db, c.id))?.messages.map((m) => m.content)).toEqual(['một', 'cũ 1', 'hai', 'mới']);
+  expect(saved).toMatchObject({ role: 'assistant', content: 'mới', metadata: { x: 1 } });
 });
 
 test('delete: xóa kèm tin nhắn; id lạ NotFound', async () => {

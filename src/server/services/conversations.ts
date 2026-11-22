@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { conversations, messages, type ConversationRow, type MessageRow } from '@/db/schema';
 import { NotFoundError, ValidationError } from '../errors';
@@ -13,16 +13,17 @@ export async function getConversation(
 ): Promise<{ conversation: ConversationRow; messages: MessageRow[] } | null> {
   const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id));
   if (!conversation) return null;
-  const rows = await db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt);
+  const rows = await db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt, messages.id);
   return { conversation, messages: rows };
 }
 
+/** Renaming is not activity: `updated_at` (the Recent chats order) stays. */
 export async function renameConversation(db: DbOrTx, id: string, title: string): Promise<void> {
   const t = title.trim();
   if (t.length < 1 || t.length > 200) throw new ValidationError('Tiêu đề phải dài 1–200 ký tự.');
   const rows = await db
     .update(conversations)
-    .set({ title: t, updatedAt: new Date() })
+    .set({ title: t })
     .where(eq(conversations.id, id))
     .returning({ id: conversations.id });
   if (rows.length === 0) throw new NotFoundError('Không tìm thấy cuộc trò chuyện.');
@@ -56,6 +57,34 @@ export async function appendMessage(
   });
 }
 
-export async function deleteMessage(db: DbOrTx, id: string): Promise<void> {
-  await db.delete(messages).where(eq(messages.id, id));
+/** `(created_at, id)` of messages compared with that of message `id`, in SQL (timestamps keep microseconds there). */
+const relativeTo = (op: '<' | '>', id: string) =>
+  sql`(${messages.createdAt}, ${messages.id}) ${sql.raw(op)} (select m.created_at, m.id from messages m where m.id = ${id})`;
+
+/** Messages of the conversation strictly before message `messageId`, oldest first. */
+export async function listMessagesBefore(db: DbOrTx, conversationId: string, messageId: string): Promise<MessageRow[]> {
+  return db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.conversationId, conversationId), relativeTo('<', messageId)))
+    .orderBy(messages.createdAt, messages.id);
+}
+
+/**
+ * Regenerate's save: in one transaction, drops the assistant replies after user message `userMessageId`
+ * and saves the new reply, so a failed or stopped regenerate leaves the old reply in place.
+ */
+export async function replaceReplies(
+  db: DbOrTx,
+  conversationId: string,
+  userMessageId: string,
+  content: string,
+  metadata?: unknown,
+): Promise<MessageRow> {
+  return db.transaction(async (tx) => {
+    await tx
+      .delete(messages)
+      .where(and(eq(messages.conversationId, conversationId), eq(messages.role, 'assistant'), relativeTo('>', userMessageId)));
+    return appendMessage(tx, conversationId, 'assistant', content, metadata);
+  });
 }

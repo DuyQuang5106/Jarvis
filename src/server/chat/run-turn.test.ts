@@ -4,8 +4,8 @@ import { conversations, messages } from '@/db/schema';
 import { createTestDb } from '@/db/testing';
 import { createMockProvider } from '../ai/mock';
 import type { AiProvider, StreamRequest } from '../ai/provider';
-import { createArea } from '../services/areas';
-import { topicService } from '../services/entities';
+import { createArea, updateArea } from '../services/areas';
+import { noteService, taskService, topicService } from '../services/entities';
 import { runChatTurn, type TurnEvent, type TurnInput } from './run-turn';
 
 const NOW = new Date('2026-11-22T03:00:00Z');
@@ -39,6 +39,11 @@ test('lượt đầu tạo cuộc chat, lưu hai tin nhắn, trả lời từ st
 test('tiêu đề cắt ở 60 ký tự', async () => {
   await turn({ message: 'a'.repeat(100) });
   expect((await db.select().from(conversations))[0].title).toBe('a'.repeat(60));
+});
+
+test('tiêu đề không cắt đôi emoji', async () => {
+  await turn({ message: `${'a'.repeat(59)}😀😀` });
+  expect((await db.select().from(conversations))[0].title).toBe(`${'a'.repeat(59)}😀`);
 });
 
 test('lượt sau đọc state mới (criterion 6) và gửi kèm lịch sử', async () => {
@@ -97,10 +102,132 @@ test('regenerate thay câu trả lời cuối', async () => {
   const first = await turn({ message: 'xin chào' });
   const conversationId = cid(first);
   const before = await rows();
-  await turn({ conversationId, regenerate: true });
+  const again = await turn({ conversationId, regenerate: true });
   const after = await rows();
   expect(after.map((m) => m.role)).toEqual(['user', 'assistant']);
+  expect(after[0].id).toBe(before[0].id);
   expect(after[1].id).not.toBe(before[1].id);
+  expect(again.at(-1)).toMatchObject({ type: 'done', assistantMessageId: after[1].id });
+});
+
+/** Saves one good turn, then returns its conversation and the saved rows. */
+async function goodTurn() {
+  const conversationId = cid(await turn({ message: 'xin chào' }));
+  return { conversationId, before: await rows() };
+}
+
+test('regenerate lỗi ở provider: giữ câu trả lời cũ', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { conversationId, before } = await goodTurn();
+  const failing: AiProvider = { stream: async function* () { throw Object.assign(new Error('x'), { name: 'AiProviderError' }); } };
+  const events = await turn({ conversationId, regenerate: true }, failing);
+  expect(events.at(-1)).toMatchObject({ type: 'error' });
+  expect(await rows()).toEqual(before);
+  log.mockRestore();
+});
+
+test('regenerate bị trần chặn: giữ câu trả lời cũ', async () => {
+  const { conversationId, before } = await goodTurn();
+  const events = await turn({ conversationId, regenerate: true }, createMockProvider(), 1);
+  expect(events.at(-1)).toEqual({ type: 'error', message: 'Đã chạm trần số lượt hỏi AI hôm nay.' });
+  expect(await rows()).toEqual(before);
+});
+
+test('regenerate bị Dừng: giữ câu trả lời cũ, không ghi log lỗi', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { conversationId, before } = await goodTurn();
+  const ac = new AbortController();
+  const provider: AiProvider = {
+    async *stream(req) {
+      yield { type: 'text', delta: 'một phần' };
+      if (req.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+      await new Promise((_, reject) => req.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+    },
+  };
+  const events: TurnEvent[] = [];
+  const deps = { db, provider, actionMode: 'off' as const, dailyCap: 200, now: NOW, signal: ac.signal };
+  for await (const e of runChatTurn(deps, { scope: { mode: 'auto' }, conversationId, regenerate: true })) {
+    events.push(e);
+    if (e.type === 'text') ac.abort();
+  }
+  expect(events.map((e) => e.type)).toEqual(['meta', 'text', 'error']);
+  expect(await rows()).toEqual(before);
+  expect(log).not.toHaveBeenCalled();
+  log.mockRestore();
+});
+
+test('provider trả lời rỗng: coi như lỗi, không lưu tin assistant rỗng', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const empty: AiProvider = { async *stream() { yield { type: 'text', delta: '  ' }; } };
+  const events = await turn({ message: 'xin chào' }, empty);
+  expect(events.at(-1)).toEqual({ type: 'error', message: 'Không gọi được AI. Dữ liệu của bạn không bị ảnh hưởng, có thể thử lại.' });
+  expect((await rows()).map((m) => m.role)).toEqual(['user']);
+  log.mockRestore();
+});
+
+test('meta mang id của đúng tin người dùng vừa lưu; các lượt nối tiếp ghép đúng cặp', async () => {
+  const seen: StreamRequest[] = [];
+  const spy: AiProvider = { stream: (req) => { seen.push(req); return createMockProvider().stream(req); } };
+  const a = await turn({ message: 'câu một' }, spy);
+  const conversationId = cid(a);
+  const b = await turn({ conversationId, message: 'câu hai' }, spy);
+  const saved = await rows();
+  expect(saved.map((m) => [m.role, m.content.startsWith('MOCK') ? 'reply' : m.content])).toEqual([
+    ['user', 'câu một'], ['assistant', 'reply'], ['user', 'câu hai'], ['assistant', 'reply'],
+  ]);
+  expect(a[0]).toMatchObject({ type: 'meta', userMessageId: saved[0].id });
+  expect(b[0]).toMatchObject({ type: 'meta', userMessageId: saved[2].id });
+  expect(seen[0].messages.slice(1)).toEqual([{ role: 'user', content: 'câu một' }]);
+  expect(seen[1].messages.slice(1).map((m) => m.content)).toEqual(['câu một', saved[1].content, 'câu hai']);
+});
+
+test('lượt thứ hai trong lúc lượt đầu còn chạy: báo bận, không lưu gì thêm', async () => {
+  const conversationId = cid(await turn({ message: 'mở đầu' }));
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  const slow: AiProvider = { async *stream() { yield { type: 'text', delta: 'chậm' }; await gate; yield { type: 'text', delta: ' xong' }; } };
+  const first = runChatTurn({ db, provider: slow, actionMode: 'off', dailyCap: 200, now: NOW }, { scope: { mode: 'auto' }, conversationId, message: 'câu A' });
+  const firstEvents: TurnEvent[] = [];
+  for (;;) {
+    const r = await first.next();
+    firstEvents.push(r.value as TurnEvent);
+    if ((r.value as TurnEvent).type === 'text') break;
+  }
+  const busy = [{ type: 'error', message: 'Đang có một câu trả lời khác trong cuộc chat này, đợi xong rồi thử lại.' }];
+  expect(await turn({ conversationId, message: 'câu B' })).toEqual(busy);
+  expect(await turn({ conversationId, regenerate: true })).toEqual(busy);
+  release();
+  for await (const e of first) firstEvents.push(e);
+  expect(firstEvents.at(-1)).toMatchObject({ type: 'done' });
+  const saved = await rows();
+  expect(saved.map((m) => m.content)).toEqual(['mở đầu', saved[1].content, 'câu A', 'chậm xong']);
+  // The lock is released: the next turn runs.
+  expect((await turn({ conversationId, message: 'câu C' })).at(-1)).toMatchObject({ type: 'done' });
+});
+
+test('lịch sử không gửi lại nội dung của mục vừa bị loại khỏi AI', async () => {
+  const area = await createArea(db, { kind: 'project', name: 'Dự án Bí Mật', status: 'active' }, manual);
+  await taskService.create(db, { areaId: area.id, title: 'Ký hợp đồng NDA-7731' }, manual);
+  await noteService.create(db, { areaId: area.id, text: 'Mật khẩu kho là cá-voi-xanh' }, manual);
+  const seen: StreamRequest[] = [];
+  const parrot: AiProvider = {
+    async *stream(req) {
+      seen.push(req);
+      // Like a model quoting the state: the reply repeats the task title and the note text.
+      yield { type: 'text', delta: 'Còn Ký hợp đồng NDA-7731; ghi chú: Mật khẩu kho là cá-voi-xanh' };
+    },
+  };
+  const conversationId = cid(await turn({ message: 'Dự án Bí Mật tới đâu rồi?' }, parrot));
+  expect(JSON.stringify(seen[0])).toContain('cá-voi-xanh'); // the area was expanded the first time
+  await updateArea(db, area.id, { aiExcluded: true }, manual);
+  await turn({ conversationId, message: 'còn gì nữa không?' }, parrot);
+  const sent = JSON.stringify(seen[1]);
+  for (const secret of ['Dự án Bí Mật', 'NDA-7731', 'cá-voi-xanh']) expect(sent).not.toContain(secret);
+  expect(seen[1].messages.slice(1)).toEqual([
+    { role: 'user', content: '[Tin nhắn cũ đã ẩn vì liên quan mục không gửi cho AI]' },
+    { role: 'assistant', content: '[Tin nhắn cũ đã ẩn vì liên quan mục không gửi cho AI]' },
+    { role: 'user', content: 'còn gì nữa không?' },
+  ]);
 });
 
 test('regenerate thiếu cuộc chat hoặc không có tin nhắn người dùng', async () => {

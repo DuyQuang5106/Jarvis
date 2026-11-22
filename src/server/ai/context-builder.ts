@@ -166,6 +166,11 @@ function toDetail(d: AreaDetails, today: string, hidden: Set<string>): AreaDetai
   };
 }
 
+/** Every aiExcluded area, archived ones included: what the chat history must not re-send. */
+export async function listAiExcludedAreas(db: DbOrTx): Promise<{ id: string; name: string; aliases: string[] }[]> {
+  return db.select({ id: areas.id, name: areas.name, aliases: areas.aliases }).from(areas).where(eq(areas.aiExcluded, true));
+}
+
 export async function buildContext(
   db: DbOrTx,
   input: { message: string; recentUserMessages: string[]; scope: ContextScope; now: Date; maxChars?: number },
