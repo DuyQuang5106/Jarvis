@@ -6,7 +6,7 @@ const run = (responder: (table: string) => Response) =>
     fetch: (async (url: RequestInfo | URL) => responder(String(url).split('/rest/v1/')[1].split('?')[0])) as typeof fetch });
 
 test('mảng rỗng hoặc lỗi quyền là đạt', async () => {
-  const out = await run((t) => t === 'areas' ? new Response('[]', { status: 200 }) : new Response('{"message":"permission denied"}', { status: 401 }));
+  const out = await run((t) => t === 'areas' ? new Response('[]', { status: 200 }) : new Response('{"code":"42501","message":"permission denied for table tasks"}', { status: 401 }));
   expect(out.map((r) => r.ok)).toEqual([true, true]);
 });
 
@@ -33,4 +33,21 @@ test('gửi đúng URL và header, không lộ anon key trong detail', async () 
   expect(calls[0].url).toBe('https://x.supabase.co/rest/v1/areas?select=*&limit=1');
   expect(calls[0].init?.headers).toMatchObject({ apikey: 'secret-anon', Authorization: 'Bearer secret-anon' });
   expect(JSON.stringify(out)).not.toContain('secret-anon');
+});
+
+test.each([
+  ['401 Invalid API key', '{"message":"Invalid API key"}', 401],
+  ['404 PGRST205', '{"code":"PGRST205"}', 404],
+  ['500', 'boom', 500],
+  ['2xx object', '{}', 200],
+  ['2xx không phải JSON', '<html>', 200],
+])('trượt khi gặp %s', async (_n, body, status) => {
+  const out = await run(() => new Response(body, { status }));
+  expect(out.map((r) => r.ok)).toEqual([false, false]);
+});
+
+test('detail nêu mã HTTP và code', async () => {
+  const out = await run(() => new Response('{"code":"PGRST205","message":"no table"}', { status: 404 }));
+  expect(out[0].detail).toContain('404');
+  expect(out[0].detail).toContain('PGRST205');
 });

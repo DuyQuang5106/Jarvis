@@ -17,21 +17,28 @@ export async function checkRls(opts: {
         headers: { apikey: opts.anonKey, Authorization: `Bearer ${opts.anonKey}` },
       });
       const text = await res.text();
-      if (!res.ok) {
-        results.push({ table, ok: true, detail: `bị từ chối (HTTP ${res.status})` });
-        continue;
-      }
-      let rows: unknown;
+      let body: unknown;
+      let parsed = true;
       try {
-        rows = JSON.parse(text);
+        body = JSON.parse(text);
       } catch {
-        results.push({ table, ok: false, detail: `phản hồi 2xx không phải JSON (HTTP ${res.status})` });
-        continue;
+        parsed = false;
       }
-      if (Array.isArray(rows) && rows.length === 0) {
-        results.push({ table, ok: true, detail: 'không đọc được dòng nào' });
+      const obj = parsed && body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+      const info = [obj?.code, obj?.message].filter((v) => typeof v === 'string').join(' ');
+      const suffix = info ? `: ${info}` : '';
+      if (res.ok) {
+        if (parsed && Array.isArray(body) && body.length === 0) {
+          results.push({ table, ok: true, detail: 'không đọc được dòng nào' });
+        } else if (parsed && Array.isArray(body)) {
+          results.push({ table, ok: false, detail: 'anon đọc được dữ liệu' });
+        } else {
+          results.push({ table, ok: false, detail: `phản hồi 2xx bất thường (HTTP ${res.status})${suffix}` });
+        }
+      } else if ((res.status === 401 || res.status === 403) && obj?.code === '42501') {
+        results.push({ table, ok: true, detail: `bị từ chối quyền (HTTP ${res.status}, 42501)` });
       } else {
-        results.push({ table, ok: false, detail: 'anon đọc được dữ liệu' });
+        results.push({ table, ok: false, detail: `HTTP ${res.status}${suffix}` });
       }
     } catch (err) {
       results.push({ table, ok: false, detail: `lỗi mạng: ${err instanceof Error ? err.message : String(err)}` });
