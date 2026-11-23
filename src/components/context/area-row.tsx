@@ -3,8 +3,9 @@
 import { LockIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { APP_TZ } from '@/lib/dates';
-import { AREA_STATUS_LABEL, MISSING_LABEL } from '@/lib/labels';
+import { MISSING_LABEL } from '@/lib/labels';
 import type { AreaSummary } from '@/server/queries/snapshot';
+import { AreaStatusBadge } from './area-status-badge';
 
 const dayMonth = new Intl.DateTimeFormat('en-GB', { timeZone: APP_TZ, day: '2-digit', month: '2-digit' });
 
@@ -34,7 +35,7 @@ export function AreaRow({ area, onOpen }: { area: AreaSummary; onOpen: (a: AreaS
         <span className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate font-medium">{area.name}</span>
           {area.aiExcluded && <LockIcon aria-label="Không gửi cho AI" className="size-4 shrink-0 text-muted-foreground" />}
-          <Badge variant="secondary">{AREA_STATUS_LABEL[area.status]}</Badge>
+          <AreaStatusBadge status={area.status} />
         </span>
         {progress && <span className="min-w-0 text-sm wrap-anywhere text-muted-foreground">{progress}</span>}
         <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

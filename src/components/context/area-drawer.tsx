@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { AreaKind } from '@/db/enums';
+import type { AreaKind, AreaStatus } from '@/db/enums';
 import type { AreaDetails } from '@/server/queries/area-details';
 import type { AreaSummary } from '@/server/queries/snapshot';
+import { AreaStatusBadge } from './area-status-badge';
 import { AssessmentList } from './assessment-list';
 import { BlockerList } from './blocker-list';
 import { ActivityTimeline } from './activity-timeline';
@@ -56,7 +57,7 @@ const CONTENT_CLASS =
  * Closing with X, Escape or the overlay asks first while the overview has unsaved edits (ruling P1-R9).
  * Browser back changes the URL directly and unmounts the drawer; those edits are dropped.
  */
-function DrawerShell({ title, children }: { title: string; children: ReactNode }) {
+function DrawerShell({ title, status, children }: { title: string; status?: AreaStatus; children: ReactNode }) {
   const { closeItem } = useContextParams();
   const dirty = useRef(false);
   const [confirming, setConfirming] = useState(false);
@@ -80,7 +81,10 @@ function DrawerShell({ title, children }: { title: string; children: ReactNode }
           }}
         >
           <SheetHeader className="pr-14">
-            <SheetTitle className="text-lg">{title}</SheetTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <SheetTitle className="text-lg">{title}</SheetTitle>
+              {status && <AreaStatusBadge status={status} />}
+            </div>
             <SheetDescription className="sr-only">Chi tiết mục</SheetDescription>
           </SheetHeader>
           {children}
@@ -131,7 +135,7 @@ export function AreaDrawer({
   const ids = KIND_SECTIONS[details.area.kind];
   const active = ids.includes(section) ? section : 'overview';
   return (
-    <DrawerShell title={details.area.name}>
+    <DrawerShell title={details.area.name} status={details.area.status}>
       <Tabs value={active} onValueChange={setSection} className="min-h-0 flex-1 gap-0">
         <div className="overflow-x-auto px-4 pb-2">
           <TabsList variant="line" className="h-11 w-max">

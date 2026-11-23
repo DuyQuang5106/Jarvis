@@ -84,3 +84,64 @@ test('việc tiếp theo dài không có khoảng trắng không làm tràn ngan
   });
   expect(spill).toBeLessThanOrEqual(0.5);
 });
+
+test('badge trạng thái đổi màu theo trạng thái ở cả danh sách và drawer', async ({ page }) => {
+  await page.goto('/context');
+  await addArea(page, 'Trạng thái màu');
+  const row = page.getByRole('listitem').filter({ hasText: 'Trạng thái màu' });
+  const rowBadge = row.locator('[data-area-status]');
+  await expect(rowBadge).toHaveAttribute('data-area-status', 'unknown');
+  const unknownBg = await rowBadge.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  await row.click();
+  const drawer = page.getByRole('dialog', { name: 'Trạng thái màu' });
+  const drawerBadge = drawer.locator('[data-area-status]');
+  await expect(drawerBadge).toHaveAttribute('data-area-status', 'unknown');
+
+  const cases: Array<[string, string]> = [
+    ['active', 'Active'],
+    ['blocked', 'Blocked'],
+    ['on_hold', 'On hold'],
+    ['completed', 'Completed'],
+  ];
+  const settledBg = async (loc: ReturnType<Page['locator']>) => {
+    let prev = '';
+    let cur = '';
+    await expect.poll(async () => {
+      prev = cur;
+      cur = await loc.evaluate((el) => getComputedStyle(el).backgroundColor);
+      return prev !== '' && cur === prev;
+    }, { intervals: [200] }).toBe(true);
+    return cur;
+  };
+  const seenBg = new Set<string>([unknownBg]);
+  const bgByStatus = new Map<string, string>();
+  for (const [value, label] of cases) {
+    await drawer.getByLabel('Trạng thái').selectOption(value);
+    await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
+    await expect(drawer.getByText('Đã lưu')).toBeVisible();
+    await expect(drawerBadge).toHaveAttribute('data-area-status', value);
+    await expect(drawerBadge).toHaveText(label);
+    const drawerBg = await settledBg(drawerBadge);
+    if (value !== 'completed') {
+      expect(seenBg.has(drawerBg)).toBe(false);
+    }
+    seenBg.add(drawerBg);
+    bgByStatus.set(value, drawerBg);
+  }
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
+  await expect(rowBadge).toHaveAttribute('data-area-status', 'completed');
+  expect(await settledBg(rowBadge)).toBe(bgByStatus.get('completed'));
+
+  // Set back to active and verify row badge matches active color too.
+  await row.click();
+  await drawer.getByLabel('Trạng thái').selectOption('active');
+  await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
+  await expect(drawer.getByText('Đã lưu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
+  await expect(rowBadge).toHaveAttribute('data-area-status', 'active');
+  await expect(rowBadge).toHaveText('Active');
+  expect(await settledBg(rowBadge)).toBe(bgByStatus.get('active'));
+});
