@@ -133,3 +133,10 @@ test('tệp PDF hỏng hoặc ảnh trả về chuỗi rỗng an toàn, không n
   expect(await extractTextFromBuffer(new Uint8Array([0xff, 0xd8, 0xff]), 'jpg')).toBe('');
   expect(await extractTextFromBuffer(new Uint8Array([1, 2, 3]), 'pdf')).toBe('');
 });
+
+test('loại bỏ NUL byte (0x00) để không làm lỗi PostgreSQL UTF-8', async () => {
+  const bytes = Buffer.from('Kiểm thử hệ thống \u0000 Kiểm thử tích hợp\u0000', 'utf8');
+  const extracted = await extractTextFromBuffer(bytes, 'txt');
+  expect(extracted).toBe('Kiểm thử hệ thống  Kiểm thử tích hợp');
+  expect(extracted.includes('\u0000')).toBe(false);
+});

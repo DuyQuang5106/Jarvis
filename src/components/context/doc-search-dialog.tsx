@@ -5,6 +5,7 @@ import { searchDocumentsAction } from '@/app/(app)/_actions/documents';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DOC_ROLE_LABEL } from '@/lib/labels';
 import { normalizeVi } from '@/server/ai/match-areas';
 import type { DocumentSearchHit } from '@/server/queries/documents';
 
@@ -133,6 +134,8 @@ export function DocSearchDialog({
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{h.title}</span>
+                      <Badge variant="outline" className="uppercase">{h.fileExt}</Badge>
+                      <Badge variant="secondary">{DOC_ROLE_LABEL[h.docRole]}</Badge>
                       <Badge variant="outline">{h.areaName}</Badge>
                     </div>
                     {h.snippet && (

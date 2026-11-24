@@ -3,8 +3,9 @@ import { MAX_EXTRACTED_TEXT_CHARS, type AllowedExt } from './policy';
 import { readZipEntries, xmlToPlainText } from './zip-xml';
 
 function clampText(text: string): string {
-  const trimmed = text.trim();
-  return trimmed.length > MAX_EXTRACTED_TEXT_CHARS ? trimmed.slice(0, MAX_EXTRACTED_TEXT_CHARS) : trimmed;
+  // PostgreSQL UTF-8 text columns reject NUL bytes (0x00) that PDFs/text files sometimes contain.
+  const sanitized = text.replace(/\u0000+/g, '').trim();
+  return sanitized.length > MAX_EXTRACTED_TEXT_CHARS ? sanitized.slice(0, MAX_EXTRACTED_TEXT_CHARS) : sanitized;
 }
 
 function slideNumber(name: string): number {

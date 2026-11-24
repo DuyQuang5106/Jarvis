@@ -13,8 +13,10 @@ import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import {
   getDocumentAction,
+  moveDocumentAction,
   renameDocumentAction,
   setDocumentAiExcludedAction,
+  setDocumentRoleAction,
   updateDocumentBodyAction,
 } from '@/app/(app)/_actions/documents';
 import { Badge } from '@/components/ui/badge';
@@ -22,14 +24,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import type { DocumentRow, MilestoneRow, TaskRow } from '@/db/schema';
+import { DOC_ROLES, type DocRole } from '@/db/enums';
+import type { DocumentRow, FolderRow, MilestoneRow, TaskRow } from '@/db/schema';
 import { formatDateVi } from '@/lib/dates';
 import { formatEntityMarkdownLink, parseEntityLink } from '@/lib/doc-links';
-import { MILESTONE_STATUS_LABEL, TASK_STATUS_LABEL } from '@/lib/labels';
+import { DOC_ROLE_LABEL, MILESTONE_STATUS_LABEL, TASK_STATUS_LABEL } from '@/lib/labels';
 import { computeLineDiff } from '@/lib/line-diff';
 import { toggleChecklistAt } from '@/lib/markdown';
 import { normalizeVi } from '@/server/ai/match-areas';
+import { buildFolderPathOptions } from './file-viewer';
 import { RowStatus, useRowAction } from './row-controls';
+import { NATIVE_SELECT } from './styles';
 
 export const DOC_AUTOSAVE_MS = 1500;
 
@@ -45,6 +50,7 @@ const subscribeNoop = () => () => {};
 
 export function DocEditor({
   doc,
+  folders = [],
   tasks,
   milestones,
   onSaved,
@@ -52,6 +58,7 @@ export function DocEditor({
   onOpenVersions,
 }: {
   doc: DocumentRow;
+  folders?: FolderRow[];
   tasks: TaskRow[];
   milestones: MilestoneRow[];
   onSaved: (updated: DocumentRow) => void;
@@ -68,6 +75,8 @@ export function DocEditor({
   const [revision, setRevision] = useState(initialStash?.revision ?? doc.revision);
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [excluded, setExcluded] = useState(doc.aiExcluded);
+  const [folderId, setFolderId] = useState(doc.folderId ?? '');
+  const [docRole, setDocRole] = useState<DocRole>(doc.docRole);
   const [saving, setSaving] = useState(false);
   const [savedFlag, setSavedFlag] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(initialStash?.error ?? null);
@@ -239,6 +248,30 @@ export function DocEditor({
       return res;
     });
   }
+
+  function changeFolder(nextFolderId: string) {
+    const prev = folderId;
+    setFolderId(nextFolderId);
+    runMeta(async () => {
+      const res = await moveDocumentAction(doc.id, nextFolderId || null);
+      if (res.ok) onSavedRef.current(res.data);
+      else setFolderId(prev);
+      return res;
+    });
+  }
+
+  function changeRole(nextRole: DocRole) {
+    const prev = docRole;
+    setDocRole(nextRole);
+    runMeta(async () => {
+      const res = await setDocumentRoleAction(doc.id, nextRole);
+      if (res.ok) onSavedRef.current(res.data);
+      else setDocRole(prev);
+      return res;
+    });
+  }
+
+  const folderOptions = useMemo(() => buildFolderPathOptions(folders), [folders]);
 
   function insertLink(kind: 'task' | 'milestone', id: string, itemTitle: string) {
     const snippet = formatEntityMarkdownLink(kind, id, itemTitle);
@@ -432,12 +465,37 @@ export function DocEditor({
         </div>
       </div>
 
-      {/* Privacy & save status */}
+      {/* Privacy, folder, role & save status */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <label htmlFor={`${uid}-doc-ai`} className="flex min-h-11 w-fit items-center gap-2 text-sm text-foreground">
-          <Switch id={`${uid}-doc-ai`} checked={excluded} disabled={metaPending} onCheckedChange={toggleExcluded} />
-          Không gửi cho AI
-        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Thư mục tài liệu"
+            disabled={!hydrated || metaPending}
+            value={folderId}
+            onChange={(e) => changeFolder(e.target.value)}
+            className={NATIVE_SELECT}
+          >
+            <option value="">Thư mục gốc</option>
+            {folderOptions.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+          <select
+            aria-label="Vai trò tài liệu"
+            disabled={!hydrated || metaPending}
+            value={docRole}
+            onChange={(e) => changeRole(e.target.value as DocRole)}
+            className={NATIVE_SELECT}
+          >
+            {DOC_ROLES.map((r) => (
+              <option key={r} value={r}>{DOC_ROLE_LABEL[r]}</option>
+            ))}
+          </select>
+          <label htmlFor={`${uid}-doc-ai`} className="flex min-h-11 w-fit items-center gap-2 text-sm text-foreground">
+            <Switch id={`${uid}-doc-ai`} checked={excluded} disabled={metaPending} onCheckedChange={toggleExcluded} />
+            Không gửi cho AI
+          </label>
+        </div>
         <div className="flex items-center gap-2">
           <span>v{revision}</span>
           {saving && <span>Đang lưu…</span>}

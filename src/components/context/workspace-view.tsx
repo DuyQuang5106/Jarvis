@@ -1,22 +1,26 @@
 'use client';
 
-import { ArrowDownIcon, ArrowUpIcon, FileTextIcon, MenuIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from 'lucide-react';
+import { MenuIcon, SearchIcon, XIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import {
   createDocumentAction,
-  reorderDocumentsAction,
   softDeleteDocumentAction,
 } from '@/app/(app)/_actions/documents';
+import {
+  createFolderAction,
+  moveFolderAction,
+  renameFolderAction,
+  setFolderAiExcludedAction,
+  softDeleteFolderAction,
+} from '@/app/(app)/_actions/folders';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AreaKind, AreaStatus } from '@/db/enums';
-import type { DocumentRow } from '@/db/schema';
+import type { DocumentRow, FolderRow } from '@/db/schema';
 import { templatesForKind } from '@/lib/doc-templates';
-import { normalizeVi } from '@/server/ai/match-areas';
 import type { AreaDetails } from '@/server/queries/area-details';
 import type { AreaSummary } from '@/server/queries/snapshot';
 import { ActivityTimeline } from './activity-timeline';
@@ -26,6 +30,8 @@ import { BlockerList } from './blocker-list';
 import { DocEditor } from './doc-editor';
 import { DocSearchDialog } from './doc-search-dialog';
 import { DocVersionsDialog } from './doc-versions-dialog';
+import { FileViewer } from './file-viewer';
+import { FolderExplorer } from './folder-explorer';
 import { MilestoneList } from './milestone-list';
 import { OperationalForm } from './operational-form';
 import { OverviewDirtyContext } from './overview-form';
@@ -146,185 +152,6 @@ function WorkspaceShell({
   );
 }
 
-function DocumentExplorer({
-  kind,
-  docs,
-  activeId,
-  onSelect,
-  onCreate,
-  onReorder,
-  onDelete,
-  creating,
-}: {
-  kind: AreaKind;
-  docs: DocumentRow[];
-  activeId: string | null;
-  onSelect: (id: string) => void;
-  onCreate: (title: string, bodyMd: string, templateKey?: string) => void;
-  onReorder: (orderedIds: string[]) => void;
-  onDelete: (id: string) => void;
-  creating: boolean;
-}) {
-  const [filter, setFilter] = useState('');
-  const [templateMenu, setTemplateMenu] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const templates = templatesForKind(kind);
-
-  const visible = useMemo(() => {
-    const q = normalizeVi(filter);
-    if (!q) return docs;
-    return docs.filter((d) => normalizeVi(d.title).includes(q));
-  }, [docs, filter]);
-
-  function move(index: number, dir: -1 | 1) {
-    const target = index + dir;
-    if (target < 0 || target >= docs.length) return;
-    const next = docs.map((d) => d.id);
-    [next[index], next[target]] = [next[target], next[index]];
-    onReorder(next);
-  }
-
-  return (
-    <div className="flex h-full flex-col gap-3 p-3">
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          className="min-h-11 flex-1 gap-1.5"
-          disabled={creating}
-          onClick={() => onCreate('Tài liệu mới', '')}
-        >
-          <PlusIcon className="size-4" />
-          Tài liệu
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-11 px-3"
-          aria-expanded={templateMenu}
-          onClick={() => setTemplateMenu((v) => !v)}
-        >
-          Mẫu
-        </Button>
-      </div>
-
-      {templateMenu && (
-        <div className="space-y-1 rounded-lg border bg-card p-2">
-          <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Tạo từ mẫu tùy chọn</p>
-          {templates.map((tpl) => (
-            <button
-              key={tpl.key}
-              type="button"
-              disabled={creating}
-              onClick={() => {
-                setTemplateMenu(false);
-                onCreate(tpl.title, tpl.bodyMd, tpl.key);
-              }}
-              className="flex min-h-11 w-full items-center rounded-md px-2 text-left text-sm hover:bg-accent"
-            >
-              {tpl.title}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <Input
-        type="search"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder="Lọc tài liệu…"
-        aria-label="Lọc tài liệu"
-        className="h-11 text-base"
-      />
-
-      {visible.length === 0 ? (
-        <p className="px-1 text-sm text-muted-foreground">
-          {docs.length === 0 ? 'Chưa có tài liệu nào.' : 'Không có tài liệu khớp.'}
-        </p>
-      ) : (
-        <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
-          {visible.map((d) => {
-            const idx = docs.findIndex((x) => x.id === d.id);
-            const active = d.id === activeId;
-            return (
-              <li
-                key={d.id}
-                className={`rounded-lg border p-1.5 ${active ? 'border-primary bg-accent/50' : 'bg-card'}`}
-              >
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onSelect(d.id)}
-                    className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded px-2 text-left text-sm font-medium"
-                  >
-                    <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{d.title}</span>
-                  </button>
-                  {filter.trim() === '' && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        aria-label={`Lên ${d.title}`}
-                        className="min-h-11 min-w-11 px-2"
-                        disabled={idx <= 0}
-                        onClick={() => move(idx, -1)}
-                      >
-                        <ArrowUpIcon className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        aria-label={`Xuống ${d.title}`}
-                        className="min-h-11 min-w-11 px-2"
-                        disabled={idx < 0 || idx >= docs.length - 1}
-                        onClick={() => move(idx, 1)}
-                      >
-                        <ArrowDownIcon className="size-4" />
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    aria-label={`Xóa ${d.title}`}
-                    className="min-h-11 min-w-11 px-2 text-muted-foreground hover:text-destructive"
-                    onClick={() => setConfirmDeleteId(d.id)}
-                  >
-                    <Trash2Icon className="size-4" />
-                  </Button>
-                </div>
-                {confirmDeleteId === d.id && (
-                  <div className="mt-1 flex items-center justify-end gap-1.5 border-t pt-1.5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="min-h-11 px-3"
-                      onClick={() => setConfirmDeleteId(null)}
-                    >
-                      Hủy
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      className="min-h-11 px-3"
-                      onClick={() => {
-                        setConfirmDeleteId(null);
-                        onDelete(d.id);
-                      }}
-                    >
-                      Xác nhận xóa
-                    </Button>
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 export function WorkspaceView({
   details,
   section,
@@ -337,7 +164,8 @@ export function WorkspaceView({
   today: string;
 }) {
   const router = useRouter();
-  const { doc: urlDocId, setDoc, setSection, closeItem, openItem } = useContextParams();
+  const { doc: urlDocId, folder: urlFolderId, setDoc, setFolder, setSection, closeItem, openItem } = useContextParams();
+  const [folders, setFolders] = useState<FolderRow[]>(details.folders);
   const [docs, setDocs] = useState<DocumentRow[]>(details.documents);
   const [mobilePane, setMobilePane] = useState<'docs' | 'ops'>(() =>
     section !== 'overview' && section !== '' && !urlDocId ? 'ops' : 'docs',
@@ -359,17 +187,18 @@ export function WorkspaceView({
     return docs[0] ?? null;
   }, [docs, urlDocId]);
 
-  function handleCreateDoc(title: string, bodyMd: string, templateKey?: string) {
+  function handleCreateDoc(title: string, bodyMd: string, templateKey?: string, folderId?: string | null) {
     startCreate(async () => {
       const res = await createDocumentAction({
         areaId: details.area.id,
+        folderId: folderId ?? null,
         title,
         bodyMd,
         templateKey: templateKey ?? null,
       });
       if (res.ok) {
         setDocs((prev) => [...prev, res.data]);
-        setDoc(res.data.id);
+        setDoc(res.data.id, res.data.folderId ?? null);
         setExplorerSheetOpen(false);
         setMobilePane('docs');
         router.refresh();
@@ -377,21 +206,84 @@ export function WorkspaceView({
     });
   }
 
-  async function handleReorder(orderedIds: string[]) {
-    const byId = new Map(docs.map((d) => [d.id, d]));
-    setDocs(orderedIds.map((id, i) => ({ ...byId.get(id)!, sortOrder: i })));
-    await reorderDocumentsAction(details.area.id, orderedIds);
+  async function handleCreateFolder(name: string, parentId: string | null) {
+    const res = await createFolderAction({ areaId: details.area.id, parentId, name });
+    if (res.ok) {
+      setFolders((prev) => [...prev, res.data]);
+      setFolder(res.data.id);
+      router.refresh();
+    }
+  }
+
+  async function handleRenameFolder(id: string, name: string) {
+    const res = await renameFolderAction(id, name);
+    if (res.ok) {
+      setFolders((prev) => prev.map((f) => (f.id === id ? res.data : f)));
+      router.refresh();
+    }
+  }
+
+  async function handleMoveFolder(id: string, parentId: string | null) {
+    const res = await moveFolderAction(id, parentId);
+    if (res.ok) {
+      setFolders((prev) => prev.map((f) => (f.id === id ? res.data : f)));
+      router.refresh();
+    }
+  }
+
+  async function handleToggleFolderExcluded(id: string, aiExcluded: boolean) {
+    const res = await setFolderAiExcludedAction(id, aiExcluded);
+    if (res.ok) {
+      setFolders((prev) => prev.map((f) => (f.id === id ? res.data : f)));
+      router.refresh();
+    }
+  }
+
+  async function handleDeleteFolder(id: string) {
+    const res = await softDeleteFolderAction(id);
+    if (res.ok) {
+      const byParent = new Map<string | null, string[]>();
+      for (const f of folders) {
+        const arr = byParent.get(f.parentId) ?? [];
+        arr.push(f.id);
+        byParent.set(f.parentId, arr);
+      }
+      const removed = new Set<string>([id]);
+      const queue = [id];
+      for (let i = 0; i < queue.length; i += 1) {
+        for (const child of byParent.get(queue[i]) ?? []) {
+          if (!removed.has(child)) {
+            removed.add(child);
+            queue.push(child);
+          }
+        }
+      }
+      const rest = docs.filter((d) => !d.folderId || !removed.has(d.folderId));
+      setFolders((prev) => prev.filter((f) => !removed.has(f.id)));
+      setDocs(rest);
+      if (urlDocId && !rest.some((d) => d.id === urlDocId)) {
+        setDoc(rest[0]?.id ?? null, null);
+      } else if (urlFolderId && removed.has(urlFolderId)) {
+        setFolder(null);
+      }
+      router.refresh();
+    }
+  }
+
+  function handleUploadedDoc(uploaded: DocumentRow) {
+    setDocs((prev) => [...prev, uploaded]);
+    setDoc(uploaded.id, uploaded.folderId ?? null);
+    setExplorerSheetOpen(false);
+    setMobilePane('docs');
     router.refresh();
   }
 
   async function handleDeleteDoc(id: string) {
     const res = await softDeleteDocumentAction(id);
     if (res.ok) {
-      setDocs((prev) => {
-        const rest = prev.filter((d) => d.id !== id);
-        if (urlDocId === id) setDoc(rest[0]?.id ?? null);
-        return rest;
-      });
+      const rest = docs.filter((d) => d.id !== id);
+      setDocs(rest);
+      if (urlDocId === id) setDoc(rest[0]?.id ?? null);
       router.refresh();
     }
   }
@@ -433,32 +325,46 @@ export function WorkspaceView({
   );
 
   const explorerNode = (
-    <DocumentExplorer
+    <FolderExplorer
+      areaId={details.area.id}
       kind={details.area.kind}
+      folders={folders}
       docs={docs}
-      activeId={activeDoc?.id ?? null}
-      onSelect={(id) => {
-        setDoc(id);
+      activeDocId={activeDoc?.id ?? null}
+      selectedFolderId={urlFolderId}
+      creating={creating}
+      onSelectFolder={(fid) => setFolder(fid)}
+      onSelectDoc={(docId, fid) => {
+        setDoc(docId, fid);
         setExplorerSheetOpen(false);
         setMobilePane('docs');
       }}
-      onCreate={handleCreateDoc}
-      onReorder={handleReorder}
-      onDelete={handleDeleteDoc}
-      creating={creating}
+      onCreateFolder={handleCreateFolder}
+      onRenameFolder={handleRenameFolder}
+      onMoveFolder={handleMoveFolder}
+      onToggleFolderExcluded={handleToggleFolderExcluded}
+      onDeleteFolder={handleDeleteFolder}
+      onCreateDoc={handleCreateDoc}
+      onUploadedDoc={handleUploadedDoc}
+      onDeleteDoc={handleDeleteDoc}
     />
   );
 
   const editorNode = activeDoc ? (
-    <DocEditor
-      key={`${activeDoc.id}-${editorRevisionBump}`}
-      doc={activeDoc}
-      tasks={details.tasks}
-      milestones={details.milestones}
-      onSaved={handleDocSaved}
-      onJumpToSection={handleJumpToSection}
-      onOpenVersions={() => setVersionsOpen(true)}
-    />
+    activeDoc.fileExt.toLowerCase() === 'md' ? (
+      <DocEditor
+        key={`${activeDoc.id}-${editorRevisionBump}`}
+        doc={activeDoc}
+        folders={folders}
+        tasks={details.tasks}
+        milestones={details.milestones}
+        onSaved={handleDocSaved}
+        onJumpToSection={handleJumpToSection}
+        onOpenVersions={() => setVersionsOpen(true)}
+      />
+    ) : (
+      <FileViewer key={activeDoc.id} doc={activeDoc} folders={folders} onSaved={handleDocSaved} />
+    )
   ) : (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="text-base font-medium">Chưa có tài liệu nào trong workspace này</p>
@@ -535,7 +441,7 @@ export function WorkspaceView({
 
       {/* Desktop 3-column layout / Mobile single-pane */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="hidden w-64 shrink-0 overflow-y-auto border-r bg-muted/20 md:block">
+        <aside className="hidden w-72 shrink-0 overflow-y-auto border-r bg-muted/20 md:block">
           {explorerNode}
         </aside>
 
@@ -567,7 +473,7 @@ export function WorkspaceView({
         </SheetContent>
       </Sheet>
 
-      {activeDoc && (
+      {activeDoc && activeDoc.fileExt.toLowerCase() === 'md' && (
         <DocVersionsDialog
           open={versionsOpen}
           onOpenChange={setVersionsOpen}
@@ -586,7 +492,7 @@ export function WorkspaceView({
         onOpenChange={setSearchOpen}
         areaId={details.area.id}
         onPick={(hit) => {
-          openItem(hit.areaId, KIND_TAB[hit.areaKind], hit.id);
+          openItem(hit.areaId, KIND_TAB[hit.areaKind], hit.id, hit.folderId);
           setMobilePane('docs');
         }}
       />
