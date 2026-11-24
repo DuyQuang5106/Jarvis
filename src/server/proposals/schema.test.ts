@@ -61,4 +61,5 @@ test('tool definition là JSON Schema của schema đề xuất', () => {
   const serialized = JSON.stringify(PROPOSE_CHANGES_TOOL.parameters);
   expect(serialized).not.toContain('"$schema"');
   expect(serialized).not.toContain('"oneOf"');
+  expect(serialized).not.toContain('"format":"uuid"');
 });

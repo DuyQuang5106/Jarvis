@@ -199,6 +199,7 @@ function simplifyToolSchema(node: unknown): unknown {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(node)) {
     if (k === '$schema') continue;
+    if (k === 'format' && v === 'uuid') continue;
     if (k === 'pattern' && (node as Record<string, unknown>).format === 'uuid') continue;
     out[k === 'oneOf' ? 'anyOf' : k] = simplifyToolSchema(v);
   }

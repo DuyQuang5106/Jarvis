@@ -4,6 +4,7 @@ import { APP_TZ, todayIn } from '@/lib/dates';
 import { firstChars } from '@/lib/utils';
 import { buildContext, listAiExcludedAreas, type ContextRef, type ContextScope } from '../ai/context-builder';
 import { hiddenDocumentIds } from '../ai/document-visibility';
+import { aliasWorkspaceState, resolveProposalAliases } from '../ai/id-aliases';
 import { matchAreas } from '../ai/match-areas';
 import { buildSystemPrompt } from '../ai/prompt';
 import type { AiProvider, ChatMessage } from '../ai/provider';
@@ -145,9 +146,10 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
       now: deps.now,
     });
 
-    // 6. Stream.
+    // 6. Stream. Alias entity UUIDs so external AI proxies that scrub UUIDs cannot corrupt IDs.
+    const aliased = aliasWorkspaceState(ctx.state);
     const messages: ChatMessage[] = [
-      { role: 'system', content: buildSystemPrompt({ stateJson: ctx.json, actionMode: deps.actionMode }) },
+      { role: 'system', content: buildSystemPrompt({ stateJson: aliased.json, actionMode: deps.actionMode }) },
       ...history,
       { role: 'user', content: current.content },
     ];
@@ -190,7 +192,8 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
     }
     if (deps.signal?.aborted) return; // stopped: nothing of this reply is saved
 
-    const parsed = rawProposal !== null ? parseProposal(rawProposal) : null;
+    const resolvedProposal = rawProposal !== null ? resolveProposalAliases(rawProposal, aliased.aliasToReal) : null;
+    const parsed = resolvedProposal !== null ? parseProposal(resolvedProposal) : null;
     if (reply.trim() === '') {
       if (parsed?.ok) {
         reply = parsed.value.summary;
