@@ -19,6 +19,7 @@ test.beforeEach(async ({ request, page }) => {
   await page.getByRole('main').getByRole('listitem').filter({ hasText: 'Algebra' }).click();
   const ws = page.getByRole('dialog', { name: 'Algebra' });
   await ws.getByRole('button', { name: 'Tiến độ ôn tập' }).click();
+  await expect(page).toHaveURL(/doc=[0-9a-f-]{36}/);
   const editor = ws.getByLabel('Nội dung tài liệu');
   await expect(editor).toBeVisible();
   await expect(async () => {
@@ -27,6 +28,8 @@ test.beforeEach(async ({ request, page }) => {
   }).toPass();
   await editor.blur();
   await expect(ws.getByText('Đã lưu')).toBeVisible();
+  await page.reload();
+  await expect(editor).toHaveValue(/Chưa đọc\./);
 });
 
 test('duyệt sửa Markdown, xem một phiên bản AI rồi hoàn tác', async ({ page }) => {
