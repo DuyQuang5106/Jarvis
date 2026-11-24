@@ -12,6 +12,7 @@ export type ChangeEvent = {
   action: LogAction;
   before?: unknown;
   after?: unknown;
+  createdAt?: Date;
 } & WriteMeta;
 
 /** Appends one activity_logs row. Call it inside the same transaction as the write it describes. */
@@ -25,6 +26,7 @@ export async function recordChange(tx: DbOrTx, e: ChangeEvent): Promise<void> {
     afterJson: e.after ?? null,
     origin: e.origin,
     batchId: e.batchId ?? null,
+    ...(e.createdAt ? { createdAt: e.createdAt } : {}),
   });
 }
 

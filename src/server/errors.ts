@@ -19,6 +19,13 @@ export class ValidationError extends Error {
   }
 }
 
+export class ConflictError extends Error {
+  constructor(message = 'Dữ liệu đã thay đổi ở nơi khác.') {
+    super(message);
+    this.name = 'ConflictError';
+  }
+}
+
 export class AiProviderError extends Error {
   status?: number;
   constructor(message: string, status?: number) {

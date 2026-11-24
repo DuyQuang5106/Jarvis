@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { MessageBubble, type ChatMessageView } from './message-bubble';
+import { ProposalCard } from './proposal-card';
 
 /** Within this many pixels of the bottom counts as "at the bottom" (auto-scroll stays on). */
 const STICK_PX = 64;
@@ -59,6 +60,7 @@ export function MessageList({
             key={m.id}
             message={m}
             onRegenerate={m === last && m.role === 'assistant' && draft === null ? onRegenerate : undefined}
+            footer={m.pendingActionId ? <ProposalCard proposalId={m.pendingActionId} /> : undefined}
           />
         ))}
         {draft !== null && (

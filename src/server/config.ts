@@ -15,6 +15,10 @@ export type AppConfig = {
   aiModel?: string;
   aiActionMode: 'tools' | 'json' | 'off';
   aiDailyRequestCap: number;
+  storageDriver: 'memory' | 'local' | 'supabase';
+  storageDir: string;
+  supabaseStorageBucket?: string;
+  supabaseServiceRoleKey?: string;
   e2e: boolean;
 };
 
@@ -42,11 +46,21 @@ export function loadConfig(env: Env): AppConfig {
     throw new ConfigError(`AI_DAILY_REQUEST_CAP=${capRaw} không hợp lệ; cần số nguyên không âm.`);
   }
 
+  const pgliteDir = blank(env.PGLITE_DIR) ?? './.pglite';
+  const supabaseStorageBucket = blank(env.SUPABASE_STORAGE_BUCKET);
+  const supabaseServiceRoleKey = blank(env.SUPABASE_SERVICE_ROLE_KEY);
+  const defaultStorageDriver: AppConfig['storageDriver'] =
+    pgliteDir === 'memory'
+      ? 'memory'
+      : supabaseStorageBucket && supabaseServiceRoleKey
+        ? 'supabase'
+        : 'local';
+
   return {
     nodeEnv,
     dbDriver: pick(env, 'DB_DRIVER', ['postgres', 'pglite'] as const, prod ? 'postgres' : 'pglite'),
     databaseUrl: blank(env.DATABASE_URL),
-    pgliteDir: blank(env.PGLITE_DIR) ?? './.pglite',
+    pgliteDir,
     authMode: pick(env, 'AUTH_MODE', ['supabase', 'dev'] as const, prod ? 'supabase' : 'dev'),
     supabaseUrl: blank(env.NEXT_PUBLIC_SUPABASE_URL),
     supabaseAnonKey: blank(env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
@@ -57,6 +71,10 @@ export function loadConfig(env: Env): AppConfig {
     aiModel: blank(env.AI_MODEL),
     aiActionMode: pick(env, 'AI_ACTION_MODE', ['tools', 'json', 'off'] as const, 'off'),
     aiDailyRequestCap: cap,
+    storageDriver: pick(env, 'STORAGE_DRIVER', ['memory', 'local', 'supabase'] as const, defaultStorageDriver),
+    storageDir: blank(env.STORAGE_DIR) ?? './.storage',
+    supabaseStorageBucket,
+    supabaseServiceRoleKey,
     e2e: env.E2E === '1',
   };
 }
@@ -68,6 +86,7 @@ export function assertSafeConfig(cfg: AppConfig): void {
   const problems: string[] = [];
   if (cfg.authMode === 'dev') problems.push('AUTH_MODE=dev bị cấm ở production (bỏ qua đăng nhập).');
   if (cfg.dbDriver === 'pglite') problems.push('DB_DRIVER=pglite bị cấm ở production.');
+  if (cfg.storageDriver === 'memory') problems.push('STORAGE_DRIVER=memory bị cấm ở production.');
   if (cfg.e2e) problems.push('E2E=1 bị cấm ở production (mở route reset dữ liệu).');
 
   const missing: string[] = [];
@@ -76,6 +95,11 @@ export function assertSafeConfig(cfg: AppConfig): void {
     if (!cfg.supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
     if (!cfg.supabaseAnonKey) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
     if (!cfg.ownerEmail) missing.push('APP_OWNER_EMAIL');
+  }
+  if (cfg.storageDriver === 'supabase') {
+    if (!cfg.supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+    if (!cfg.supabaseStorageBucket) missing.push('SUPABASE_STORAGE_BUCKET');
+    if (!cfg.supabaseServiceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
   }
   for (const name of missing) problems.push(`Thiếu biến môi trường bắt buộc: ${name}.`);
 

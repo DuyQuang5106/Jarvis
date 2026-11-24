@@ -46,10 +46,11 @@ test('hỏi về một môn: trả lời từ DB, có nguồn, cuộc chat vào 
   await expect(recent).toHaveText('Mobile Programming đang ở tình trạng nào?');
 });
 
-test('sửa bằng UI rồi mở chat mới vẫn đọc state mới (criterion 6)', async ({ page }) => {
+test('sửa bằng UI rồi mở chat mới vẫn đọc state mới (criterion 6)', async ({ page, isMobile }) => {
   await page.goto('/context');
   await page.getByRole('listitem').filter({ hasText: 'Mobile Programming' }).click();
   const drawer = page.getByRole('dialog', { name: 'Mobile Programming' });
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await drawer.getByRole('tab', { name: 'Topics' }).click();
   await drawer.getByPlaceholder('Thêm topic…').fill('Navigation');
   const isAction = (r: Response) => r.request().method() === 'POST' && !!r.request().headers()['next-action'];

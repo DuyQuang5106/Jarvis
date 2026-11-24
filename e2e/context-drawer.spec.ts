@@ -1,21 +1,23 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { resetDb } from './helpers';
 
-test.beforeEach(async ({ request, page }) => {
+test.beforeEach(async ({ request, page, isMobile }) => {
   await resetDb(request);
   await page.goto('/context');
   await page.getByRole('button', { name: 'Thêm' }).click();
   await page.getByLabel('Tên', { exact: true }).fill('Computer Networks');
   await page.getByRole('button', { name: 'Tạo' }).click();
   await page.getByRole('listitem').filter({ hasText: 'Computer Networks' }).click();
+  if (isMobile) await page.getByRole('dialog', { name: 'Computer Networks' }).getByRole('button', { name: 'Vận hành' }).click();
 });
 
-test('drawer mở theo URL và còn nguyên sau khi tải lại', async ({ page }) => {
+test('drawer mở theo URL và còn nguyên sau khi tải lại', async ({ page, isMobile }) => {
   const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
   await expect(drawer).toBeVisible();
   await page.reload();
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('tab')).toHaveText(['Tổng quan', 'Tasks', 'Topics', 'Assessments', 'Notes', 'Activity']);
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
+  await expect(drawer.getByRole('tab')).toHaveText(['Vận hành', 'Tasks', 'Topics', 'Assessments', 'Activity']);
 });
 
 test('sửa tổng quan được lưu và hiện ở danh sách', async ({ page }) => {
@@ -118,8 +120,9 @@ test('gõ từng ký tự vào Hạn chỉ lưu ngày đã gõ', async ({ page }
   test.skip(testInfo.project.name !== 'desktop', 'Typing into a date field is a desktop behaviour');
   await addTask(page, 'Task gõ ngày');
   const due = item(page, 'Task gõ ngày').getByLabel('Hạn');
-  await due.click();
+  await due.click({ position: { x: 12, y: 22 } });
   await due.pressSequentially('12012026');
+  await expect(due).toHaveValue('2026-12-01');
   await due.blur();
   await settled(page, 'Task gõ ngày');
   await page.reload();
@@ -137,31 +140,34 @@ test('task Done xếp cuối và gạch ngang', async ({ page }) => {
   await expect(item(page, 'Việc B').getByRole('button', { name: 'Việc B' })).not.toHaveCSS('text-decoration-line', 'line-through');
 });
 
-test('chuyển tab không làm mất chỉnh sửa chưa lưu ở Tổng quan', async ({ page }) => {
+test('chuyển tab không làm mất chỉnh sửa chưa lưu ở Vận hành', async ({ page, isMobile }) => {
   const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
   await drawer.getByLabel('Việc tiếp theo').fill('Chưa lưu');
   await drawer.getByRole('tab', { name: 'Tasks' }).click();
   await expect(page).toHaveURL(/section=tasks/);
-  await drawer.getByRole('tab', { name: 'Tổng quan' }).click();
+  await drawer.getByRole('tab', { name: 'Vận hành' }).click();
   await expect(page).toHaveURL(/section=overview/);
   await expect(drawer.getByLabel('Việc tiếp theo')).toHaveValue('Chưa lưu');
   await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
   await expect(drawer.getByText('Đã lưu')).toBeVisible();
   await page.reload();
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await expect(drawer.getByLabel('Việc tiếp theo')).toHaveValue('Chưa lưu');
 });
 
-test('xóa ngày gửi null: sau khi tải lại ô ngày trống', async ({ page }) => {
+test('xóa ngày gửi null: sau khi tải lại ô ngày trống', async ({ page, isMobile }) => {
   const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
   await drawer.getByLabel('Deadline').fill('2026-12-01');
   await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
   await expect(drawer.getByText('Đã lưu')).toBeVisible();
   await page.reload();
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await expect(drawer.getByLabel('Deadline')).toHaveValue('2026-12-01');
   await drawer.getByLabel('Deadline').fill('');
   await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
   await expect(drawer.getByText('Đã lưu')).toBeVisible();
   await page.reload();
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await expect(drawer.getByLabel('Deadline')).toHaveValue('');
 });
 
@@ -181,7 +187,7 @@ test('Lưu trữ cần xác nhận và ẩn mục khỏi danh sách', async ({ p
   await expect(page.getByRole('listitem').filter({ hasText: 'Computer Networks' })).toHaveCount(0);
 });
 
-test('đóng drawer xóa item và section, giữ tab; dự án có bộ tab riêng', async ({ page }) => {
+test('đóng drawer xóa item và section, giữ tab; dự án có bộ tab riêng', async ({ page, isMobile }) => {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('tab', { name: 'Projects' }).click();
@@ -192,8 +198,8 @@ test('đóng drawer xóa item và section, giữ tab; dự án có bộ tab riê
   await page.getByRole('button', { name: 'Tạo' }).click();
   await page.getByRole('listitem').filter({ hasText: 'Jarvis' }).click();
   const drawer = page.getByRole('dialog', { name: 'Jarvis' });
-  await expect(drawer.getByRole('tab')).toHaveText(['Tổng quan', 'Tasks', 'Milestones', 'Blockers', 'Notes', 'Activity']);
-  await expect(drawer.getByLabel('Vai trò')).toBeVisible();
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
+  await expect(drawer.getByRole('tab')).toHaveText(['Vận hành', 'Tasks', 'Milestones', 'Blockers', 'Activity']);
   await drawer.getByRole('tab', { name: 'Tasks' }).click();
   await expect(page).toHaveURL(/section=tasks/);
   await page.keyboard.press('Escape');
@@ -224,7 +230,7 @@ async function holdWrites(page: Page) {
   return release;
 }
 
-test('Không gửi cho AI của mục lưu ngay khi bật, không cần bấm Lưu', async ({ page }) => {
+test('Không gửi cho AI của mục lưu ngay khi bật, không cần bấm Lưu', async ({ page, isMobile }) => {
   const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
   await drawer.getByRole('switch', { name: 'Không gửi cho AI' }).click();
   await expect(drawer.locator('[aria-busy="true"]')).toHaveCount(0);
@@ -234,6 +240,7 @@ test('Không gửi cho AI của mục lưu ngay khi bật, không cần bấm L�
   await expect(page.getByRole('listitem').filter({ hasText: 'Computer Networks' }).getByLabel('Không gửi cho AI')).toBeVisible();
   await page.reload();
   await page.getByRole('listitem').filter({ hasText: 'Computer Networks' }).click();
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await expect(drawer.getByRole('switch', { name: 'Không gửi cho AI' })).toBeChecked();
 });
 
@@ -245,7 +252,7 @@ test('Không gửi cho AI của mục lỗi khi lưu: về lại giá trị cũ 
   await expect(drawer.getByRole('switch', { name: 'Không gửi cho AI' })).not.toBeChecked();
 });
 
-test('đóng drawer khi Tổng quan có thay đổi chưa lưu thì hỏi lại', async ({ page }, testInfo) => {
+test('đóng drawer khi Vận hành có thay đổi chưa lưu thì hỏi lại', async ({ page, isMobile }) => {
   const drawer = page.getByRole('dialog', { name: 'Computer Networks' });
   const confirm = page.getByRole('alertdialog', { name: 'Bỏ thay đổi chưa lưu?' });
   await drawer.getByLabel('Việc tiếp theo').fill('Chưa lưu');
@@ -256,24 +263,17 @@ test('đóng drawer khi Tổng quan có thay đổi chưa lưu thì hỏi lại'
   await expect(confirm).toHaveCount(0);
   await expect(drawer.getByLabel('Việc tiếp theo')).toHaveValue('Chưa lưu');
 
-  await drawer.getByRole('button', { name: 'Close' }).click();
+  await drawer.getByRole('button', { name: 'Đóng' }).click();
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: 'Hủy' }).click();
   await expect(drawer).toBeVisible();
-
-  if (testInfo.project.name === 'desktop') {
-    // The overlay is the strip left of the 40rem drawer.
-    await page.mouse.click(10, 300);
-    await expect(confirm).toBeVisible();
-    await confirm.getByRole('button', { name: 'Hủy' }).click();
-    await expect(drawer).toBeVisible();
-  }
 
   await page.keyboard.press('Escape');
   await confirm.getByRole('button', { name: 'Bỏ thay đổi' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).not.toHaveURL(/item=/);
   await page.getByRole('listitem').filter({ hasText: 'Computer Networks' }).click();
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await expect(drawer.getByLabel('Việc tiếp theo')).toHaveValue('');
 
   // A clean form closes straight away.
@@ -313,7 +313,7 @@ test('nút đóng drawer và hộp thoại thêm mục rộng ít nhất 44px', 
     await expect.poll(async () => (await button.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(43.5);
     await expect.poll(async () => (await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(43.5);
   };
-  await atLeast44(drawer.getByRole('button', { name: 'Close' }));
+  await atLeast44(drawer.getByRole('button', { name: 'Đóng' }));
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0);
   await page.getByRole('button', { name: 'Thêm' }).click();

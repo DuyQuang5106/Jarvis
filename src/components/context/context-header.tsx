@@ -1,6 +1,7 @@
 'use client';
 
 import { SearchIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddAreaDialog } from './add-area-dialog';
@@ -12,17 +13,25 @@ export function ContextHeader({
   onTab,
   query,
   onQuery,
+  onSearchDocs,
 }: {
   tab: TabId;
   onTab: (t: TabId) => void;
   query: string;
   onQuery: (q: string) => void;
+  onSearchDocs: () => void;
 }) {
   return (
     <header className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Context</h1>
-        <AddAreaDialog tab={tab} />
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" className="min-h-11 gap-1.5 px-3" onClick={onSearchDocs}>
+            <SearchIcon className="size-4" />
+            Tìm tài liệu
+          </Button>
+          <AddAreaDialog tab={tab} />
+        </div>
       </div>
       <QuickCapture />
       <Tabs value={tab} onValueChange={(v) => onTab(v as TabId)}>

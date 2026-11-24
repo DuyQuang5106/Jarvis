@@ -34,8 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
-# local db and test output
+# local db, storage and test output
 .pglite/
+.storage/
 test-results/
 playwright-report/
 

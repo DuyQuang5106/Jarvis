@@ -25,13 +25,14 @@ export default function ChatPage({ searchParams }: { searchParams: SearchParams 
 
 function toView(m: MessageRow): ChatMessageView | null {
   if (m.role !== 'user' && m.role !== 'assistant') return null;
-  const meta = (m.metadata ?? {}) as { contextRefs?: ContextRef[]; summaryCount?: number };
+  const meta = (m.metadata ?? {}) as { contextRefs?: ContextRef[]; summaryCount?: number; pendingActionId?: string };
   return {
     id: m.id,
     role: m.role,
     content: m.content,
     contextRefs: Array.isArray(meta.contextRefs) ? meta.contextRefs : [],
     summaryCount: typeof meta.summaryCount === 'number' ? meta.summaryCount : 0,
+    pendingActionId: typeof meta.pendingActionId === 'string' ? meta.pendingActionId : null,
   };
 }
 

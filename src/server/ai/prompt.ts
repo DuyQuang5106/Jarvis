@@ -1,4 +1,28 @@
+import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
+
 export type PromptInput = { stateJson: string; actionMode: 'tools' | 'json' | 'off' };
+
+const PROPOSAL_RULES_COMMON = `- Chỉ đề xuất điều người dùng đã nói rõ. Không suy diễn thêm trạng thái, deadline hay điểm số.
+- Dùng đúng id và areaId có trong <workspace_state>. Nếu thứ người dùng nhắc tới chưa tồn tại (ví dụ một topic chưa có), đề xuất tạo mới và nói rõ là tạo mới; không gán vào bản ghi gần giống.
+- Ngày viết dạng YYYY-MM-DD.
+- Bạn không thể xóa dữ liệu. Bạn không tự ghi được gì: mọi đề xuất chờ người dùng duyệt, nên đừng nói là đã cập nhật.
+- Luôn kèm một câu trả lời ngắn bằng văn bản mô tả điều bạn đề xuất.`;
+
+function proposalSection(mode: PromptInput['actionMode']): string {
+  if (mode === 'tools') {
+    return `ĐỀ XUẤT CẬP NHẬT
+- Khi người dùng báo tiến độ, báo một thay đổi, hoặc yêu cầu sửa dữ liệu, hãy gọi tool propose_changes. Không gọi khi họ chỉ hỏi.
+${PROPOSAL_RULES_COMMON}`;
+  }
+  if (mode === 'json') {
+    return `ĐỀ XUẤT CẬP NHẬT
+- Khi người dùng báo tiến độ, báo một thay đổi, hoặc yêu cầu sửa dữ liệu, hãy đặt Ở CUỐI câu trả lời một khối <proposed_actions>{...}</proposed_actions> chứa đúng một object JSON theo schema dưới đây, không kèm code fence. Không thêm khối này khi họ chỉ hỏi.
+${PROPOSAL_RULES_COMMON}
+Schema: ${JSON.stringify(PROPOSE_CHANGES_TOOL.parameters)}`;
+  }
+  return `ĐỀ XUẤT CẬP NHẬT
+- Bạn không thể đề xuất hay ghi thay đổi dữ liệu. Khi người dùng muốn cập nhật, hướng dẫn họ sửa trong màn Context.`;
+}
 
 const TEMPLATE = `Bạn là trợ lý trong Personal AI Workspace của một người dùng duy nhất. Bạn giúp họ theo dõi việc học và các dự án dựa trên dữ liệu trong khối <workspace_state>.
 
@@ -21,12 +45,15 @@ CÁCH TRẢ LỜI
 CẬP NHẬT NHANH
 - Khi người dùng nhắn "Cập nhật nhanh": hỏi ngắn gọn về tối đa ba mục trong \`staleAreaIds\` (gọi theo tên), mỗi mục một câu hỏi, rồi chờ họ trả lời.
 
+{{PROPOSALS}}
+
 <workspace_state>
 {{STATE}}
 </workspace_state>`;
 
-/** Phase 3 adds proposal instructions per `actionMode`; for now every mode gets the same text. */
 export function buildSystemPrompt(input: PromptInput): string {
   // Function replacer: `$` sequences inside the state JSON must stay literal.
-  return TEMPLATE.replace('{{STATE}}', () => input.stateJson);
+  return TEMPLATE
+    .replace('{{PROPOSALS}}', () => proposalSection(input.actionMode))
+    .replace('{{STATE}}', () => input.stateJson);
 }

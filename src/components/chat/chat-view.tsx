@@ -110,6 +110,7 @@ export function ChatView({
     const gen = generationRef.current;
     let text = '';
     let metaSeen = false;
+    let pendingActionId: string | null = null;
     setDraft('');
     setNotice(null);
     setPinKey((k) => k + 1);
@@ -136,12 +137,22 @@ export function ChatView({
             text += e.delta;
             setDraft(text);
             break;
+          case 'proposal':
+            pendingActionId = e.pendingActionId;
+            break;
           case 'done':
             replaced.current = null;
             setDraft(null);
             setMessages((ms) => [
               ...ms,
-              { id: e.assistantMessageId, role: 'assistant', content: text, contextRefs: e.contextRefs, summaryCount: e.summaryCount },
+              {
+                id: e.assistantMessageId,
+                role: 'assistant',
+                content: text,
+                contextRefs: e.contextRefs,
+                summaryCount: e.summaryCount,
+                pendingActionId,
+              },
             ]);
             break;
           case 'error':

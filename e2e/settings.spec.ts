@@ -14,7 +14,7 @@ test('đổi ngưỡng cũ và tải export', async ({ page, request, isMobile }
   const res = await request.get('/api/export');
   expect(res.headers()['content-disposition']).toMatch(/personal-ai-export-\d{4}-\d{2}-\d{2}\.json/);
   const body = await res.json();
-  expect(body.schema_version).toBe(1);
+  expect(body.schema_version).toBe(3);
   expect(body.tables.settings[0].stale_after_days ?? body.tables.settings[0].staleAfterDays).toBe(10);
 });
 

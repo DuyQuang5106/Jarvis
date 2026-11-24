@@ -24,10 +24,10 @@ Personal AI Workspace là một ứng dụng web cá nhân có **hai màn hình 
 ## 2. Phạm vi V1 và những gì chưa xây
 
 ### Phải có trong V1
-- Hai màn hình: `/chat` và `/context`; các chi tiết mở dưới dạng panel/drawer, không thành screen thứ ba. Onboarding `Review & import` và Settings đều là modal.
+- Hai màn hình: `/chat` và `/context`; chi tiết của mỗi môn/dự án mở ở chế độ toàn màn hình ngay trong `/context?tab=...&item=<id>&doc=<docId>` (hoặc drawer tương thích trong giai đoạn chuyển tiếp), không thành screen thứ ba. Onboarding `Review & import` và Settings đều là modal.
 - Chat nhiều cuộc hội thoại, streaming nếu provider hỗ trợ, Markdown, retry, lịch sử chat, prompt gợi ý.
 - Context với hai tab Academic / Projects; danh sách, tìm kiếm theo tên, tạo/sửa/lưu trữ mục.
-- Drawer chi tiết của mỗi môn/dự án: overview, tiến độ, tasks, notes, logs; riêng Academic có topics và assessments, riêng Projects có milestones và blockers.
+- Workspace chi tiết của mỗi môn/dự án: thông tin vận hành gọn (status, priority, ngày bắt đầu, deadline, next action, aliases, cờ `Không gửi cho AI`), không giới hạn tài liệu Markdown (`documents`) kèm lịch sử phiên bản và tìm kiếm, cùng các bản ghi có cấu trúc: tasks, logs; riêng Academic có topics và assessments, riêng Projects có milestones và blockers.
 - CRUD trực tiếp bằng UI, không cần AI.
 - AI đọc ngữ cảnh có cấu trúc; trả lời có giải thích, nêu dữ liệu nào hỗ trợ nhận định và dữ liệu nào chưa có.
 - AI **đề xuất** các thay đổi dữ liệu dưới dạng structured actions; UI cho xem bản xem trước và **duyệt** trước khi ghi.
@@ -109,24 +109,24 @@ Header: `Context` · tab `[Academic] [Projects]` · search · `+ Add` · quick c
 
 **Danh sách:** compact list (dạng card là P1); mỗi item thể hiện tên, trạng thái, milestone hoặc việc tiếp theo, ngày cập nhật cuối, cảnh báo khi thông tin thiếu/cũ, huy hiệu số blocker đang mở. Không bắt buộc phải có phần trăm tiến độ. Phía trên danh sách có dải `Cần cập nhật` liệt kê các item active quá 7 ngày chưa đụng tới (ngưỡng chỉnh trong Settings).
 
-**Drawer chi tiết dùng chung:**
-- **Overview:** mục tiêu, mô tả ngắn, trạng thái (`Unknown / Not started / Active / Blocked / On hold / Completed`), priority (`High / Medium / Low`), ngày bắt đầu, deadline nếu có, next action, tên gọi tắt (aliases). Trạng thái do owner đặt, **không tự suy ra** từ blocker hay task.
-- **Tasks:** việc cụ thể, status (`Todo / Doing / Done / Blocked`), due date tùy chọn, thời lượng ước lượng tùy chọn, loại deadline (`Hard / Committed / Flexible`).
-- **Notes:** ghi chú Markdown đơn giản, autosave; tìm kiếm nội dung cơ bản (P1).
-- **Activity:** timeline logs gồm thời gian, tác nhân (`manual / ai_approved / seed / undo`), thay đổi và nguồn.
+**Workspace chi tiết dùng chung (`/context?tab=...&item=<id>&doc=<docId>`):**
+- **Thông tin vận hành (gọn, có cấu trúc):** trạng thái (`Unknown / Not started / Active / Blocked / On hold / Completed`), priority (`High / Medium / Low`), ngày bắt đầu, deadline nếu có, next action, tên gọi tắt (aliases), công tắc `Không gửi cho AI`. Trạng thái do owner đặt, **không tự suy ra** từ blocker hay task.
+- **Tài liệu Markdown (`documents`):** cây tài liệu bên trái (trên mobile mở dạng sheet), editor Markdown rộng ở giữa hỗ trợ GFM (heading, list, checklist, bảng, code block), autosave và lịch sử phiên bản. Bối cảnh linh hoạt (mục tiêu, tóm tắt, syllabus, hình thức đánh giá, vai trò, đối tác, nhật ký kỹ thuật…) nằm trong các tài liệu thay cho bộ ô form cố định.
+- **Bản ghi vận hành (panel bên phải hoặc tab):**
+  - **Tasks:** việc cụ thể, status (`Todo / Doing / Done / Blocked`), due date tùy chọn, thời lượng ước lượng tùy chọn, loại deadline (`Hard / Committed / Flexible`).
+  - **Activity:** timeline logs gồm thời gian, tác nhân (`manual / ai_approved / seed / undo / migration`), thay đổi và nguồn.
 
-**Academic — trường riêng:**
-- Tên môn, học kỳ, số tín chỉ (optional), mục tiêu điểm (mặc định A), ghi chú hình thức đánh giá.
+**Academic — bản ghi riêng:**
 - **Topics tracker:** danh sách chương/chủ đề; trạng thái `Not started / Familiar / Practiced / Confident`; bằng chứng tự khai báo (ví dụ bài tập/quiz/điểm) là tùy chọn.
 - **Assessments:** tên kỳ thi/bài lab, ngày, trọng số và điểm nếu biết; không bắt buộc nhập đầy đủ.
-- Mục `Course content overview`: syllabus, mục lục, chủ đề chính, liên kết tài liệu để AI biết **môn đang học gì**, không phải để dùng app như tài liệu giảng dạy.
 - **Academic progress:** số topic và task đã đạt mục tiêu, đánh giá định tính có dẫn chứng; không đồng nhất với GPA.
 
-**Projects — trường riêng:**
-- Mô tả mục tiêu, vai trò của người dùng, đối tác/nhóm nếu muốn, nhịp độ mong muốn (optional).
+**Projects — bản ghi riêng:**
 - **Milestones:** deliverable, target date, status, completion criteria.
 - **Blockers:** vấn đề đang mắc, bước thử gần nhất, next experiment/action, phụ thuộc bên ngoài nếu có, trạng thái `Open / Resolved`.
 - Project health là **danh sách tín hiệu thực** (deadline gần nhất, milestone trễ, số blocker mở, số ngày chưa cập nhật), không phải một điểm số tổng hợp; **không suy diễn** rằng ít logs = ít làm việc.
+
+*(Ghi chú chuyển tiếp: trong lúc chuyển sang mô hình Document-First, các cột form cũ ở `areas`/`academic_details`/`project_details` được giữ chế độ chỉ đọc để migration an toàn trước khi dọn ở A11; `notes` chỉ còn giữ Quick capture Inbox khi `area_id IS NULL`.)*
 
 **Quyền riêng tư với AI:** mỗi area và mỗi note có công tắc `Không gửi cho AI`. Khi bật, server loại bản ghi đó khỏi mọi context gửi tới provider. Dùng cho nội dung NDA hoặc nhạy cảm.
 
@@ -164,7 +164,10 @@ Các item seed được hiển thị trong modal onboarding `Review & import`; o
 | `blockers` | id, area_id, title, last_attempt?, next_action?, external_dependency?, status (`open/resolved`), created_at, resolved_at?, updated_at | Vướng mắc dự án |
 | `tasks` | id, area_id, milestone_id?, title, status, due_date?, due_time?, deadline_type, estimate_minutes?, blocked_reason?, sort_order, updated_at | Công việc |
 | `assessments` | id, area_id, title, due_date?, weight?, score?, max_score?, updated_at | Bài thi/lab/điểm thành phần |
-| `notes` | id, area_id?, text, inbox_status, ai_excluded, created_at, updated_at | Ghi chú và quick capture |
+| `notes` | id, area_id?, text, inbox_status, ai_excluded, created_at, updated_at | Quick capture Inbox (khi `area_id IS NULL`) và ghi chú trước migration |
+| `documents` | id, area_id, title, body_md, sort_order, template_key?, ai_excluded, revision, search_text, search_tsv, deleted_at?, created_at, updated_at | Tài liệu Markdown của từng môn/dự án |
+| `document_versions` | id, document_id, revision, title, body_md, origin, batch_id?, created_at | Lịch sử phiên bản tài liệu |
+| `note_document_map` | note_id, document_id, migrated_at | Ánh xạ note cũ sang document sau migration |
 | `activity_logs` | id, area_id?, entity_type, entity_id, action, before_json?, after_json?, origin, batch_id?, created_at | Nhật ký chỉ-thêm |
 | `conversations` | id, title, created_at, updated_at | Cuộc chat |
 | `messages` | id, conversation_id, role, content, metadata?, created_at | Hội thoại; `metadata.context_refs` lưu các item đã đưa vào context |

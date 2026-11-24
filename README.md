@@ -12,6 +12,7 @@ Yêu cầu: Node 24, pnpm 10.
 ```bash
 pnpm install
 pnpm dev
+pnpm db:seed   # tùy chọn: nạp toàn bộ seed data vào PGlite local
 ```
 
 `pnpm dev` dùng PGlite (lưu ở `./.pglite`), `AUTH_MODE=dev` và `AI_PROVIDER=mock` nên không cần Supabase hay khóa AI. Mở http://localhost:3000.
@@ -29,6 +30,7 @@ pnpm dev
 | `pnpm typecheck` / `pnpm lint` | `tsc --noEmit` / ESLint |
 | `pnpm db:generate` | Sinh migration từ schema |
 | `pnpm db:migrate` | Áp migration lên `MIGRATION_DATABASE_URL` (hoặc `DATABASE_URL`) |
+| `pnpm db:seed` | Nhập toàn bộ seed data (dev) |
 | `pnpm ai:probe` | Kiểm tra tương thích provider, ghi `docs/ai-probe-report.md` |
 | `pnpm verify:rls` | Kiểm tra criterion 13 trên Supabase thật |
 
@@ -65,3 +67,26 @@ Các bước dưới đây do owner tự làm.
 5. **Vercel.** Đẩy code lên GitHub (chỉ khi owner yêu cầu), tạo project Vercel từ repo (`vercel.json` đã chọn vùng `sin1`), điền đủ biến môi trường production gồm `APP_OWNER_EMAIL`, `DB_DRIVER=postgres`, `AUTH_MODE=supabase`, các biến `AI_*` và `AI_ACTION_MODE` theo báo cáo probe.
 6. **Kiểm tra trên máy tính.** Mở bản deploy: chưa đăng nhập thì bị đưa về `/login`; đăng nhập được bằng tài khoản owner (criterion 1).
 7. **Kiểm tra trên iPhone.** Mở bản deploy bằng Safari, `Add to Home Screen`, mở từ màn hình chính, đăng nhập, đóng hẳn app rồi mở lại: vẫn còn đăng nhập.
+
+## Đổi provider AI
+
+Đổi `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` trong biến môi trường, chạy `pnpm ai:probe` để kiểm tra tương thích, rồi đặt `AI_ACTION_MODE` (`tools`, `json` hoặc `off`) theo kết quả trong [docs/ai-probe-report.md](./docs/ai-probe-report.md).
+
+## Sao lưu
+
+Dùng nút Export JSON trong Settings (gọi `GET /api/export`) để tải toàn bộ dữ liệu định kỳ. Kiểm tra thêm chính sách backup và tạm dừng project của gói Supabase đang dùng.
+
+## Quyền riêng tư
+
+Dữ liệu nằm trên Supabase Postgres (RLS bật, không có policy cho Data API). Khi chat hoặc chạy `Extract suggestions`, context được gửi tới provider AI đã cấu hình. Công tắc `Không gửi cho AI` chặn dữ liệu của mục hoặc ghi chú đó đi tới provider.
+
+## Dùng trên iPhone
+
+Mở bản deploy bằng Safari → Chia sẻ → `Add to Home Screen` để chạy dưới dạng PWA toàn màn hình.
+
+## Chuyển dữ liệu sang tài liệu (A10)
+
+Trước khi chạy chuyển dữ liệu thật trên Supabase:
+1. Tải bản sao lưu JSON từ nút Export trong Settings (`GET /api/export`).
+2. Chạy thử dry-run trên bản sao PGlite để kiểm tra báo cáo ký tự và số tài liệu: `pnpm exec tsx scripts/migrate-to-documents.ts`.
+3. Khi báo cáo khớp (`fieldCharsBefore === fieldCharsAfter` và `noteCharsBefore === noteCharsAfter`), mới chạy áp dụng (`--apply`). Không xóa các cột form cũ cho tới khi xác nhận ổn định ở bước A11.

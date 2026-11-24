@@ -7,6 +7,9 @@ import { matchAreas } from '../ai/match-areas';
 import { buildSystemPrompt } from '../ai/prompt';
 import type { AiProvider, ChatMessage } from '../ai/provider';
 import { AiCapExceededError } from '../errors';
+import { ProposalBlockFilter, parseProposal } from '../proposals/extract';
+import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
+import { createPendingAction, IGNORED_PROPOSAL_NOTICE, supersedeForMessage } from '../proposals/store';
 import { countAiRequest } from '../services/ai-usage';
 import {
   appendMessage,
@@ -14,12 +17,13 @@ import {
   getConversation,
   listMessagesBefore,
   replaceReplies,
+  updateMessageReply,
 } from '../services/conversations';
 
 export type TurnEvent =
   | { type: 'meta'; conversationId: string; userMessageId: string }
   | { type: 'text'; delta: string }
-  | { type: 'proposal'; pendingActionId: string } // emitted from Phase 3
+  | { type: 'proposal'; pendingActionId: string }
   | { type: 'done'; assistantMessageId: string; contextRefs: ContextRef[]; summaryCount: number }
   | { type: 'error'; message: string };
 export type TurnDeps = { db: Db; provider: AiProvider; actionMode: 'tools' | 'json' | 'off'; dailyCap: number; now: Date; signal?: AbortSignal };
@@ -94,6 +98,7 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
     let conversationId: string;
     let current: MessageRow;
     let before: MessageRow[];
+    let oldReplies: MessageRow[] = [];
     if (input.regenerate) {
       conversationId = input.conversationId!;
       const msgs = existing!;
@@ -102,6 +107,7 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
       lock(conversationId);
       current = msgs[idx];
       before = msgs.slice(0, idx);
+      oldReplies = msgs.slice(idx + 1).filter((m) => m.role === 'assistant');
     } else {
       if (input.conversationId) {
         conversationId = input.conversationId;
@@ -139,13 +145,34 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
       ...(await historyForModel(db, before.slice(-HISTORY))),
       { role: 'user', content: current.content },
     ];
+    const tools = deps.actionMode === 'tools' ? [PROPOSE_CHANGES_TOOL] : undefined;
+    const filter = deps.actionMode === 'json' ? new ProposalBlockFilter() : null;
     let reply = '';
+    let rawProposal: string | null = null;
     try {
-      for await (const e of deps.provider.stream({ messages, maxOutputTokens: 1500, signal: deps.signal })) {
+      for await (const e of deps.provider.stream({ messages, tools, maxOutputTokens: 1500, signal: deps.signal })) {
         if (e.type === 'text') {
-          reply += e.delta;
-          yield { type: 'text', delta: e.delta };
+          if (filter) {
+            const out = filter.push(e.delta);
+            if (out) {
+              reply += out;
+              yield { type: 'text', delta: out };
+            }
+          } else {
+            reply += e.delta;
+            yield { type: 'text', delta: e.delta };
+          }
+        } else if (e.type === 'tool_call' && e.name === PROPOSE_CHANGES_TOOL.name && rawProposal === null) {
+          rawProposal = e.argsJson;
         }
+      }
+      if (filter) {
+        const end = filter.end();
+        if (end.visibleTail) {
+          reply += end.visibleTail;
+          yield { type: 'text', delta: end.visibleTail };
+        }
+        rawProposal = end.rawJson;
       }
     } catch (e) {
       // `Dừng` aborts the request: expected, not a failure worth logging.
@@ -156,16 +183,46 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
       return yield err(PROVIDER_FAILED);
     }
     if (deps.signal?.aborted) return; // stopped: nothing of this reply is saved
+
+    const parsed = rawProposal !== null ? parseProposal(rawProposal) : null;
     if (reply.trim() === '') {
-      console.error('chat turn failed', { name: 'EmptyReply', status: undefined });
-      return yield err(PROVIDER_FAILED);
+      if (parsed?.ok) {
+        reply = parsed.value.summary;
+        yield { type: 'text', delta: reply };
+      } else if (rawProposal === null) {
+        console.error('chat turn failed', { name: 'EmptyReply', status: undefined });
+        return yield err(PROVIDER_FAILED);
+      }
     }
 
-    // 7. Save the reply. Regenerate replaces the old reply only now that the new one exists.
-    const metadata = { contextRefs: ctx.refs, summaryCount: ctx.summaryCount, truncated: ctx.truncated };
+    // 7. Save the reply. Regenerate supersedes old proposals and replaces the old reply only now that the new one exists.
+    if (input.regenerate) {
+      for (const old of oldReplies) await supersedeForMessage(db, old.id);
+    }
+    const metadata: Record<string, unknown> = { contextRefs: ctx.refs, summaryCount: ctx.summaryCount, truncated: ctx.truncated };
     const saved = input.regenerate
       ? await replaceReplies(db, conversationId, current.id, reply, metadata)
       : await appendMessage(db, conversationId, 'assistant', reply, metadata);
+
+    if (rawProposal !== null) {
+      const pending = parsed?.ok
+        ? await createPendingAction(db, {
+            source: 'chat',
+            conversationId,
+            messageId: saved.id,
+            proposal: parsed.value,
+          })
+        : null;
+      if (pending) {
+        await updateMessageReply(db, saved.id, { metadata: { ...metadata, pendingActionId: pending.id } });
+        yield { type: 'proposal', pendingActionId: pending.id };
+      } else {
+        const nextContent = reply + IGNORED_PROPOSAL_NOTICE;
+        await updateMessageReply(db, saved.id, { content: nextContent });
+        yield { type: 'text', delta: IGNORED_PROPOSAL_NOTICE };
+      }
+    }
+
     yield { type: 'done', assistantMessageId: saved.id, contextRefs: ctx.refs, summaryCount: ctx.summaryCount };
   } finally {
     if (locked) inFlight.delete(locked);

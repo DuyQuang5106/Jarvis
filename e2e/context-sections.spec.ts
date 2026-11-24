@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDb } from './helpers';
 
-async function openNew(page: Page, tab: 'Academic' | 'Projects', name: string) {
+async function openNew(page: Page, tab: 'Academic' | 'Projects', name: string, isMobile = false) {
   await page.goto('/context');
   await page.getByRole('tab', { name: tab }).click();
   // Wait for the tab to take effect: `Thêm` creates an item of the tab that is active when it is clicked.
@@ -10,15 +10,17 @@ async function openNew(page: Page, tab: 'Academic' | 'Projects', name: string) {
   await page.getByLabel('Tên', { exact: true }).fill(name);
   await page.getByRole('button', { name: 'Tạo' }).click();
   await page.getByRole('listitem').filter({ hasText: name }).click();
-  return page.getByRole('dialog', { name });
+  const ws = page.getByRole('dialog', { name });
+  if (isMobile) await ws.getByRole('button', { name: 'Vận hành' }).click();
+  return ws;
 }
 
 test.beforeEach(async ({ request }) => {
   await resetDb(request);
 });
 
-test('topics: thêm, đổi trạng thái, tổng kết có mẫu số', async ({ page }) => {
-  const drawer = await openNew(page, 'Academic', 'Mobile Programming');
+test('topics: thêm, đổi trạng thái, tổng kết có mẫu số', async ({ page, isMobile }) => {
+  const drawer = await openNew(page, 'Academic', 'Mobile Programming', isMobile);
   await drawer.getByRole('tab', { name: 'Topics' }).click();
   for (const t of ['Navigation', 'State']) {
     await drawer.getByPlaceholder('Thêm topic…').fill(t);
@@ -32,8 +34,8 @@ test('topics: thêm, đổi trạng thái, tổng kết có mẫu số', async (
   await expect(page.getByRole('listitem').filter({ hasText: 'Mobile Programming' })).not.toContainText('Chưa có topic');
 });
 
-test('assessment chỉ cần tên; không có dự báo điểm', async ({ page }) => {
-  const drawer = await openNew(page, 'Academic', 'Database');
+test('assessment chỉ cần tên; không có dự báo điểm', async ({ page, isMobile }) => {
+  const drawer = await openNew(page, 'Academic', 'Database', isMobile);
   await drawer.getByRole('tab', { name: 'Assessments' }).click();
   await drawer.getByRole('button', { name: 'Thêm assessment' }).click();
   // The overview stays mounted (hidden) and has its own `Tên`; role queries skip hidden elements.
@@ -43,9 +45,9 @@ test('assessment chỉ cần tên; không có dự báo điểm', async ({ page 
   await expect(drawer).not.toContainText(/GPA|dự báo/i);
 });
 
-test('blocker: thêm, hiện huy hiệu ở danh sách, gỡ', async ({ page }) => {
-  const drawer = await openNew(page, 'Projects', 'Question House');
-  await expect(drawer.getByRole('tab')).toHaveText(['Tổng quan', 'Tasks', 'Milestones', 'Blockers', 'Notes', 'Activity']);
+test('blocker: thêm, hiện huy hiệu ở danh sách, gỡ', async ({ page, isMobile }) => {
+  const drawer = await openNew(page, 'Projects', 'Question House', isMobile);
+  await expect(drawer.getByRole('tab')).toHaveText(['Vận hành', 'Tasks', 'Milestones', 'Blockers', 'Activity']);
   await drawer.getByRole('tab', { name: 'Blockers' }).click();
   await drawer.getByRole('button', { name: 'Thêm blocker' }).click();
   await drawer.getByLabel('Vấn đề').fill('Login Android chưa chạy');
@@ -56,13 +58,14 @@ test('blocker: thêm, hiện huy hiệu ở danh sách, gỡ', async ({ page }) 
   await expect(row).toContainText('1 blocker');
   await expect(row).toContainText('Unknown'); // trạng thái area không tự đổi
   await row.click();
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await drawer.getByRole('tab', { name: 'Blockers' }).click();
   await drawer.getByRole('button', { name: 'Đã gỡ' }).click();
   await expect(drawer.getByText('Đã gỡ (1)')).toBeVisible();
 });
 
-test('milestone: tổng kết có mẫu số', async ({ page }) => {
-  const drawer = await openNew(page, 'Projects', 'StewieSAT');
+test('milestone: tổng kết có mẫu số', async ({ page, isMobile }) => {
+  const drawer = await openNew(page, 'Projects', 'StewieSAT', isMobile);
   await drawer.getByRole('tab', { name: 'Milestones' }).click();
   await drawer.getByRole('button', { name: 'Thêm milestone' }).click();
   await drawer.getByLabel('Deliverable').fill('Trang luyện đề');
@@ -70,8 +73,8 @@ test('milestone: tổng kết có mẫu số', async ({ page }) => {
   await expect(drawer.getByText('0/1 milestones Done')).toBeVisible();
 });
 
-test('task dự án chọn được milestone và giữ sau khi tải lại', async ({ page }) => {
-  const drawer = await openNew(page, 'Projects', 'Jarvis');
+test('task dự án chọn được milestone và giữ sau khi tải lại', async ({ page, isMobile }) => {
+  const drawer = await openNew(page, 'Projects', 'Jarvis', isMobile);
   await drawer.getByRole('tab', { name: 'Milestones' }).click();
   await drawer.getByRole('button', { name: 'Thêm milestone' }).click();
   await drawer.getByLabel('Deliverable').fill('Beta');
@@ -89,15 +92,15 @@ test('task dự án chọn được milestone và giữ sau khi tải lại', as
   await expect(again.getByRole('listitem').filter({ hasText: 'Viết spec' }).getByLabel('Milestone', { exact: true }).locator('option:checked')).toHaveText('Beta');
 });
 
-test('project health: bốn dòng dữ kiện, milestone trễ', async ({ page }) => {
-  const drawer = await openNew(page, 'Projects', 'Health Co');
+test('project health: bốn dòng dữ kiện, milestone trễ', async ({ page, isMobile }) => {
+  const drawer = await openNew(page, 'Projects', 'Health Co', isMobile);
   await drawer.getByRole('tab', { name: 'Milestones' }).click();
   await drawer.getByRole('button', { name: 'Thêm milestone' }).click();
   await drawer.getByLabel('Deliverable').fill('Cũ');
   await drawer.getByLabel('Ngày mục tiêu').fill('2020-01-15');
   await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
   await expect(drawer.getByText('0/1 milestones Done')).toBeVisible();
-  await drawer.getByRole('tab', { name: 'Tổng quan' }).click();
+  await drawer.getByRole('tab', { name: 'Vận hành' }).click();
   const health = drawer.getByRole('region', { name: 'Project health' });
   await expect(health).toContainText('Deadline gần nhất: 15/01 · quá');
   await expect(health).toContainText('Milestone trễ: 1');
@@ -105,8 +108,8 @@ test('project health: bốn dòng dữ kiện, milestone trễ', async ({ page }
   await expect(health).toContainText('Cập nhật cách đây: 0 ngày');
 });
 
-test('Enter hai lần nhanh khi thêm topic chỉ tạo một topic', async ({ page }) => {
-  const drawer = await openNew(page, 'Academic', 'Mobile Programming');
+test('Enter hai lần nhanh khi thêm topic chỉ tạo một topic', async ({ page, isMobile }) => {
+  const drawer = await openNew(page, 'Academic', 'Mobile Programming', isMobile);
   await drawer.getByRole('tab', { name: 'Topics' }).click();
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));

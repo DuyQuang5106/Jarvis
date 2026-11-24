@@ -1,10 +1,11 @@
 import type {
   AreaStatus,
   BlockerStatus,
-  InboxStatus,
-  Origin,
   DeadlineType,
+  DocRole,
+  InboxStatus,
   MilestoneStatus,
+  Origin,
   Priority,
   TaskStatus,
   TopicStatus,
@@ -76,4 +77,11 @@ export const ORIGIN_LABEL: Record<Origin, string> = {
   ai_approved: 'AI (đã duyệt)',
   seed: 'Seed',
   undo: 'Hoàn tác',
+  migration: 'Chuyển dữ liệu',
+};
+
+export const DOC_ROLE_LABEL: Record<DocRole, string> = {
+  context: 'Context',
+  raw: 'Tài liệu gốc',
+  instruction: 'Hướng dẫn AI',
 };

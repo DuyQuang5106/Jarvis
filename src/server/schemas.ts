@@ -4,6 +4,7 @@ import {
   AREA_STATUSES,
   BLOCKER_STATUSES,
   DEADLINE_TYPES,
+  DOC_ROLES,
   INBOX_STATUSES,
   MILESTONE_STATUSES,
   PRIORITIES,
@@ -208,6 +209,71 @@ export const ConversationTitle = z
   .trim()
   .min(1, { error: 'Tiêu đề phải dài 1–200 ký tự.' })
   .max(200, { error: 'Tiêu đề phải dài 1–200 ký tự.' });
+
+// ---- folders & documents
+export const MAX_DOCUMENT_CHARS = 200_000;
+export const MAX_SEARCH_SOURCE_CHARS = 500_000;
+export const FolderId = uuid('Thư mục');
+export const FolderName = z
+  .string({ error: 'Tên thư mục phải là chuỗi.' })
+  .trim()
+  .min(1, { error: 'Tên thư mục không được để trống.' })
+  .max(200, { error: 'Tên thư mục tối đa 200 ký tự.' });
+export const CreateFolderInput = z.object({
+  areaId,
+  parentId: FolderId.nullable().optional(),
+  name: FolderName,
+  aiExcluded: z.boolean({ error: 'Loại khỏi AI phải là đúng/sai.' }).optional(),
+  sortOrder,
+});
+export const RenameFolderInput = z.object({ id: FolderId, name: FolderName });
+export const MoveFolderInput = z.object({ id: FolderId, parentId: FolderId.nullable() });
+export const ReorderFoldersInput = z.object({
+  areaId,
+  parentId: FolderId.nullable().optional(),
+  orderedIds: z.array(FolderId, { error: 'Danh sách thư mục không hợp lệ.' }),
+});
+export type CreateFolderInput = z.infer<typeof CreateFolderInput>;
+
+export const DocumentId = uuid('Tài liệu');
+export const DocumentVersionId = uuid('Phiên bản tài liệu');
+export const DocumentTitle = z
+  .string({ error: 'Tiêu đề tài liệu phải là chuỗi.' })
+  .trim()
+  .min(1, { error: 'Tiêu đề tài liệu không được để trống.' })
+  .max(200, { error: 'Tiêu đề tài liệu tối đa 200 ký tự.' });
+export const DocumentBody = z
+  .string({ error: 'Nội dung tài liệu phải là chuỗi.' })
+  .max(MAX_DOCUMENT_CHARS, { error: 'Nội dung tài liệu tối đa 200.000 ký tự.' });
+
+export const CreateDocumentInput = z.object({
+  areaId,
+  folderId: FolderId.nullable().optional(),
+  title: DocumentTitle,
+  bodyMd: DocumentBody.optional(),
+  docRole: choice('Vai trò tài liệu', DOC_ROLES).optional(),
+  mimeType: text('Loại MIME').optional(),
+  fileExt: text('Phần mở rộng').optional(),
+  storageKey: text('Khóa lưu trữ').nullable().optional(),
+  sizeBytes: z.number().int().nonnegative().nullable().optional(),
+  extractedText: z.string().max(MAX_SEARCH_SOURCE_CHARS).optional(),
+  templateKey: text('Mẫu tài liệu').nullable().optional(),
+  aiExcluded: z.boolean({ error: 'Loại khỏi AI phải là đúng/sai.' }).optional(),
+  sortOrder,
+});
+export const RenameDocumentInput = z.object({ id: DocumentId, title: DocumentTitle });
+export const MoveDocumentInput = z.object({ id: DocumentId, folderId: FolderId.nullable() });
+export const SetDocumentRoleInput = z.object({ id: DocumentId, docRole: choice('Vai trò tài liệu', DOC_ROLES) });
+export const UpdateDocumentBodyInput = z.object({
+  id: DocumentId,
+  bodyMd: DocumentBody,
+  expectedRevision: z.number({ error: 'Phiên bản không hợp lệ.' }).int().positive(),
+});
+export const ReorderDocumentsInput = z.object({
+  areaId,
+  orderedIds: z.array(DocumentId, { error: 'Danh sách tài liệu không hợp lệ.' }),
+});
+export type CreateDocumentInput = z.infer<typeof CreateDocumentInput>;
 
 export type CreateAreaInput = z.infer<typeof CreateAreaInput>;
 export type UpdateAreaInput = z.infer<typeof UpdateAreaInput>;

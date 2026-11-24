@@ -22,12 +22,13 @@ test('Bỏ qua không tạo gì', async ({ page, request }) => {
   await expect(page.getByText('Chưa có mục nào.')).toBeVisible();
 });
 
-test('nhãn chưa xác minh lại biến mất sau lần sửa đầu tiên', async ({ page, request }) => {
+test('nhãn chưa xác minh lại biến mất sau lần sửa đầu tiên', async ({ page, request, isMobile }) => {
   await resetDb(request, { seed: true });
   await page.goto('/context');
   const row = page.getByRole('listitem').filter({ hasText: 'Database' });
   await expect(row).toContainText('chưa xác minh lại');
   await row.click();
+  if (isMobile) await page.getByRole('dialog').getByRole('button', { name: 'Vận hành' }).click();
   await page.getByRole('dialog').getByLabel('Trạng thái').selectOption('active');
   await page.getByRole('dialog').getByRole('button', { name: 'Lưu', exact: true }).click();
   await page.keyboard.press('Escape');

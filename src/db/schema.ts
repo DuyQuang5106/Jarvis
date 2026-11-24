@@ -1,5 +1,7 @@
+import { sql, type SQL } from 'drizzle-orm';
 import {
   boolean,
+  customType,
   date,
   index,
   integer,
@@ -10,12 +12,14 @@ import {
   time,
   timestamp,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import {
   AREA_KINDS,
   AREA_STATUSES,
   BLOCKER_STATUSES,
   DEADLINE_TYPES,
+  DOC_ROLES,
   ENTITY_TYPES,
   INBOX_STATUSES,
   LOG_ACTIONS,
@@ -33,6 +37,11 @@ const id = () => uuid('id').primaryKey().defaultRandom();
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull().defaultNow();
 const tz = (name: string) => timestamp(name, { withTimezone: true });
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 
 export const areas = pgTable('areas', {
   id: id(),
@@ -223,6 +232,74 @@ export const aiUsage = pgTable('ai_usage', {
   count: integer('count').notNull().default(0),
 }).enableRLS();
 
+export const folders = pgTable(
+  'folders',
+  {
+    id: id(),
+    areaId: uuid('area_id').notNull().references(() => areas.id, { onDelete: 'cascade' }),
+    parentId: uuid('parent_id').references((): AnyPgColumn => folders.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    aiExcluded: boolean('ai_excluded').notNull().default(false),
+    deletedAt: tz('deleted_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('folders_area_id_parent_id_sort_order_idx').on(t.areaId, t.parentId, t.sortOrder)],
+).enableRLS();
+
+export const documents = pgTable(
+  'documents',
+  {
+    id: id(),
+    areaId: uuid('area_id').notNull().references(() => areas.id, { onDelete: 'cascade' }),
+    folderId: uuid('folder_id').references(() => folders.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    bodyMd: text('body_md').notNull().default(''),
+    docRole: text('doc_role', { enum: DOC_ROLES }).notNull().default('context'),
+    mimeType: text('mime_type').notNull().default('text/markdown'),
+    fileExt: text('file_ext').notNull().default('md'),
+    storageKey: text('storage_key'),
+    sizeBytes: integer('size_bytes'),
+    extractedText: text('extracted_text').notNull().default(''),
+    sortOrder: integer('sort_order').notNull().default(0),
+    templateKey: text('template_key'),
+    aiExcluded: boolean('ai_excluded').notNull().default(false),
+    revision: integer('revision').notNull().default(1),
+    searchText: text('search_text').notNull().default(''),
+    searchTsv: tsvector('search_tsv').generatedAlwaysAs((): SQL => sql`to_tsvector('simple', search_text)`),
+    deletedAt: tz('deleted_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('documents_area_id_sort_order_idx').on(t.areaId, t.sortOrder),
+    index('documents_folder_id_sort_order_idx').on(t.folderId, t.sortOrder),
+    index('documents_search_tsv_idx').using('gin', t.searchTsv),
+  ],
+).enableRLS();
+
+export const documentVersions = pgTable(
+  'document_versions',
+  {
+    id: id(),
+    documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+    revision: integer('revision').notNull(),
+    title: text('title').notNull(),
+    bodyMd: text('body_md').notNull(),
+    origin: text('origin', { enum: ORIGINS }).notNull(),
+    batchId: uuid('batch_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('document_versions_document_id_revision_idx').on(t.documentId, t.revision)],
+).enableRLS();
+
+export const noteDocumentMap = pgTable('note_document_map', {
+  noteId: uuid('note_id').primaryKey().references(() => notes.id, { onDelete: 'cascade' }),
+  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  migratedAt: createdAt(),
+}).enableRLS();
+
 /** Every table by its SQL name: the single source for TABLE_NAMES, export and RLS checks. */
 export const TABLES = {
   areas,
@@ -234,6 +311,10 @@ export const TABLES = {
   tasks,
   assessments,
   notes,
+  folders,
+  documents,
+  document_versions: documentVersions,
+  note_document_map: noteDocumentMap,
   activity_logs: activityLogs,
   conversations,
   messages,
@@ -253,6 +334,10 @@ export type BlockerRow = typeof blockers.$inferSelect;
 export type TaskRow = typeof tasks.$inferSelect;
 export type AssessmentRow = typeof assessments.$inferSelect;
 export type NoteRow = typeof notes.$inferSelect;
+export type FolderRow = typeof folders.$inferSelect;
+export type DocumentRow = typeof documents.$inferSelect;
+export type DocumentVersionRow = typeof documentVersions.$inferSelect;
+export type NoteDocumentMapRow = typeof noteDocumentMap.$inferSelect;
 export type ActivityLogRow = typeof activityLogs.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;

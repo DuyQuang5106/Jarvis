@@ -4,6 +4,7 @@ import {
   AREA_STATUS_LABEL,
   BLOCKER_STATUS_LABEL,
   DEADLINE_TYPE_LABEL,
+  DOC_ROLE_LABEL,
   INBOX_STATUS_LABEL,
   MILESTONE_STATUS_LABEL,
   PRIORITY_LABEL,
@@ -16,7 +17,19 @@ export type LogChange = { field: string; before: string | null; after: string | 
 export type DescribedLog = { title: string; changes: LogChange[] };
 
 /** Fields that never appear in a diff. */
-const EXCLUDED = new Set(['updatedAt', 'createdAt', 'id', 'areaId', 'sortOrder']);
+const EXCLUDED = new Set([
+  'updatedAt',
+  'createdAt',
+  'id',
+  'areaId',
+  'sortOrder',
+  'searchText',
+  'searchTsv',
+  'extractedText',
+  'storageKey',
+  'revision',
+  'templateKey',
+]);
 
 export const FIELD_LABEL: Record<string, string> = {
   name: 'Tên',
@@ -58,6 +71,14 @@ export const FIELD_LABEL: Record<string, string> = {
   score: 'Điểm',
   maxScore: 'Điểm tối đa',
   text: 'Nội dung',
+  bodyMd: 'Nội dung',
+  folderId: 'Thư mục',
+  parentId: 'Thư mục cha',
+  docRole: 'Vai trò tài liệu',
+  mimeType: 'Loại tệp',
+  fileExt: 'Đuôi tệp',
+  sizeBytes: 'Kích thước',
+  deletedAt: 'Xóa lúc',
   inboxStatus: 'Hộp thư',
 };
 
@@ -77,6 +98,7 @@ const ENUM_LABEL: Record<string, Record<string, string>> = {
   priority: PRIORITY_LABEL,
   deadlineType: DEADLINE_TYPE_LABEL,
   inboxStatus: INBOX_STATUS_LABEL,
+  docRole: DOC_ROLE_LABEL,
   kind: KIND_LABEL,
 };
 
@@ -120,6 +142,7 @@ function flatten(json: unknown): Flat {
 /** Free-text fields whose long values are summarised by length in change lines (ruling P1-R10). */
 const LONG_TEXT = new Set([
   'text',
+  'bodyMd',
   'courseOutline',
   'summary',
   'goal',
@@ -133,10 +156,11 @@ const LONG_TEXT = new Set([
 ]);
 const LONG_TEXT_MAX = 80;
 export const PRIVATE_NOTE = 'ghi chú riêng tư';
+export const PRIVATE_DOC = 'tài liệu riêng tư';
 
-/** A note log is private when either snapshot has `aiExcluded: true` (covers later-excluded notes). */
-function isPrivateNote(log: Pick<ActivityLogRow, 'entityType' | 'beforeJson' | 'afterJson'>): boolean {
-  if (log.entityType !== 'note') return false;
+/** A note or document log is private when either snapshot has `aiExcluded: true`. */
+function isPrivateContent(log: Pick<ActivityLogRow, 'entityType' | 'beforeJson' | 'afterJson'>): boolean {
+  if (log.entityType !== 'note' && log.entityType !== 'document') return false;
   return [log.beforeJson, log.afterJson].some((j) => flatten(j).aiExcluded === true);
 }
 
@@ -148,7 +172,7 @@ const NAME_MAX = 40;
 
 /** The quoted part of a title: the record's title/name, or the first 40 characters of a note (`ghi chú riêng tư` if private). */
 export function entityName(log: Pick<ActivityLogRow, 'entityType' | 'beforeJson' | 'afterJson'>): string | null {
-  if (isPrivateNote(log)) return PRIVATE_NOTE;
+  if (isPrivateContent(log)) return log.entityType === 'document' ? PRIVATE_DOC : PRIVATE_NOTE;
   for (const json of [log.afterJson, log.beforeJson]) {
     const f = flatten(json);
     for (const key of ['title', 'name']) if (typeof f[key] === 'string' && f[key]) return f[key] as string;
@@ -167,6 +191,8 @@ const NOUN: Record<string, string> = {
   milestone: 'milestone',
   blocker: 'blocker',
   note: 'ghi chú',
+  folder: 'thư mục',
+  document: 'tài liệu',
 };
 
 const VERB: Record<string, string> = { create: 'Tạo', update: 'Sửa', delete: 'Xóa' };
@@ -175,14 +201,14 @@ export function describeLog(log: ActivityLogRow): DescribedLog {
   const before = flatten(log.beforeJson);
   const after = flatten(log.afterJson);
   const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => !EXCLUDED.has(k));
-  const hidden = isPrivateNote(log);
+  const hidden = isPrivateContent(log);
   const changes: LogChange[] = [];
   for (const k of keys) {
     const b = norm(before[k]);
     const a = norm(after[k]);
     if (JSON.stringify(b) === JSON.stringify(a)) continue;
     const long = LONG_TEXT.has(k) && (textLength(b) > LONG_TEXT_MAX || textLength(a) > LONG_TEXT_MAX);
-    if (long || (hidden && k === 'text')) {
+    if (long || (hidden && (k === 'text' || k === 'bodyMd'))) {
       const n = textLength(log.action === 'delete' ? b : a);
       changes.push({ field: fieldLabel(k), before: null, after: null, summary: `đã sửa (${n} ký tự)` });
       continue;
@@ -192,7 +218,7 @@ export function describeLog(log: ActivityLogRow): DescribedLog {
 
   if (log.action === 'progress') return { title: 'Ghi nhận tiến độ', changes };
   if (log.action === 'archive') return { title: 'Lưu trữ mục', changes };
-  if (hidden) return { title: `${VERB[log.action] ?? log.action} ${PRIVATE_NOTE}`, changes };
+  if (hidden) return { title: `${VERB[log.action] ?? log.action} ${log.entityType === 'document' ? PRIVATE_DOC : PRIVATE_NOTE}`, changes };
   const noun = NOUN[log.entityType] ?? log.entityType;
   const name = entityName(log);
   return { title: `${VERB[log.action] ?? log.action} ${noun}${name ? ` “${name}”` : ''}`, changes };

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import type { AreaKind } from '@/db/enums';
 import {
@@ -7,8 +7,11 @@ import {
   areas,
   assessments,
   blockers,
+  documents,
+  folders,
   milestones,
   notes,
+  pendingActions,
   projectDetails,
   tasks,
   topics,
@@ -17,6 +20,8 @@ import {
   type AreaRow,
   type AssessmentRow,
   type BlockerRow,
+  type DocumentRow,
+  type FolderRow,
   type MilestoneRow,
   type NoteRow,
   type ProjectDetailsRow,
@@ -34,6 +39,8 @@ export type AreaDetails = {
   blockers: BlockerRow[];
   tasks: TaskRow[];
   notes: NoteRow[];
+  folders: FolderRow[];
+  documents: DocumentRow[];
   logs: ActivityLogRow[];
 };
 
@@ -45,7 +52,7 @@ export async function getAreaDetails(
   const [area] = await db.select().from(areas).where(eq(areas.id, areaId));
   if (!area) return null;
   const logLimit = opts.logLimit ?? 50;
-  const [academicRows, projectRows, topicRows, assessmentRows, milestoneRows, blockerRows, taskRows, noteRows, logRows] =
+  const [academicRows, projectRows, topicRows, assessmentRows, milestoneRows, blockerRows, taskRows, noteRows, folderRows, docRows, logRows] =
     await Promise.all([
       db.select().from(academicDetails).where(eq(academicDetails.areaId, areaId)),
       db.select().from(projectDetails).where(eq(projectDetails.areaId, areaId)),
@@ -55,6 +62,16 @@ export async function getAreaDetails(
       db.select().from(blockers).where(eq(blockers.areaId, areaId)).orderBy(desc(blockers.createdAt)),
       db.select().from(tasks).where(eq(tasks.areaId, areaId)).orderBy(asc(tasks.sortOrder), asc(tasks.createdAt)),
       db.select().from(notes).where(eq(notes.areaId, areaId)).orderBy(desc(notes.createdAt), desc(notes.id)),
+      db
+        .select()
+        .from(folders)
+        .where(and(eq(folders.areaId, areaId), isNull(folders.deletedAt)))
+        .orderBy(asc(folders.sortOrder), asc(folders.createdAt)),
+      db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.areaId, areaId), isNull(documents.deletedAt)))
+        .orderBy(asc(documents.sortOrder), asc(documents.createdAt)),
       db
         .select()
         .from(activityLogs)
@@ -72,6 +89,8 @@ export async function getAreaDetails(
     blockers: blockerRows,
     tasks: taskRows,
     notes: noteRows,
+    folders: folderRows,
+    documents: docRows,
     logs: logRows,
   };
 }
@@ -84,6 +103,19 @@ export async function listArchivedAreas(db: DbOrTx, kind: AreaKind): Promise<Are
     .orderBy(desc(areas.archivedAt));
 }
 
-export async function listInboxNotes(db: DbOrTx): Promise<NoteRow[]> {
-  return db.select().from(notes).where(eq(notes.inboxStatus, 'inbox')).orderBy(desc(notes.createdAt), desc(notes.id));
+export type InboxNote = NoteRow & { pendingActionId: string | null };
+
+export async function listInboxNotes(db: DbOrTx): Promise<InboxNote[]> {
+  const rows = await db.select().from(notes).where(eq(notes.inboxStatus, 'inbox')).orderBy(desc(notes.createdAt), desc(notes.id));
+  if (rows.length === 0) return [];
+  const pendings = await db
+    .select({ id: pendingActions.id, noteId: pendingActions.noteId })
+    .from(pendingActions)
+    .where(and(eq(pendingActions.status, 'pending'), inArray(pendingActions.noteId, rows.map((r) => r.id))))
+    .orderBy(desc(pendingActions.createdAt));
+  const byNote = new Map<string, string>();
+  for (const p of pendings) {
+    if (p.noteId && !byNote.has(p.noteId)) byNote.set(p.noteId, p.id);
+  }
+  return rows.map((r) => ({ ...r, pendingActionId: byNote.get(r.id) ?? null }));
 }

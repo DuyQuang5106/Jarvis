@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { ContextView } from '@/components/context/context-view';
 import { getDb } from '@/db/client';
 import { requireOwner } from '@/server/auth';
+import { getConfig } from '@/server/config';
 import { getAreaDetails, listArchivedAreas, listInboxNotes } from '@/server/queries/area-details';
 import { getPortfolioSnapshot } from '@/server/queries/snapshot';
 
@@ -32,5 +33,15 @@ async function ContextContent({ searchParams }: { searchParams: Promise<{ item?:
     itemId && UUID.test(itemId) ? getAreaDetails(db, itemId) : null,
     listInboxNotes(db),
   ]);
-  return <ContextView areas={snapshot.areas} today={snapshot.today} archived={{ academic, project }} loadedItem={itemId} details={details} inbox={inbox} />;
+  return (
+    <ContextView
+      areas={snapshot.areas}
+      today={snapshot.today}
+      archived={{ academic, project }}
+      loadedItem={itemId}
+      details={details}
+      inbox={inbox}
+      actionMode={getConfig().aiActionMode}
+    />
+  );
 }

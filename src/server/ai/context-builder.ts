@@ -15,7 +15,7 @@ import { getAreaDetails, type AreaDetails } from '../queries/area-details';
 import { describeLog } from '../queries/describe-log';
 import { getPortfolioSnapshot, pickStaleAreaIds, type AreaSummary, type PortfolioSnapshot } from '../queries/snapshot';
 import { truncateState } from './context-truncate';
-import { matchAreas } from './match-areas';
+import { matchAreas, normalizeVi } from './match-areas';
 
 export type ContextScope = { mode: 'auto' | 'all' | 'academic' | 'projects' | 'item'; areaId?: string };
 export type ContextRef = { areaId: string; name: string; kind: AreaKind; updatedAt: string };
@@ -82,8 +82,12 @@ async function selectAreaIds(
       return open.filter((a) => eligible(a) && a.kind === 'project').map((a) => a.id);
     case 'all':
       return open.filter(eligible).map((a) => a.id);
-    case 'auto':
-      return matchAreas(texts, open);
+    case 'auto': {
+      const matched = matchAreas(texts, open);
+      if (normalizeVi(texts[0] ?? '') !== 'cap nhat nhanh') return matched;
+      const stale = pickStaleAreaIds(open);
+      return [...new Set([...matched, ...stale])];
+    }
   }
 }
 

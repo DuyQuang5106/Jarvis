@@ -88,3 +88,15 @@ export async function replaceReplies(
     return appendMessage(tx, conversationId, 'assistant', content, metadata);
   });
 }
+
+export async function updateMessageReply(
+  db: DbOrTx,
+  messageId: string,
+  patch: { content?: string; metadata?: unknown },
+): Promise<void> {
+  const values: { content?: string; metadata?: unknown } = {};
+  if (patch.content !== undefined) values.content = patch.content;
+  if (patch.metadata !== undefined) values.metadata = patch.metadata;
+  if (Object.keys(values).length === 0) return;
+  await db.update(messages).set(values).where(eq(messages.id, messageId));
+}

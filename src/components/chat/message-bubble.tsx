@@ -16,6 +16,7 @@ export type ChatMessageView = {
   content: string;
   contextRefs: ContextRef[];
   summaryCount: number;
+  pendingActionId?: string | null;
 };
 
 async function copyText(text: string): Promise<boolean> {

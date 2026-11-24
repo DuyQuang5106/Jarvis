@@ -61,11 +61,12 @@ test('mọi ô nhập và select trên /context có cỡ chữ từ 16px', async
   for (const s of sizes) expect(s).toBeGreaterThanOrEqual(16);
 });
 
-test('việc tiếp theo dài không có khoảng trắng không làm tràn ngang', async ({ page }) => {
+test('việc tiếp theo dài không có khoảng trắng không làm tràn ngang', async ({ page, isMobile }) => {
   await page.goto('/context');
   await addArea(page, 'Tràn');
   await page.getByRole('listitem').filter({ hasText: 'Tràn' }).click();
   const drawer = page.getByRole('dialog', { name: 'Tràn' });
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await drawer.getByLabel('Trạng thái').selectOption('active');
   await drawer.getByLabel('Việc tiếp theo').fill('x'.repeat(200));
   await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
@@ -85,7 +86,7 @@ test('việc tiếp theo dài không có khoảng trắng không làm tràn ngan
   expect(spill).toBeLessThanOrEqual(0.5);
 });
 
-test('badge trạng thái đổi màu theo trạng thái ở cả danh sách và drawer', async ({ page }) => {
+test('badge trạng thái đổi màu theo trạng thái ở cả danh sách và drawer', async ({ page, isMobile }) => {
   await page.goto('/context');
   await addArea(page, 'Trạng thái màu');
   const row = page.getByRole('listitem').filter({ hasText: 'Trạng thái màu' });
@@ -95,6 +96,7 @@ test('badge trạng thái đổi màu theo trạng thái ở cả danh sách và
 
   await row.click();
   const drawer = page.getByRole('dialog', { name: 'Trạng thái màu' });
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   const drawerBadge = drawer.locator('[data-area-status]');
   await expect(drawerBadge).toHaveAttribute('data-area-status', 'unknown');
 
@@ -136,6 +138,7 @@ test('badge trạng thái đổi màu theo trạng thái ở cả danh sách và
 
   // Set back to active and verify row badge matches active color too.
   await row.click();
+  if (isMobile) await drawer.getByRole('button', { name: 'Vận hành' }).click();
   await drawer.getByLabel('Trạng thái').selectOption('active');
   await drawer.getByRole('button', { name: 'Lưu', exact: true }).click();
   await expect(drawer.getByText('Đã lưu')).toBeVisible();

@@ -13,3 +13,18 @@ test('prompt kết thúc bằng khối state và chứa các luật cốt lõi',
 test('ký tự $ trong state được giữ nguyên', () => {
   expect(buildSystemPrompt({ stateJson: '{"a":"$&$1"}', actionMode: 'off' })).toContain('{"a":"$&$1"}');
 });
+
+test('chế độ đề xuất của prompt theo actionMode', () => {
+  const tools = buildSystemPrompt({ stateJson: '{}', actionMode: 'tools' });
+  expect(tools).toContain('gọi tool propose_changes');
+  expect(tools).not.toContain('<proposed_actions>');
+  expect(tools.endsWith('<workspace_state>\n{}\n</workspace_state>')).toBe(true);
+
+  const json = buildSystemPrompt({ stateJson: '{}', actionMode: 'json' });
+  expect(json).toContain('<proposed_actions>');
+  expect(json).toContain('Schema: {');
+  expect(json.endsWith('<workspace_state>\n{}\n</workspace_state>')).toBe(true);
+
+  const off = buildSystemPrompt({ stateJson: '{}', actionMode: 'off' });
+  expect(off).toContain('Bạn không thể đề xuất');
+});

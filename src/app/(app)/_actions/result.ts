@@ -1,6 +1,6 @@
 import { revalidatePath } from 'next/cache';
 import { getDb, type Db } from '@/db/client';
-import { NotFoundError, ValidationError } from '@/server/errors';
+import { ConflictError, NotFoundError, ValidationError } from '@/server/errors';
 import { requireOwner } from '@/server/auth';
 
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -22,7 +22,9 @@ export async function runAction<T>(
     for (const p of paths) revalidatePath(p);
     return { ok: true, data };
   } catch (err) {
-    if (err instanceof ValidationError || err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError || err instanceof NotFoundError || err instanceof ConflictError) {
+      return { ok: false, error: err.message };
+    }
     console.error('Server action failed:', err instanceof Error ? err.name : 'UnknownError');
     return { ok: false, error: GENERIC_ERROR };
   }

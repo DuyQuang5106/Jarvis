@@ -28,11 +28,14 @@ export type InboxStatus = (typeof INBOX_STATUSES)[number];
 export const LOG_ACTIONS = ['create', 'update', 'delete', 'archive', 'progress'] as const;
 export type LogAction = (typeof LOG_ACTIONS)[number];
 
-export const ORIGINS = ['manual', 'ai_approved', 'seed', 'undo'] as const;
+export const ORIGINS = ['manual', 'ai_approved', 'seed', 'undo', 'migration'] as const;
 export type Origin = (typeof ORIGINS)[number];
 
-export const ENTITY_TYPES = ['area', 'task', 'topic', 'assessment', 'milestone', 'blocker', 'note'] as const;
+export const ENTITY_TYPES = ['area', 'task', 'topic', 'assessment', 'milestone', 'blocker', 'note', 'folder', 'document'] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
+
+export const DOC_ROLES = ['context', 'raw', 'instruction'] as const;
+export type DocRole = (typeof DOC_ROLES)[number];
 
 export const PENDING_STATUSES = ['pending', 'applied', 'partially_applied', 'rejected', 'superseded', 'failed'] as const;
 export type PendingStatus = (typeof PENDING_STATUSES)[number];
