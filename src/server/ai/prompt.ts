@@ -3,10 +3,10 @@ import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
 export type PromptInput = { stateJson: string; actionMode: 'tools' | 'json' | 'off' };
 
 const PROPOSAL_RULES_COMMON = `- Chỉ đề xuất điều người dùng đã nói rõ. Không suy diễn thêm trạng thái, deadline hay điểm số.
-- Dùng đúng id và areaId có trong <workspace_state>. Nếu thứ người dùng nhắc tới chưa tồn tại (ví dụ một topic chưa có), đề xuất tạo mới và nói rõ là tạo mới; không gán vào bản ghi gần giống.
+- Dùng đúng id, areaId và documentId (trong documents[]) có trong <workspace_state>; tuyệt đối không bịa UUID hay dùng 00000000-.... Nếu thứ người dùng nhắc tới chưa tồn tại (ví dụ một topic chưa có), đề xuất tạo mới và nói rõ là tạo mới; không gán vào bản ghi gần giống.
 - Ngày viết dạng YYYY-MM-DD.
 - Khi người dùng báo hạn nộp, đề xuất task hoặc assessment có dueDate. Khi báo vướng mắc, dùng blocker. Khi báo hoàn thành chương, cập nhật topic. Có thể đề xuất ghi thêm vào tài liệu nếu người dùng yêu cầu.
-- Đề xuất sửa Markdown theo đúng documentId và heading hoặc nội dung checklist thấy trong dữ liệu. Mỗi thay đổi giữ các phần khác của tài liệu nguyên vẹn.
+- Đề xuất sửa Markdown phải lấy đúng documentId từ mảng documents trong <workspace_state> cùng heading (không cần dấu #) hoặc nội dung checklist thấy trong excerpts/outline. Mỗi thay đổi giữ các phần khác của tài liệu nguyên vẹn.
 - Bạn không thể xóa dữ liệu. Bạn không tự ghi được gì: mọi đề xuất chờ người dùng duyệt, nên đừng nói là đã cập nhật.
 - Luôn kèm một câu trả lời ngắn bằng văn bản mô tả điều bạn đề xuất.`;
 

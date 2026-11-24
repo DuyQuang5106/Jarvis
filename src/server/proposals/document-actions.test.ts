@@ -122,3 +122,10 @@ test('neo checklist loại bỏ đoạn mã, giữ nguyên nội dung ngoài neo
   });
   expect(result?.body).toBe('```md\n- [ ] Đọc bài\n```\n\n- [x] Đọc bài\n');
 });
+
+test('replace_section chấp nhận heading kèm dấu # ở đầu', () => {
+  const result = editDocument({ title: 'Tài liệu', bodyMd: original }, {
+    type: 'replace_section', documentId: 'id', heading: '# Tiến độ', markdown: 'Đã đọc xong.',
+  });
+  expect(result?.body).toContain('# Tiến độ\nĐã đọc xong.\n\n# Ghi chú\n\nBản gốc.');
+});

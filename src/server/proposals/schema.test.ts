@@ -58,4 +58,7 @@ test('khóa lạ bị bỏ, không làm hỏng đề xuất', () => {
 test('tool definition là JSON Schema của schema đề xuất', () => {
   expect(PROPOSE_CHANGES_TOOL.name).toBe('propose_changes');
   expect(PROPOSE_CHANGES_TOOL.parameters).toMatchObject({ type: 'object', required: expect.arrayContaining(['summary', 'actions']) });
+  const serialized = JSON.stringify(PROPOSE_CHANGES_TOOL.parameters);
+  expect(serialized).not.toContain('"$schema"');
+  expect(serialized).not.toContain('"oneOf"');
 });

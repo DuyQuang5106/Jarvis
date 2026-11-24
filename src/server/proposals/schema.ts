@@ -193,10 +193,22 @@ export const ProposeChangesSchema = z.object({
 
 export type ProposeChanges = z.infer<typeof ProposeChangesSchema>;
 
+function simplifyToolSchema(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(simplifyToolSchema);
+  if (!node || typeof node !== 'object') return node;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node)) {
+    if (k === '$schema') continue;
+    if (k === 'pattern' && (node as Record<string, unknown>).format === 'uuid') continue;
+    out[k === 'oneOf' ? 'anyOf' : k] = simplifyToolSchema(v);
+  }
+  return out;
+}
+
 export const PROPOSE_CHANGES_TOOL: ToolDef = {
   name: 'propose_changes',
   description: 'Đề xuất thay đổi dữ liệu để người dùng duyệt. Không thay đổi nào được ghi trước khi họ duyệt.',
-  parameters: z.toJSONSchema(ProposeChangesSchema) as Record<string, unknown>,
+  parameters: simplifyToolSchema(z.toJSONSchema(ProposeChangesSchema)) as Record<string, unknown>,
 };
 
 export type StoredAction = {

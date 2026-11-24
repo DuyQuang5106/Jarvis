@@ -55,3 +55,23 @@
 | Đề xuất Markdown đi qua engine duyệt và chưa ghi | Trượt |
 | Provider trả lời cả hai yêu cầu | Trượt |
 | Câu trả lời nhận ra mâu thuẫn tiến độ | Trượt |
+
+### Mock · tools
+
+| Hành vi | Kết quả |
+| --- | --- |
+| Tài liệu cũ và trạng thái có cấu trúc cùng có trong dữ liệu | Đạt |
+| Hai tài liệu cùng heading trỏ đúng hai workspace | Đạt |
+| Payload gửi provider giữ kín thư mục riêng tư | Đạt |
+| Đề xuất Markdown đi qua engine duyệt và chưa ghi | Đạt |
+
+### Provider thật · tools
+
+| Hành vi | Kết quả |
+| --- | --- |
+| Tài liệu cũ và trạng thái có cấu trúc cùng có trong dữ liệu | Đạt |
+| Hai tài liệu cùng heading trỏ đúng hai workspace | Đạt |
+| Payload gửi provider giữ kín thư mục riêng tư | Đạt |
+| Đề xuất Markdown đi qua engine duyệt và chưa ghi | Trượt |
+| Provider trả lời cả hai yêu cầu | Đạt |
+| Câu trả lời nhận ra mâu thuẫn tiến độ | Đạt |

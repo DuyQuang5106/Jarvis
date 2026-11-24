@@ -19,13 +19,16 @@ const REPORT = 'docs/ai-probe-report.md';
 const MARKER = '<!-- phase-b-evaluation -->';
 const actionMode = process.argv.includes('--json') ? 'json' : 'tools';
 const live = process.argv.includes('--live');
+const verbose = process.argv.includes('--verbose');
 const manual = { origin: 'manual' } as const;
 const now = new Date('2026-11-24T03:00:00Z');
 
 async function main() {
   const envArg = process.argv.find((arg) => arg.startsWith('--env='));
   if (envArg) process.loadEnvFile(envArg.slice('--env='.length));
-  const { AI_BASE_URL: baseUrl, AI_API_KEY: apiKey, AI_MODEL: model } = process.env;
+  const modelArg = process.argv.find((arg) => arg.startsWith('--model='))?.slice('--model='.length);
+  const { AI_BASE_URL: baseUrl, AI_API_KEY: apiKey } = process.env;
+  const model = modelArg || process.env.AI_MODEL;
   if (live && (!baseUrl || !apiKey || !model)) throw new Error('Thiếu cấu hình provider cho --live.');
   const provider = live && baseUrl && apiKey && model ? createFostaProvider({ baseUrl, apiKey, model }) : createMockProvider();
   const client = new PGlite();
@@ -55,12 +58,29 @@ async function main() {
       let providerFailed = false;
       for await (const event of runChatTurn({
         db, actionMode, now, dailyCap: 10, signal: AbortSignal.timeout(60_000),
-        provider: { stream(request) { seen.push(request); return provider.stream(request); } },
+        provider: {
+          async *stream(request) {
+            seen.push(request);
+            if (verbose) {
+              const sys = request.messages.find((m) => m.role === 'system')?.content ?? '';
+              const wsIdx = sys.indexOf('<workspace_state>');
+              console.log('[evaluate-phase-b] state:', wsIdx >= 0 ? sys.slice(wsIdx) : sys);
+            }
+            for await (const ev of provider.stream(request)) {
+              if (verbose && ev.type === 'tool_call') console.log('[evaluate-phase-b] tool_call:', ev.name, ev.argsJson);
+              yield ev;
+            }
+          },
+        },
       }, { message, scope: { mode: 'item', areaId: algebra.id } })) {
         if (event.type === 'text') text += event.delta;
         if (event.type === 'proposal') proposed = true;
-        if (event.type === 'error') providerFailed = true;
+        if (event.type === 'error') {
+          providerFailed = true;
+          if (live) console.error('[evaluate-phase-b] provider error:', event.message);
+        }
       }
+      if (verbose) console.log('[evaluate-phase-b] reply:', { proposed, providerFailed, text });
       return { text, proposed, providerFailed };
     }
     const answer = await ask('Tình trạng chương Nhân ma trận của Algebra là gì? Hãy chỉ rõ nếu tài liệu Tiến độ ôn tập mâu thuẫn với topic.');

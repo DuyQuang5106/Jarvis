@@ -54,7 +54,9 @@ export function editDocument(doc: Pick<DocumentRow, 'bodyMd' | 'title'>, action:
     const next = body.trimEnd() ? body.trimEnd() + newline.repeat(2) + markdown + newline : markdown + newline;
     return { before: '', after: markdown, anchor: body, body: next, title: doc.title };
   }
-  const matches = lines.filter((line) => line.heading?.label === action.heading);
+  const normalizedHeading = action.heading.replace(/^ {0,3}#{1,6}[ \t]+/, '').replace(/[ \t]+#+[ \t]*$/, '').trim();
+  const exactMatches = lines.filter((line) => line.heading?.label === action.heading);
+  const matches = exactMatches.length > 0 ? exactMatches : lines.filter((line) => line.heading?.label === normalizedHeading);
   if (matches.length !== 1) return null;
   const head = matches[0];
   const following = lines.find((line) => line.start > head.start && line.heading && line.heading.level <= head.heading!.level);
