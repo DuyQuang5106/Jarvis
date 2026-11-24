@@ -60,7 +60,7 @@ async function loadActiveDoc(tx: Tx, id: string): Promise<DocumentRow> {
   const [doc] = await tx
     .select()
     .from(documents)
-    .where(and(eq(documents.id, id), isNull(documents.deletedAt)));
+    .where(and(eq(documents.id, id), isNull(documents.deletedAt))).for('update');
   if (!doc) throw new NotFoundError('Không tìm thấy tài liệu.');
   return doc;
 }
@@ -169,6 +169,40 @@ export const documentService = {
       });
       if (opts?.touchArea !== false) await touchArea(tx, doc.areaId, now);
       return doc;
+    });
+  },
+
+  async applyRevision(
+    db: DbOrTx,
+    id: string,
+    expectedRevision: number,
+    input: { title: string; bodyMd: string },
+    meta: WriteMeta,
+  ): Promise<DocumentRow> {
+    const title = parseOrThrow(DocumentTitle, input.title);
+    const bodyMd = parseOrThrow(DocumentBody, input.bodyMd);
+    return db.transaction(async (tx) => {
+      const [current] = await tx.select().from(documents)
+        .where(and(eq(documents.id, id), isNull(documents.deletedAt))).for('update');
+      if (!current) throw new NotFoundError('Không tìm thấy tài liệu.');
+      if (current.revision !== expectedRevision) throw new ConflictError('Tài liệu đã thay đổi ở nơi khác.');
+      if (current.title === title && current.bodyMd === bodyMd) return current;
+      const now = new Date();
+      const [updated] = await tx.update(documents).set({
+        title, bodyMd, revision: current.revision + 1, updatedAt: now,
+        searchText: computeSearchText(title, bodyMd, current.extractedText),
+      }).where(eq(documents.id, id)).returning();
+      await tx.insert(documentVersions).values({
+        documentId: id, revision: updated.revision, title, bodyMd,
+        origin: meta.origin, batchId: meta.batchId ?? null, createdAt: now,
+      });
+      await pruneVersions(tx, id);
+      await recordChange(tx, {
+        ...meta, areaId: updated.areaId, entityType: 'document', entityId: id, action: 'update',
+        before: stripSearch(current), after: stripSearch(updated), createdAt: now,
+      });
+      await touchArea(tx, updated.areaId, now);
+      return updated;
     });
   },
 

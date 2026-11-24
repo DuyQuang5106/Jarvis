@@ -108,6 +108,33 @@ export function ProposalActionEditor({
   const fid = (k: string) => `${uid}-${k}`;
 
   switch (action.type) {
+    case 'create_document':
+    case 'rename_document':
+    case 'append_to_document':
+    case 'replace_section':
+      return (
+        <div className="space-y-2 pt-1">
+          {'title' in action && (
+            <Field id={fid('title')} label="Tên tài liệu">
+              <Input id={fid('title')} className="h-11 text-base" maxLength={200} value={action.title}
+                onChange={(event) => onChange({ ...action, title: event.target.value })} />
+            </Field>
+          )}
+          {'markdown' in action && (
+            <Field id={fid('markdown')} label="Nội dung Markdown">
+              <Textarea id={fid('markdown')} className="min-h-28 text-base" maxLength={20_000} value={action.markdown}
+                onChange={(event) => onChange({ ...action, markdown: event.target.value })} />
+            </Field>
+          )}
+        </div>
+      );
+    case 'set_checklist_item':
+      return (
+        <label className="flex min-h-11 items-center gap-2 text-sm">
+          <input type="checkbox" checked={action.checked} onChange={(event) => onChange({ ...action, checked: event.target.checked })} />
+          Đánh dấu đã hoàn thành
+        </label>
+      );
     case 'create_task':
       return (
         <div className="space-y-2 pt-1">

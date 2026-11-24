@@ -6,6 +6,7 @@ import {
   CreateNoteInput,
   CreateTaskInput,
   CreateTopicInput,
+  DocumentTitle,
   Name,
   UpdateAreaInput,
   UpdateAssessmentInput,
@@ -137,6 +138,27 @@ const ResolveBlockerActionSchema = z.object({
   id: uuid('Blocker'),
 });
 
+const documentId = uuid('Tài liệu');
+const anchorText = z.string().trim().min(1, 'Cần chỉ rõ mục trong tài liệu.').max(300, 'Tên mục tối đa 300 ký tự.');
+const markdown = z.string().max(20_000, 'Nội dung đề xuất tối đa 20.000 ký tự.');
+
+const CreateDocumentActionSchema = z.object({
+  type: z.literal('create_document'), areaId: uuid('Mục'), title: DocumentTitle, markdown,
+});
+const AppendToDocumentActionSchema = z.object({
+  type: z.literal('append_to_document'), documentId, heading: anchorText.optional(),
+  markdown: markdown.refine((text) => !!text.trim(), 'Nội dung thêm không được để trống.'),
+});
+const ReplaceSectionActionSchema = z.object({
+  type: z.literal('replace_section'), documentId, heading: anchorText, markdown,
+});
+const SetChecklistItemActionSchema = z.object({
+  type: z.literal('set_checklist_item'), documentId, itemText: anchorText, checked: z.boolean(),
+});
+const RenameDocumentActionSchema = z.object({
+  type: z.literal('rename_document'), documentId, title: DocumentTitle,
+});
+
 export const ProposedActionSchema = z.discriminatedUnion('type', [
   CreateTaskActionSchema,
   UpdateTaskActionSchema,
@@ -148,6 +170,11 @@ export const ProposedActionSchema = z.discriminatedUnion('type', [
   AddProgressLogActionSchema,
   CreateBlockerActionSchema,
   ResolveBlockerActionSchema,
+  CreateDocumentActionSchema,
+  AppendToDocumentActionSchema,
+  ReplaceSectionActionSchema,
+  SetChecklistItemActionSchema,
+  RenameDocumentActionSchema,
 ]);
 
 export type ProposedAction = z.infer<typeof ProposedActionSchema>;
@@ -172,8 +199,21 @@ export const PROPOSE_CHANGES_TOOL: ToolDef = {
   parameters: z.toJSONSchema(ProposeChangesSchema) as Record<string, unknown>,
 };
 
-export type StoredAction = { key: number; action: ProposedAction; baseUpdatedAt: string | null };
-export type StoredProposal = { summary: string; actions: StoredAction[]; appliedKeys?: number[] };
+export type StoredAction = {
+  key: number;
+  action: ProposedAction;
+  baseUpdatedAt: string | null;
+  baseRevision?: number;
+  sectionHash?: string;
+};
+export type StoredProposal = {
+  summary: string;
+  actions: StoredAction[];
+  appliedKeys?: number[];
+  requiresDeadlineRoute?: boolean;
+  batchId?: string;
+  undoneAt?: string;
+};
 
 export type ActionPreview = {
   key: number;
@@ -183,5 +223,7 @@ export type ActionPreview = {
   label: string;
   changes: { field: string; before: string | null; after: string | null }[];
   isCreate: boolean;
+  documentId?: string;
+  diff?: { before: string; after: string };
   conflict: 'none' | 'changed' | 'missing';
 };

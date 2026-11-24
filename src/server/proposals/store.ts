@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { pendingActions } from '@/db/schema';
 import type { ProposeChanges, StoredProposal } from './schema';
+import { hasDeadline, hasDeadlineRoute } from './routing';
 import { stampActions } from './validate';
 
 export const IGNORED_PROPOSAL_NOTICE =
@@ -15,11 +16,14 @@ export async function createPendingAction(
     messageId?: string;
     noteId?: string;
     proposal: ProposeChanges;
+    requestText?: string;
   },
 ): Promise<{ id: string } | null> {
+  const requiresDeadlineRoute = hasDeadline(input.requestText ?? '');
+  if (requiresDeadlineRoute && !hasDeadlineRoute(input.proposal.actions)) return null;
   const stamped = await stampActions(db, input.proposal.actions);
   if (!stamped.ok) return null;
-  const payload: StoredProposal = { summary: input.proposal.summary, actions: stamped.stored };
+  const payload: StoredProposal = { summary: input.proposal.summary, actions: stamped.stored, ...(requiresDeadlineRoute ? { requiresDeadlineRoute } : {}) };
   const [row] = await db
     .insert(pendingActions)
     .values({

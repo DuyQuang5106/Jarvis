@@ -12,6 +12,7 @@ import {
   rejectPendingAction,
   type ApproveResult,
 } from '@/server/proposals/resolve';
+import { undoPendingAction, type UndoResult } from '@/server/proposals/undo';
 import { runAction, type ActionResult } from './result';
 
 const IdSchema = z.uuid({ error: 'ID đề xuất không hợp lệ.' });
@@ -47,6 +48,10 @@ export async function approveProposalAction(
       : undefined;
     return approvePendingAction(db, validId, { selectedKeys: parsed.data.selectedKeys, edits });
   }, ['/context', '/chat']);
+}
+
+export async function undoProposalAction(id: string): Promise<ActionResult<UndoResult>> {
+  return runAction((db) => undoPendingAction(db, parseId(id)), ['/context', '/chat']);
 }
 
 export async function rejectProposalAction(id: string): Promise<ActionResult<ProposalView>> {

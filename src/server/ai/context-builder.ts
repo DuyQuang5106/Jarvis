@@ -12,13 +12,17 @@ import type {
 import { activityLogs, areas, notes, type ActivityLogRow } from '@/db/schema';
 import { daysUntil } from '@/lib/dates';
 import { getAreaDetails, type AreaDetails } from '../queries/area-details';
+import { getExcludedFolderIds } from '../queries/folders';
 import { describeLog } from '../queries/describe-log';
 import { getPortfolioSnapshot, pickStaleAreaIds, type AreaSummary, type PortfolioSnapshot } from '../queries/snapshot';
+import { getSettings } from '../services/settings';
+import { DOCUMENT_CONTEXT_MAX, selectDocumentContext, type DocumentContext } from './document-context';
+import { hiddenDocumentIds, hiddenMigratedNoteIds } from './document-visibility';
 import { truncateState } from './context-truncate';
 import { matchAreas, normalizeVi } from './match-areas';
 
 export type ContextScope = { mode: 'auto' | 'all' | 'academic' | 'projects' | 'item'; areaId?: string };
-export type ContextRef = { areaId: string; name: string; kind: AreaKind; updatedAt: string };
+export type ContextRef = { areaId: string; name: string; kind: AreaKind; updatedAt: string; documentId?: string };
 export type AreaDetailForAi = {
   areaId: string; name: string; kind: AreaKind; summary: string | null; goal: string | null;
   startDate: string | null; deadlineDate: string | null;
@@ -40,6 +44,7 @@ export type WorkspaceState = {
   upcomingAssessments: PortfolioSnapshot['upcomingAssessments'];
   staleAreaIds: string[];
   details: AreaDetailForAi[];
+  documents?: DocumentContext[];
 };
 export type BuiltContext = { state: WorkspaceState; json: string; refs: ContextRef[]; summaryCount: number; truncated: boolean };
 
@@ -124,12 +129,17 @@ async function privateNoteIds(db: DbOrTx, logs: ActivityLogRow[], excludedAreas:
   return out;
 }
 
-function isHiddenLog(log: ActivityLogRow, hidden: Set<string>): boolean {
-  if (log.entityType !== 'note') return false;
-  return hidden.has(log.entityId) || [log.beforeJson, log.afterJson].some((j) => snap(j).aiExcluded === true);
+function isHiddenLog(log: ActivityLogRow, hidden: Set<string>, excludedFolders: Set<string>): boolean {
+  if (log.entityType === 'folder') return true;
+  if (log.entityType !== 'note' && log.entityType !== 'document') return false;
+  return hidden.has(log.entityId) || [log.beforeJson, log.afterJson].some((j) => {
+    const row = snap(j);
+    return row.aiExcluded === true || row.docRole === 'instruction' ||
+      (typeof row.folderId === 'string' && excludedFolders.has(row.folderId));
+  });
 }
 
-function toDetail(d: AreaDetails, today: string, hidden: Set<string>): AreaDetailForAi {
+function toDetail(d: AreaDetails, today: string, hidden: Set<string>, excludedFolders: Set<string>): AreaDetailForAi {
   const { area, academic: ac, project: pr } = d;
   const left = (date: string | null) => (date ? daysUntil(date, today) : null);
   return {
@@ -165,11 +175,11 @@ function toDetail(d: AreaDetails, today: string, hidden: Set<string>): AreaDetai
         estimateMinutes: t.estimateMinutes, blockedReason: t.blockedReason, milestoneId: t.milestoneId,
       })),
     notes: d.notes
-      .filter((n) => !n.aiExcluded)
+      .filter((n) => !n.aiExcluded && !hidden.has(n.id))
       .slice(0, NOTE_LIMIT)
       .map((n) => ({ id: n.id, text: n.text, updatedAt: n.updatedAt.toISOString() })),
     recentLogs: d.logs
-      .filter((l) => !isHiddenLog(l, hidden))
+      .filter((l) => !isHiddenLog(l, hidden, excludedFolders))
       .slice(0, LOG_LIMIT)
       .map((l) => ({ at: l.createdAt.toISOString(), origin: l.origin, ...describeLog(l) })),
   };
@@ -195,7 +205,15 @@ export async function buildContext(
     // Re-check privacy on the row actually loaded.
     (d): d is AreaDetails => d !== null && !d.area.aiExcluded,
   );
-  const hidden = await privateNoteIds(db, loaded.flatMap((d) => d.logs), excluded);
+  const logs = loaded.flatMap((d) => d.logs);
+  const [hiddenNotes, hiddenDocuments, hiddenMigrated, excludedFolders] = await Promise.all([
+    privateNoteIds(db, logs, excluded),
+    hiddenDocumentIds(db, logs.filter((log) => log.entityType === 'document').map((log) => log.entityId)),
+    hiddenMigratedNoteIds(db, [...logs.filter((log) => log.entityType === 'note').map((log) => log.entityId),
+      ...loaded.flatMap((detail) => detail.notes.map((note) => note.id))]),
+    getExcludedFolderIds(db),
+  ]);
+  const hidden = new Set([...hiddenNotes, ...hiddenDocuments, ...hiddenMigrated]);
 
   const full: WorkspaceState = {
     now: {
@@ -211,14 +229,26 @@ export async function buildContext(
     dueTasks: snapshot.dueTasks.filter((t) => !excluded.has(t.areaId)),
     upcomingAssessments: snapshot.upcomingAssessments.filter((x) => !excluded.has(x.areaId)),
     staleAreaIds: pickStaleAreaIds(open),
-    details: loaded.map((d) => toDetail(d, snapshot.today, hidden)),
+    details: loaded.map((d) => toDetail(d, snapshot.today, hidden, excludedFolders)),
   };
 
+  const tierOneSize = serializeState({ ...full, details: [] }).length;
+  const settings = await getSettings(db);
+  const selectedAreaIds = loaded.map((detail) => detail.area.id);
+  const docContext = await selectDocumentContext(db, {
+    areaIds: selectedAreaIds.length || input.scope.mode !== 'auto' ? selectedAreaIds : undefined,
+    query: texts.join(' '), today: snapshot.today, timezone: snapshot.timezone, staleAfterDays: settings.staleAfterDays,
+    budget: Math.min(DOCUMENT_CONTEXT_MAX, Math.floor(maxChars * 0.4), maxChars - tierOneSize - 14),
+  });
+  if (docContext.documents.length) full.documents = docContext.documents;
   const { state, truncated } = truncateState(full, (s) => serializeState(s).length <= maxChars);
   const byId = new Map(loaded.map((d) => [d.area.id, d.area]));
   const refs = state.details.map((d): ContextRef => {
     const area = byId.get(d.areaId)!;
     return { areaId: area.id, name: area.name, kind: area.kind, updatedAt: area.updatedAt.toISOString() };
   });
-  return { state, json: serializeState(state), refs, summaryCount: state.areas.length, truncated };
+  return {
+    state, json: serializeState(state), refs: [...refs, ...docContext.refs], summaryCount: state.areas.length,
+    truncated: truncated || docContext.truncated,
+  };
 }

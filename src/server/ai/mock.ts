@@ -5,6 +5,7 @@ import type { AiProvider, ProviderEvent, StreamRequest } from './provider';
 type MockState = {
   now: { date: string };
   areas: { id: string; name: string; status: string }[];
+  documents?: { documentId: string; areaId: string; title: string; docRole: string }[];
   details: { areaId: string; name: string; topics: { id: string; title: string; status: string }[] }[];
 };
 
@@ -89,6 +90,41 @@ export function createMockProvider(): AiProvider {
           actions: [{ type: 'update_task', id: '00000000-0000-4000-8000-000000000000', patch: { status: 'done' } }],
         });
         return;
+      }
+
+      if (u.startsWith('Cập nhật tài liệu') && state) {
+        const norm = normalizeVi(u);
+        const document = state.documents?.find((item) => item.docRole === 'context' && norm.includes(normalizeVi(item.title)));
+        if (document) {
+          yield* emitWithProposal(req, system, 'Đề xuất sửa Markdown.', {
+            summary: 'Cập nhật tài liệu',
+            actions: [{ type: 'replace_section', documentId: document.documentId, heading: 'Tiến độ', markdown: 'Đã đọc chương mới.' }],
+          });
+          return;
+        }
+      }
+
+      if (u.startsWith('Báo blocker') && state) {
+        const area = state.areas.find((item) => normalizeVi(u).includes(normalizeVi(item.name)));
+        if (area) {
+          yield* emitWithProposal(req, system, 'Đề xuất ghi vướng mắc.', {
+            summary: 'Ghi nhận vướng mắc',
+            actions: [{ type: 'create_blocker', areaId: area.id, title: 'Thiếu thiết bị thử nghiệm' }],
+          });
+          return;
+        }
+      }
+
+      if (u.startsWith('Hạn nộp') && state) {
+        const area = state.areas.find((item) => normalizeVi(u).includes(normalizeVi(item.name)));
+        const date = u.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+        if (area && date) {
+          yield* emitWithProposal(req, system, 'Đề xuất tạo việc có hạn nộp.', {
+            summary: 'Ghi nhận hạn nộp',
+            actions: [{ type: 'create_task', areaId: area.id, title: 'Nộp bài', dueDate: date }],
+          });
+          return;
+        }
       }
 
       if (u.startsWith('Phân loại ghi chú') && state) {
