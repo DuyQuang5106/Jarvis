@@ -1,7 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { areas, assessments, blockers, milestones, tasks, topics, type AreaRow } from '@/db/schema';
 import { FIELD_LABEL, formatFieldValue } from '../queries/describe-log';
+import { describeDocumentAction, isDocumentAction } from './document-actions';
 import type { ActionPreview, ProposedAction, StoredAction } from './schema';
 
 type Change = ActionPreview['changes'][number];
@@ -12,7 +13,7 @@ function sameValue(a: unknown, b: unknown): boolean {
 
 async function loadArea(db: DbOrTx, areaId: string | null): Promise<AreaRow | null> {
   if (!areaId) return null;
-  const [row] = await db.select().from(areas).where(eq(areas.id, areaId));
+  const [row] = await db.select().from(areas).where(and(eq(areas.id, areaId), eq(areas.aiExcluded, false)));
   return row ?? null;
 }
 
@@ -74,6 +75,7 @@ function quote(name: string | null | undefined): string {
 
 async function describeOne(db: DbOrTx, item: StoredAction): Promise<ActionPreview> {
   const a: ProposedAction = item.action;
+  if (isDocumentAction(a)) return describeDocumentAction(db, item, a);
   switch (a.type) {
     case 'create_task': {
       const area = await loadArea(db, a.areaId);

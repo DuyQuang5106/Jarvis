@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { CheckIcon } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import {
@@ -7,10 +8,12 @@ import {
   getProposalAction,
   rebaseProposalAction,
   rejectProposalAction,
+  undoProposalAction,
 } from '@/app/(app)/_actions/proposals';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { computeLineDiff } from '@/lib/line-diff';
 import type { ProposalView } from '@/server/proposals/load';
 import type { ActionPreview, ProposedAction } from '@/server/proposals/schema';
 import { ProposalActionEditor, previewWithEdits } from './proposal-action-editor';
@@ -29,6 +32,7 @@ export function ProposalCard({
   const [edits, setEdits] = useState<Record<number, ProposedAction>>({});
   const [conflicts, setConflicts] = useState<Map<number, 'changed' | 'missing'>>(new Map());
   const [fieldErrors, setFieldErrors] = useState<Map<number, string>>(new Map());
+  const [undoLinks, setUndoLinks] = useState<{ areaId: string; documentId: string }[]>([]);
   const [alert, setAlert] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
 
@@ -138,6 +142,24 @@ export function ProposalCard({
     });
   }
 
+  function handleUndo() {
+    setAlert(null);
+    setUndoLinks([]);
+    startTransition(async () => {
+      const result = await undoProposalAction(proposalId);
+      if (!result.ok) {
+        setAlert(result.error);
+      } else if (result.data.status === 'conflict') {
+        setAlert('Dữ liệu đã thay đổi sau khi duyệt. Bạn có thể mở tài liệu để xem lịch sử phiên bản.');
+        setUndoLinks(result.data.documents);
+      } else {
+        const reloaded = await getProposalAction(proposalId);
+        if (reloaded.ok) setView(reloaded.data);
+        if (result.data.status === 'undone') onResolved?.();
+      }
+    });
+  }
+
   function handleReject() {
     if (busy) return;
     setAlert(null);
@@ -172,6 +194,11 @@ export function ProposalCard({
       {alert && (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive">
           {alert}
+          {undoLinks.map((ref) => (
+            <Link key={ref.documentId} href={documentHref(ref.areaId, ref.documentId)} className="flex min-h-11 items-center underline">
+              Mở tài liệu để xem lịch sử
+            </Link>
+          ))}
         </div>
       )}
 
@@ -208,7 +235,13 @@ export function ProposalCard({
                 )}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium wrap-anywhere">{p.label}</span>
+                    {p.documentId && p.areaId ? (
+                      <Link href={documentHref(p.areaId, p.documentId)} className="inline-flex min-h-11 items-center font-medium wrap-anywhere underline">
+                        {p.label}
+                      </Link>
+                    ) : (
+                      <span className="font-medium wrap-anywhere">{p.label}</span>
+                    )}
                     {p.areaName && <Badge variant="outline">{p.areaName}</Badge>}
                     {conflict === 'changed' && <Badge variant="destructive">Đã thay đổi</Badge>}
                     {conflict === 'missing' && <Badge variant="destructive">Không còn tồn tại</Badge>}
@@ -219,7 +252,11 @@ export function ProposalCard({
                       onChange={(next) => setEdits((prev) => ({ ...prev, [p.key]: next }))}
                     />
                   ) : (
-                    <PreviewChanges changes={previewWithEdits(p.changes, edits[p.key])} />
+                    p.diff ? (
+                      <DocumentDiff diff={p.diff} edited={edits[p.key]} />
+                    ) : (
+                      <PreviewChanges changes={previewWithEdits(p.changes, edits[p.key])} />
+                    )
                   )}
                   {rowError && (
                     <p role="alert" className="text-xs text-destructive">
@@ -267,7 +304,9 @@ export function ProposalCard({
         </div>
       )}
 
-      {(view.status === 'applied' || view.status === 'partially_applied') && (
+      {view.canUndo && <Button type="button" variant="outline" className="min-h-11 w-full" disabled={busy} onClick={handleUndo}>Hoàn tác</Button>}
+      {view.undone && <p className="text-xs text-muted-foreground">Đã hoàn tác thay đổi.</p>}
+      {!view.undone && (view.status === 'applied' || view.status === 'partially_applied') && (
         <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
           Đã áp dụng {view.appliedKeys.length}/{view.previews.length} thay đổi
         </p>
@@ -276,6 +315,34 @@ export function ProposalCard({
       {view.status === 'superseded' && <p className="text-xs text-muted-foreground">Đã thay bằng đề xuất mới</p>}
       {view.status === 'failed' && <p className="text-xs text-destructive">Không áp dụng được thay đổi.</p>}
     </section>
+  );
+}
+
+function documentHref(areaId: string, documentId: string) {
+  return '/context?item=' + areaId + '&doc=' + documentId;
+}
+
+function DocumentDiff({ diff, edited }: { diff: NonNullable<ActionPreview['diff']>; edited?: ProposedAction }) {
+  let after = diff.after;
+  if (edited?.type === 'rename_document') after = edited.title;
+  if (edited?.type === 'replace_section' || edited?.type === 'create_document') after = edited.markdown;
+  if (edited?.type === 'append_to_document') after = [diff.before, edited.markdown].filter(Boolean).join('\n\n');
+  if (edited?.type === 'set_checklist_item') after = diff.before.replace(/\[[ xX]\]/, edited.checked ? '[x]' : '[ ]');
+  const lines = computeLineDiff(diff.before, after);
+  if (!lines.some((line) => line.kind !== 'same')) return <p className="text-xs">Nội dung hiện tại đã khớp.</p>;
+  return (
+    <details className="min-w-0 text-xs" open={lines.length <= 8}>
+      <summary className="min-h-11 cursor-pointer py-3">Xem thay đổi theo dòng</summary>
+      <div className="max-h-64 overflow-y-auto rounded border font-mono">
+        {lines.map((line, index) => (
+          <div key={index} className={line.kind === 'add' ? 'bg-emerald-500/15' : line.kind === 'del' ? 'bg-red-500/15' : undefined}>
+            <span className="block whitespace-pre-wrap wrap-anywhere px-2 py-0.5">
+              {line.kind === 'add' ? '+ ' : line.kind === 'del' ? '− ' : '  '}{line.text}
+            </span>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

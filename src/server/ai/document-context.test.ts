@@ -1,0 +1,99 @@
+import { expect, test } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { makeArea } from '@/db/test-helpers';
+import { createTestDb } from '@/db/testing';
+import { documents } from '@/db/schema';
+import { runChatTurn, HIDDEN_HISTORY, type TurnEvent } from '../chat/run-turn';
+import { appendMessage, createConversation } from '../services/conversations';
+import { documentService } from '../services/documents';
+import { folderService } from '../services/folders';
+import { buildContext } from './context-builder';
+import { searchContext, splitDocument } from './document-context';
+import type { AiProvider, StreamRequest } from './provider';
+
+const manual = { origin: 'manual' } as const;
+const now = new Date('2026-11-24T03:00:00Z');
+
+test('tìm FTS không dấu qua các workspace, theo đoạn mới nhất và văn bản PDF', async () => {
+  const db = await createTestDb();
+  const math = await makeArea(db, { name: 'Algebra' });
+  const networks = await makeArea(db, { name: 'Computer Networks' });
+  const mathDoc = await documentService.create(db, {
+    areaId: math.id, title: 'Bài giảng', bodyMd: '# Cơ sở\n\n## Nhân ma trận\n\nCông thức ma trận.', docRole: 'context',
+  }, { origin: 'migration' }, { now: new Date('2026-10-01T00:00:00Z') });
+  const pdf = await documentService.create(db, {
+    areaId: networks.id, title: 'Bài giảng', bodyMd: '', fileExt: 'pdf', docRole: 'raw',
+    extractedText: 'Ma trận kề của đồ thị.\n\nPhần này nói về định tuyến.',
+  }, manual);
+  const hits = await searchContext(db, 'ma tran');
+  expect(hits.map(({ documentId }) => documentId)).toEqual(expect.arrayContaining([mathDoc.id, pdf.id]));
+  expect(hits.find((hit) => hit.documentId === mathDoc.id)).toMatchObject({
+    heading_path: ['Cơ sở', 'Nhân ma trận'], origin: 'migration',
+  });
+  expect((await searchContext(db, 'ma tran', { areaIds: [math.id] })).every((hit) => hit.documentId === mathDoc.id)).toBe(true);
+  const scoped = await buildContext(db, { message: 'Học gì?', recentUserMessages: [], scope: { mode: 'item', areaId: math.id }, now });
+  expect(scoped.state.documents).toEqual([expect.objectContaining({
+    documentId: mathDoc.id, possibly_stale: true, days_since_update: 54, outline: [['Cơ sở'], ['Cơ sở', 'Nhân ma trận']],
+  })]);
+  await documentService.updateBody(db, mathDoc.id, '# Định thức\n\nKhai triển Laplace.', mathDoc.revision, manual);
+  expect(await searchContext(db, 'ma tran', { areaIds: [math.id] })).toEqual([]);
+  expect(await searchContext(db, 'dinh thuc', { areaIds: [math.id] })).toEqual(expect.arrayContaining([expect.objectContaining({ documentId: mathDoc.id, text: 'Khai triển Laplace.' })]));
+});
+
+test('tôn trọng ngân sách đã serialize và giữ đủ dữ liệu tầng 1', async () => {
+  const db = await createTestDb();
+  const area = await makeArea(db, { name: 'Algebra' });
+  await documentService.create(db, {
+    areaId: area.id, title: 'Tóm tắt mâu thuẫn',
+    bodyMd: Array.from({ length: 30 }, (_, index) => '## Chương ' + index + '\n' + '<matrix '.repeat(96)).join('\n\n'),
+  }, manual);
+  const input = { message: 'matrix', recentUserMessages: [], scope: { mode: 'item' as const, areaId: area.id }, now };
+  const limited = await buildContext(db, { ...input, maxChars: 3200 });
+  const full = await buildContext(db, input);
+  expect(limited.state.areas).toEqual(full.state.areas);
+  expect(limited.json.length).toBeLessThanOrEqual(3200);
+  expect(JSON.stringify(limited.state.documents ?? []).replace(/</g, '\\u003c').length).toBeLessThanOrEqual(1280);
+  expect(limited.truncated).toBe(true);
+  expect(full.state.areas[0].status).toBe('active');
+  expect(full.state.documents?.[0].title).toBe('Tóm tắt mâu thuẫn');
+});
+
+test('lọc toàn bộ payload provider khi tài liệu, workspace, hướng dẫn hoặc tổ tiên bị ẩn', async () => {
+  const db = await createTestDb();
+  const open = await makeArea(db, { name: 'Algebra' });
+  const hidden = await makeArea(db, { name: 'Kho tư', aiExcluded: true });
+  const root = await folderService.create(db, { areaId: open.id, name: 'THU_MUC_RIENG', aiExcluded: true }, manual);
+  const branch = await folderService.create(db, { areaId: open.id, name: 'THU_MUC_CON', parentId: root.id }, manual);
+  const deep = await folderService.create(db, { areaId: open.id, name: 'THU_MUC_SAU', parentId: branch.id }, manual);
+  const direct = await documentService.create(db, { areaId: open.id, title: 'RIENG_TRUC_TIEP', bodyMd: 'matrix trực tiếp' }, manual);
+  await documentService.setAiExcluded(db, direct.id, true, manual);
+  await documentService.create(db, { areaId: open.id, title: 'RIENG_TO_TIEN', bodyMd: 'matrix tổ tiên', folderId: deep.id }, manual);
+  await documentService.create(db, { areaId: hidden.id, title: 'RIENG_WORKSPACE', bodyMd: 'matrix workspace' }, manual);
+  const instruction = await documentService.create(db, { areaId: open.id, title: 'RIENG_HUONG_DAN', bodyMd: 'matrix hướng dẫn' }, manual);
+  await documentService.setRole(db, instruction.id, 'instruction', manual);
+  const visible = await documentService.create(db, { areaId: open.id, title: 'CÔNG KHAI', bodyMd: 'matrix nội dung công khai' }, manual);
+  const conv = await createConversation(db, 'Algebra');
+  await appendMessage(db, conv.id, 'assistant', 'RIENG_LICH_SU', { contextRefs: [{ areaId: open.id, documentId: direct.id }] });
+  await appendMessage(db, conv.id, 'assistant', 'VISIBLE_HISTORY', { contextRefs: [{ areaId: open.id, documentId: visible.id }] });
+  const seen: StreamRequest[] = [];
+  const provider: AiProvider = { async *stream(request) { seen.push(request); yield { type: 'text', delta: 'Đã đọc dữ liệu' }; } };
+  const events: TurnEvent[] = [];
+  for await (const event of runChatTurn({ db, provider, actionMode: 'tools', dailyCap: 10, now }, {
+    conversationId: conv.id, message: 'Algebra có gì về matrix?', scope: { mode: 'all' },
+  })) events.push(event);
+  expect(events.at(-1)).toMatchObject({ type: 'done' });
+  const payload = JSON.stringify(seen[0]);
+  expect(payload).not.toMatch(/RIENG_|THU_MUC_|matrix trực tiếp|matrix tổ tiên|matrix workspace|matrix hướng dẫn/);
+  expect(payload).toContain(HIDDEN_HISTORY);
+  expect(payload).toContain('VISIBLE_HISTORY');
+  expect(payload).toContain('matrix nội dung công khai');
+  expect((await searchContext(db, 'matrix')).map((hit) => hit.documentId)).toEqual([visible.id]);
+  await db.update(documents).set({ deletedAt: now }).where(eq(documents.id, visible.id));
+  expect(await searchContext(db, 'matrix')).toEqual([]);
+});
+
+test('chunk giữ đường dẫn và bỏ qua heading giả trong code block', () => {
+  const result = splitDocument('# Thật\n\n```md\n# Giả\n```\n\n## Con\n\nđoạn cuối', true);
+  expect(result.at(-1)).toMatchObject({ heading_path: ['Thật', 'Con'], text: 'đoạn cuối' });
+  expect(result.some((chunk) => chunk.heading_path.includes('Giả'))).toBe(false);
+});

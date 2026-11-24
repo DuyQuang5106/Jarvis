@@ -14,6 +14,8 @@ export type ProposalView = {
   previews: ActionPreview[];
   actions: StoredAction[];
   appliedKeys: number[];
+  canUndo: boolean;
+  undone: boolean;
 };
 
 export async function loadProposal(db: DbOrTx, id: string): Promise<ProposalView | null> {
@@ -33,5 +35,7 @@ export async function loadProposal(db: DbOrTx, id: string): Promise<ProposalView
     previews,
     actions: stored.actions,
     appliedKeys: stored.appliedKeys ?? [],
+    canUndo: Boolean(stored.batchId && !stored.undoneAt && (row.status === 'applied' || row.status === 'partially_applied')),
+    undone: Boolean(stored.undoneAt),
   };
 }

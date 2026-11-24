@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { areas, assessments, blockers, milestones, tasks, topics, type AreaRow } from '@/db/schema';
+import { isDocumentAction, stampDocumentAction, type DocumentAction } from './document-actions';
 import type { ProposedAction, StoredAction } from './schema';
 
 export type StampError = { index: number; message: string };
@@ -9,13 +10,13 @@ export type StampResult = { ok: true; stored: StoredAction[] } | { ok: false; er
 const ARCHIVED_MSG = 'Mục đã lưu trữ.';
 
 async function loadArea(db: DbOrTx, id: string): Promise<AreaRow | null> {
-  const [row] = await db.select().from(areas).where(eq(areas.id, id));
+  const [row] = await db.select().from(areas).where(and(eq(areas.id, id), eq(areas.aiExcluded, false)));
   return row ?? null;
 }
 
 async function validateOne(
   db: DbOrTx,
-  action: ProposedAction,
+  action: Exclude<ProposedAction, DocumentAction>,
 ): Promise<{ ok: true; baseUpdatedAt: string | null } | { ok: false; message: string }> {
   switch (action.type) {
     case 'create_note': {
@@ -108,7 +109,14 @@ export async function stampActions(db: DbOrTx, actions: ProposedAction[]): Promi
   const stored: StoredAction[] = [];
   const errors: StampError[] = [];
   for (let i = 0; i < actions.length; i += 1) {
-    const res = await validateOne(db, actions[i]);
+    const action = actions[i];
+    if (isDocumentAction(action)) {
+      const stamp = await stampDocumentAction(db, action);
+      if (!stamp) errors.push({ index: i, message: 'Tài liệu không thể sửa hoặc mục đích không khớp duy nhất.' });
+      else stored.push({ key: i, action, ...stamp });
+      continue;
+    }
+    const res = await validateOne(db, action);
     if (!res.ok) errors.push({ index: i, message: res.message });
     else stored.push({ key: i, action: actions[i], baseUpdatedAt: res.baseUpdatedAt });
   }

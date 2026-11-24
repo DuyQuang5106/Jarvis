@@ -3,6 +3,7 @@ import { notes } from '@/db/schema';
 import { APP_TZ, todayIn } from '@/lib/dates';
 import { eq } from 'drizzle-orm';
 import { buildContext } from '../ai/context-builder';
+import { hiddenMigratedNoteIds } from '../ai/document-visibility';
 import { buildSystemPrompt } from '../ai/prompt';
 import { collect, type AiProvider } from '../ai/provider';
 import { AiCapExceededError } from '../errors';
@@ -25,7 +26,7 @@ export async function extractNoteProposal(
   if (!note || note.inboxStatus !== 'inbox') {
     return { status: 'none', reason: 'Ghi chú không còn trong Inbox.' };
   }
-  if (note.aiExcluded) {
+  if (note.aiExcluded || (await hiddenMigratedNoteIds(db, [note.id])).size > 0) {
     return { status: 'none', reason: 'Ghi chú này đang tắt gửi cho AI.' };
   }
   if (deps.actionMode === 'off') {
@@ -96,6 +97,7 @@ export async function extractNoteProposal(
       source: 'capture',
       noteId: note.id,
       proposal: parsed.value,
+      requestText: note.text,
     });
   });
 

@@ -3,6 +3,7 @@ import type { MessageRow } from '@/db/schema';
 import { APP_TZ, todayIn } from '@/lib/dates';
 import { firstChars } from '@/lib/utils';
 import { buildContext, listAiExcludedAreas, type ContextRef, type ContextScope } from '../ai/context-builder';
+import { hiddenDocumentIds } from '../ai/document-visibility';
 import { matchAreas } from '../ai/match-areas';
 import { buildSystemPrompt } from '../ai/prompt';
 import type { AiProvider, ChatMessage } from '../ai/provider';
@@ -51,19 +52,23 @@ async function loadMessages(db: Db, conversationId: string): Promise<MessageRow[
   return (await getConversation(db, conversationId))?.messages ?? null;
 }
 
-const refAreaIds = (metadata: unknown): string[] => {
+const refIds = (metadata: unknown, key: 'areaId' | 'documentId'): string[] => {
   const refs = (metadata as { contextRefs?: unknown } | null)?.contextRefs;
-  return Array.isArray(refs) ? refs.map((r) => (r as { areaId?: unknown })?.areaId).filter((id): id is string => typeof id === 'string') : [];
+  return Array.isArray(refs) ? refs.map((r) => (r as Record<string, unknown>)?.[key]).filter((id): id is string => typeof id === 'string' && UUID.test(id)) : [];
 };
 
 /** History as sent to the model: a message tied to an area excluded since (by its refs or its text) is replaced. */
 async function historyForModel(db: Db, history: MessageRow[]): Promise<ChatMessage[]> {
-  const excluded = await listAiExcludedAreas(db);
+  const [excluded, hiddenDocuments] = await Promise.all([
+    listAiExcludedAreas(db),
+    hiddenDocumentIds(db, history.flatMap((message) => refIds(message.metadata, 'documentId'))),
+  ]);
   const excludedIds = new Set(excluded.map((a) => a.id));
   return history.map((m) => {
     const hidden =
-      excluded.length > 0 &&
-      (refAreaIds(m.metadata).some((id) => excludedIds.has(id)) || matchAreas([m.content], excluded).length > 0);
+      refIds(m.metadata, 'documentId').some((id) => hiddenDocuments.has(id)) ||
+      refIds(m.metadata, 'areaId').some((id) => excludedIds.has(id)) ||
+      matchAreas([m.content], excluded).length > 0;
     return { role: m.role, content: hidden ? HIDDEN_HISTORY : m.content };
   });
 }
@@ -132,9 +137,10 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
     }
 
     // 5. Context.
+    const history = await historyForModel(db, before.slice(-HISTORY));
     const ctx = await buildContext(db, {
       message: current.content,
-      recentUserMessages: before.filter((m) => m.role === 'user').map((m) => m.content),
+      recentUserMessages: history.filter((m) => m.role === 'user' && m.content !== HIDDEN_HISTORY).map((m) => m.content),
       scope: input.scope,
       now: deps.now,
     });
@@ -142,7 +148,7 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
     // 6. Stream.
     const messages: ChatMessage[] = [
       { role: 'system', content: buildSystemPrompt({ stateJson: ctx.json, actionMode: deps.actionMode }) },
-      ...(await historyForModel(db, before.slice(-HISTORY))),
+      ...history,
       { role: 'user', content: current.content },
     ];
     const tools = deps.actionMode === 'tools' ? [PROPOSE_CHANGES_TOOL] : undefined;
@@ -211,6 +217,7 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
             conversationId,
             messageId: saved.id,
             proposal: parsed.value,
+            requestText: current.content,
           })
         : null;
       if (pending) {

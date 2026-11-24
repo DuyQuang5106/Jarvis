@@ -4,6 +4,8 @@ import {
   areas,
   assessments,
   blockers,
+  documents,
+  folders,
   milestones,
   pendingActions,
   tasks,
@@ -12,6 +14,7 @@ import {
 import { NotFoundError, ValidationError } from '../errors';
 import { addProgressLog, updateArea } from '../services/areas';
 import type { WriteMeta } from '../services/activity';
+import { documentService } from '../services/documents';
 import {
   assessmentService,
   blockerService,
@@ -20,6 +23,8 @@ import {
   taskService,
   topicService,
 } from '../services/entities';
+import { editDocument, loadDocumentArea, loadEditableDocument, sectionHash, stampDocumentAction, isDocumentAction } from './document-actions';
+import { DEADLINE_ROUTE_ERROR, hasDeadlineRoute } from './routing';
 import { describeStored } from './describe';
 import {
   ProposedActionSchema,
@@ -43,6 +48,10 @@ class RollbackWithResult extends Error {
 
 function sameIdentity(orig: ProposedAction, edited: ProposedAction): boolean {
   if (orig.type !== edited.type) return false;
+  if ('documentId' in orig && (!('documentId' in edited) || orig.documentId !== edited.documentId)) return false;
+  if (('heading' in orig || 'heading' in edited) &&
+    ('heading' in orig ? orig.heading : undefined) !== ('heading' in edited ? edited.heading : undefined)) return false;
+  if ('itemText' in orig && (!('itemText' in edited) || orig.itemText !== edited.itemText)) return false;
   if ('id' in orig && orig.id !== undefined) {
     if (!('id' in edited) || edited.id !== orig.id) return false;
   } else if ('id' in edited && edited.id !== undefined) {
@@ -55,7 +64,25 @@ function sameIdentity(orig: ProposedAction, edited: ProposedAction): boolean {
 }
 
 async function lockTarget(tx: Tx, action: ProposedAction): Promise<void> {
+  if ('documentId' in action) {
+    const [target] = await tx.select({ areaId: documents.areaId, folderId: documents.folderId }).from(documents)
+      .where(eq(documents.id, action.documentId)).for('update');
+    if (!target) return;
+    await tx.select({ id: areas.id }).from(areas).where(eq(areas.id, target.areaId)).for('update');
+    const visited = new Set<string>();
+    let folderId = target.folderId;
+    while (folderId && !visited.has(folderId)) {
+      visited.add(folderId);
+      const [parent] = await tx.select({ parentId: folders.parentId }).from(folders)
+        .where(eq(folders.id, folderId)).for('share');
+      folderId = parent?.parentId ?? null;
+    }
+    return;
+  }
   switch (action.type) {
+    case 'create_document':
+      await tx.select({ id: areas.id }).from(areas).where(eq(areas.id, action.areaId)).for('update');
+      return;
     case 'update_task':
       await tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, action.id)).for('update');
       return;
@@ -101,6 +128,20 @@ async function lockTarget(tx: Tx, action: ProposedAction): Promise<void> {
 
 export async function applyAction(tx: DbOrTx, action: ProposedAction, meta: WriteMeta): Promise<void> {
   switch (action.type) {
+    case 'create_document':
+      if (!await loadDocumentArea(tx, action.areaId)) throw new ValidationError('Không thể truy cập workspace.');
+      await documentService.create(tx, { areaId: action.areaId, title: action.title, bodyMd: action.markdown }, meta);
+      return;
+    case 'append_to_document':
+    case 'replace_section':
+    case 'set_checklist_item':
+    case 'rename_document': {
+      const target = await loadEditableDocument(tx, action.documentId);
+      const edit = target && editDocument(target.doc, action);
+      if (!target || !edit) throw new ValidationError('Không thể sửa tài liệu đích.');
+      await documentService.applyRevision(tx, target.doc.id, target.doc.revision, { title: edit.title, bodyMd: edit.body }, meta);
+      return;
+    }
     case 'create_task': {
       const { type: _, ...input } = action;
       void _;
@@ -152,6 +193,27 @@ export async function applyAction(tx: DbOrTx, action: ProposedAction, meta: Writ
   }
 }
 
+function targetKey(action: ProposedAction): string {
+  if ('documentId' in action) return 'document:' + action.documentId;
+  return action.type + ':' + ('id' in action && action.id ? action.id : 'areaId' in action ? action.areaId : '');
+}
+
+async function applyDocumentGroup(tx: Tx, id: string, items: StoredAction[], meta: WriteMeta) {
+  const target = await loadEditableDocument(tx, id);
+  if (!target) throw new ValidationError('Không thể sửa tài liệu đích.');
+  let content = { title: target.doc.title, bodyMd: target.doc.bodyMd };
+  for (const item of items) {
+    const action = item.action;
+    if (!('documentId' in action) || action.documentId !== id) continue;
+    const edit = editDocument(content, action);
+    if (!edit || item.sectionHash !== sectionHash(edit.anchor)) {
+      throw new RollbackWithResult({ status: 'conflict', conflicts: [{ key: item.key, kind: 'changed' }] });
+    }
+    content = { title: edit.title, bodyMd: edit.body };
+  }
+  await documentService.applyRevision(tx, id, target.doc.revision, content, meta);
+}
+
 export async function approvePendingAction(
   db: Db,
   id: string,
@@ -169,7 +231,7 @@ export async function approvePendingAction(
 
       const stored = row.actionsJson as StoredProposal;
       const byKey = new Map(stored.actions.map((a) => [a.key, a]));
-      const uniqueKeys = [...new Set(input.selectedKeys)];
+      const uniqueKeys = [...new Set(input.selectedKeys)].sort((a, b) => a - b);
       if (uniqueKeys.length === 0 || uniqueKeys.some((k) => !byKey.has(k))) {
         throw new RollbackWithResult({
           status: 'invalid',
@@ -194,15 +256,18 @@ export async function approvePendingAction(
               errors: [{ key, message: 'Không thể thay đổi đích của hành động.' }],
             });
           }
-          selected.push({ key, action: parsed.data, baseUpdatedAt: orig.baseUpdatedAt });
+          selected.push({ ...orig, action: parsed.data });
         } else {
           selected.push(orig);
         }
       }
 
-      for (const item of selected) {
-        await lockTarget(tx, item.action);
+      if (stored.requiresDeadlineRoute && !hasDeadlineRoute(selected.map((item) => item.action))) {
+        throw new RollbackWithResult({ status: 'invalid', errors: [{ key: -1, message: DEADLINE_ROUTE_ERROR }] });
       }
+
+      const lockOrder = [...selected].sort((a, b) => targetKey(a.action).localeCompare(targetKey(b.action)));
+      for (const item of lockOrder) await lockTarget(tx, item.action);
 
       const previews = await describeStored(tx, selected);
       const conflicts = previews
@@ -214,9 +279,17 @@ export async function approvePendingAction(
 
       const batchId = crypto.randomUUID();
       const meta: WriteMeta = { origin: 'ai_approved', batchId };
+      const updatedDocuments = new Set<string>();
       for (const item of selected) {
         try {
-          await applyAction(tx, item.action, meta);
+          if ('documentId' in item.action) {
+            const id = item.action.documentId;
+            if (updatedDocuments.has(id)) continue;
+            await applyDocumentGroup(tx, id, selected, meta);
+            updatedDocuments.add(id);
+          } else {
+            await applyAction(tx, item.action, meta);
+          }
         } catch (err) {
           if (err instanceof ValidationError || err instanceof NotFoundError) {
             throw new RollbackWithResult({ status: 'invalid', errors: [{ key: item.key, message: err.message }] });
@@ -228,7 +301,7 @@ export async function approvePendingAction(
       const finalStatus = uniqueKeys.length < stored.actions.length ? 'partially_applied' : 'applied';
       const selectedMap = new Map(selected.map((s) => [s.key, s]));
       const updatedActions = stored.actions.map((item) => selectedMap.get(item.key) ?? item);
-      const updatedJson: StoredProposal = { ...stored, actions: updatedActions, appliedKeys: uniqueKeys };
+      const updatedJson: StoredProposal = { ...stored, actions: updatedActions, appliedKeys: uniqueKeys, batchId };
       await tx
         .update(pendingActions)
         .set({ status: finalStatus, actionsJson: updatedJson })
@@ -309,6 +382,10 @@ export async function rebasePendingAction(
   const stored = row.actionsJson as StoredProposal;
   const rebased: StoredAction[] = await Promise.all(
     stored.actions.map(async (item) => {
+      if (isDocumentAction(item.action)) {
+        const stamp = await stampDocumentAction(db, item.action);
+        return stamp ? { ...item, ...stamp } : item;
+      }
       const nextAt = await currentUpdatedAt(db, item.action);
       return nextAt ? { ...item, baseUpdatedAt: nextAt } : item;
     }),

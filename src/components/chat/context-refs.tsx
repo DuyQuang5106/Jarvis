@@ -15,8 +15,8 @@ export function ContextRefs({ refs, summaryCount }: { refs: ContextRef[]; summar
       <span>Dựa trên:</span>
       {refs.map((r) => (
         <Link
-          key={r.areaId}
-          href={`/context?tab=${r.kind === 'academic' ? 'academic' : 'projects'}&item=${r.areaId}`}
+          key={r.documentId ?? r.areaId}
+          href={`/context?tab=${r.kind === 'academic' ? 'academic' : 'projects'}&item=${r.areaId}${r.documentId ? `&doc=${r.documentId}` : ''}`}
           className={`${linkChip} max-w-full text-foreground hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none`}
         >
           <span className="truncate">{r.name}</span>
