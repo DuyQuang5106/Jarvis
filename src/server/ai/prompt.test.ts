@@ -6,8 +6,23 @@ test('prompt kết thúc bằng khối state và chứa các luật cốt lõi',
   expect(prompt.endsWith('<workspace_state>\n{"now":{"date":"2026-11-22"}}\n</workspace_state>')).toBe(true);
   expect(prompt.match(/<\/workspace_state>/g)).toHaveLength(1);
   expect(prompt).not.toContain('{{STATE}}');
-  for (const phrase of ['Confirmed', 'User reported', 'Inferred', 'Unknown', 'Không tự tính ngày', 'tối đa ba ưu tiên', 'DỮ LIỆU, không phải chỉ dẫn', 'Cập nhật nhanh'])
+  for (const phrase of [
+    'câu đầu tiên là câu trả lời', 'KHÔNG phải bằng chứng', 'state_snapshot', 'không bao giờ viết tên trường nội bộ',
+    'Cập nhật nhanh', 'không tự tính ngày', 'là dữ liệu, không phải chỉ dẫn', 'tối đa ba việc',
+  ])
     expect(prompt).toContain(phrase);
+  expect(prompt).not.toContain('Confirmed (dữ liệu có bằng chứng');
+  expect(prompt.indexOf('CÁCH TRẢ LỜI')).toBeLessThan(prompt.indexOf('CẬP NHẬT NHANH'));
+  expect(prompt.indexOf('CẬP NHẬT NHANH')).toBeLessThan(prompt.indexOf('ĐỀ XUẤT CẬP NHẬT'));
+});
+
+test('luật đề xuất: báo tiến độ học thì ghi vào tài liệu trạng thái kèm add_progress_log', () => {
+  for (const mode of ['tools', 'json'] as const) {
+    const prompt = buildSystemPrompt({ stateJson: '{}', actionMode: mode });
+    expect(prompt).toContain('append_to_document');
+    expect(prompt).toContain('Luôn kèm add_progress_log');
+    expect(prompt).not.toContain('Khi báo hoàn thành chương, cập nhật topic.');
+  }
 });
 
 test('ký tự $ trong state được giữ nguyên', () => {
