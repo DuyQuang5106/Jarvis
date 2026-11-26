@@ -7,7 +7,7 @@ test('có đúng 21 bảng', async () => {
   const db = await createTestDb();
   const rows = await db.execute(sql`select tablename from pg_tables where schemaname = 'public' and tablename not like '__drizzle%' order by tablename`);
   expect(rowsOf(rows).map((r) => r.tablename)).toEqual([...TABLE_NAMES].sort());
-  expect(TABLE_NAMES).toHaveLength(21);
+  expect(TABLE_NAMES).toHaveLength(22);
 });
 
 test('mọi bảng đều bật RLS (criterion 13)', async () => {

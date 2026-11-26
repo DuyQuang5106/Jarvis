@@ -204,6 +204,7 @@ export const UpdateSettingsInput = z.object({
   /** Kept in `preferences_json`, like `daySlots`. */
   checkinsEnabled: z.boolean({ error: 'Bật check-in phải là đúng/sai.' }).optional(),
   daySlots: DaySlotsSchema.optional(),
+  weeklyReviewsEnabled: z.boolean({ error: 'Bật tổng kết tuần phải là đúng/sai.' }).optional(),
 });
 
 // ---- conversations

@@ -34,4 +34,5 @@ test('updateSettings: check-in và giờ các buổi lưu trong preferences_json
   expect((await updateSettings(db, { checkinsEnabled: true })).preferencesJson).toEqual({ other: 1, checkinsEnabled: true, daySlots });
   await expect(updateSettings(db, { daySlots: { ...daySlots, noon: { start: '11:00', end: '13:00' } } })).rejects.toThrow('chồng lên buổi trước');
   expect((await getSettings(db)).preferencesJson).toEqual({ other: 1, checkinsEnabled: true, daySlots });
+  expect((await updateSettings(db, { weeklyReviewsEnabled: false })).preferencesJson).toEqual({ other: 1, checkinsEnabled: true, daySlots, weeklyReviewsEnabled: false });
 });

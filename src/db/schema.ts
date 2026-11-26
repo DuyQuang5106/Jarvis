@@ -326,6 +326,17 @@ export const checkins = pgTable(
   (t) => [primaryKey({ columns: [t.day, t.slot] })],
 ).enableRLS();
 
+/**
+ * One weekly review per week (Monday, local): the conversation that holds it and the proposal it made.
+ * Reviewing a week again on purpose replaces the row; the earlier conversation stays.
+ */
+export const weeklyReviews = pgTable('weekly_reviews', {
+  weekStart: date('week_start', { mode: 'string' }).primaryKey(),
+  conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+  pendingActionId: uuid('pending_action_id').references(() => pendingActions.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}).enableRLS();
+
 /** Every table by its SQL name: the single source for TABLE_NAMES, export and RLS checks. */
 export const TABLES = {
   areas,
@@ -349,6 +360,7 @@ export const TABLES = {
   ai_usage: aiUsage,
   daily_briefs: dailyBriefs,
   checkins,
+  weekly_reviews: weeklyReviews,
 } as const;
 
 export const TABLE_NAMES: readonly string[] = Object.keys(TABLES);
@@ -374,3 +386,4 @@ export type SettingsRow = typeof settings.$inferSelect;
 export type AiUsageRow = typeof aiUsage.$inferSelect;
 export type DailyBriefRow = typeof dailyBriefs.$inferSelect;
 export type CheckinRow = typeof checkins.$inferSelect;
+export type WeeklyReviewRow = typeof weeklyReviews.$inferSelect;
