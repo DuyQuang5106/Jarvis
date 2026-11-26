@@ -140,7 +140,13 @@ type Pending = { checkin: PendingCheckin; activity: ActivityItem[] };
 
 async function findPending(db: DbOrTx, now: Date, cfg: CheckinConfig): Promise<Pending | null> {
   if (!cfg.checkinsEnabled) return null;
-  const ended = endedSlots(now, cfg.tz, cfg.daySlots);
+  // Check-ins start on the day they were first used: before any row exists only today's slots count, so
+  // the first card after install is not "Trưa, chiều và tối qua và sáng nay". The earliest row keeps that
+  // floor afterwards (yesterday's slots of the first day are never asked about later).
+  const [{ first }] = await db.select({ first: sql<Date | string | null>`min(${checkins.createdAt})` }).from(checkins);
+  const firstAt = first ? new Date(first) : now;
+  const firstDay = todayIn(cfg.tz, firstAt < now ? firstAt : now);
+  const ended = endedSlots(now, cfg.tz, cfg.daySlots).filter((s) => s.day >= firstDay);
   if (ended.length === 0) return null;
   const days = [...new Set(ended.map((s) => s.day))];
   const rows = await db.select().from(checkins).where(inArray(checkins.day, days));

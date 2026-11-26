@@ -186,7 +186,20 @@ test('hai yêu cầu song song: chỉ một lần gọi AI', async () => {
   expect(await usage()).toBe(1);
 });
 
+test('lần dùng đầu tiên (chưa có dòng check-in nào): chỉ các buổi đã kết thúc hôm nay', async () => {
+  await userMessage('Tối qua ôn chương 4', at('2025-03-09T12:00:00Z')); // 19:00 on 09/03
+  expect(await getPendingCheckin(db, NOW, cfg)).toMatchObject({ label: 'Sáng nay', slots: [{ day: DAY, slot: 'morning' }], hasActivity: false });
+  // 06:30 on 10/03: nothing has ended today yet, so no card at all (not last evening).
+  expect(await getPendingCheckin(db, at('2025-03-09T23:30:00Z'), cfg)).toBeNull();
+  // Once a slot is handled, yesterday's slots of that first day are never asked about later either.
+  await resolveCheckin(db, NOW, cfg, 'skip', [{ day: DAY, slot: 'morning' }]);
+  expect(await getPendingCheckin(db, at('2025-03-10T06:05:00Z'), cfg)).toMatchObject({ label: 'Trưa nay' });
+  expect(await getPendingCheckin(db, at('2025-03-11T00:30:00Z'), cfg)).toMatchObject({ label: 'Trưa, chiều và tối qua' });
+});
+
 test('lỡ nhiều buổi: gộp thành một thẻ, tóm tắt một lần cho cả các buổi', async () => {
+  // Check-ins in use since 09/03.
+  await db.insert(checkins).values({ day: PREV, slot: 'morning', status: 'skipped', createdAt: at('2025-03-09T04:00:00Z') });
   await userMessage('Tối qua ôn chương 4', at('2025-03-09T12:00:00Z')); // 19:00 on 09/03
   await userMessage('Sáng nay ôn chương 5', IN_MORNING);
   const { provider, seen } = spyProvider();
@@ -198,7 +211,7 @@ test('lỡ nhiều buổi: gộp thành một thẻ, tóm tắt một lần cho 
   expect(seen).toHaveLength(1);
   expect(seen[0].messages[1].content).toContain('Tối qua ôn chương 4');
   expect(seen[0].messages[1].content).toContain('Sáng nay ôn chương 5');
-  expect(await db.select().from(checkins)).toHaveLength(4);
+  expect(await db.select().from(checkins)).toHaveLength(5);
 });
 
 test('mỗi buổi tối đa một thẻ: xử lý xong thì không hiện lại; buổi sau mới có thẻ mới', async () => {
@@ -212,7 +225,8 @@ test('mỗi buổi tối đa một thẻ: xử lý xong thì không hiện lại
   // 13:05: only the noon slot, which had no activity.
   expect(await getPendingCheckin(db, at('2025-03-10T06:05:00Z'), cfg)).toMatchObject({ label: 'Trưa nay', hasActivity: false });
   const statuses = (await db.select().from(checkins)).map((r) => `${r.day}:${r.slot}=${r.status}`).sort();
-  expect(statuses).toEqual([`${PREV}:afternoon=recorded`, `${PREV}:evening=recorded`, `${PREV}:noon=recorded`, `${DAY}:morning=recorded`]);
+  // First use: only today's morning was on the card.
+  expect(statuses).toEqual([`${DAY}:morning=recorded`]);
 });
 
 test('buổi mới kết thúc khi tóm tắt cũ còn chờ: sinh lại cho cả các buổi', async () => {

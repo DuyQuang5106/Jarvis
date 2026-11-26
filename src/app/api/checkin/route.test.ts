@@ -48,7 +48,7 @@ test('GET: buổi không hoạt động -> thẻ hỏi, không gọi AI', async 
   const res = await get();
   expect(res.status).toBe(200);
   const body = await res.json();
-  expect(body.checkin).toMatchObject({ day: '2025-03-10', hasActivity: false, label: 'Trưa, chiều và tối qua và sáng nay' });
+  expect(body.checkin).toMatchObject({ day: '2025-03-10', hasActivity: false, label: 'Sáng nay' }); // first use: today's slots only
   expect(calls).toHaveLength(0);
 });
 

@@ -2,11 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDb } from './helpers';
 
 // The server's clock for this page is set with the E2E-only `x-e2e-now` header (requestNow): 11:30 on
-// 10/03/2025 in Asia/Ho_Chi_Minh, so the morning has just ended and every slot since noon of 09/03 is due.
+// 10/03/2025 in Asia/Ho_Chi_Minh, so the morning has just ended. No check-in row exists yet (first use), so
+// only today's slots count: the card is for this morning alone.
 // Real activity written by the seed and by these tests happens at the real time, far outside those slots.
 const NOW = '2025-03-10T04:30:00.000Z';
-const LABEL = 'Trưa, chiều và tối qua và sáng nay';
-const PHRASE = 'trưa, chiều và tối 09/03 và sáng 10/03';
+const LABEL = 'Sáng nay';
+const PHRASE = 'sáng 10/03';
 
 const card = (page: Page) => page.getByTestId('checkin-card');
 
@@ -22,7 +23,7 @@ test('buổi không có hoạt động: câu hỏi → trả lời → tin nhắ
   let gets = 0;
   page.on('request', (r) => { if (r.url().endsWith('/api/checkin') && r.method() === 'GET') gets++; });
   await openChat(page);
-  // Missed slots are merged into one card; no activity means a question and no AI call at all.
+  // No activity means a question and no AI call at all.
   await expect(card(page)).toHaveCount(1);
   await expect(card(page)).toContainText(`Buổi ${LABEL.toLowerCase()} bạn đã làm gì?`);
   await expect(card(page)).toHaveAttribute('aria-busy', 'false');
