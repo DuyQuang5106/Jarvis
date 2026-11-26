@@ -52,6 +52,22 @@ Sửa thêm ngoài kế hoạch: đề xuất gồm nhiều thay đổi không c
 | M5 | **Tóm tắt định hướng hằng ngày**: lần mở app đầu tiên trong ngày sinh một thẻ ngắn ở đầu màn Chat gồm 3 việc nên làm hôm nay (kèm lý do), hạn sắp tới, mục lâu chưa cập nhật; có nút "Làm mới" và "Bắt đầu việc 1". Lưu theo ngày, không cần cron | M1, Đợt 1 | Thẻ xuất hiện đúng một lần mỗi ngày, đọc trong dưới 30 giây, mọi việc nêu ra đều truy được về dữ liệu; có e2e với AI giả lập và một case trong `ai:eval` | Done (26/11/2026: unit test và e2e `daily-brief.spec.ts` với AI giả lập đạt trên desktop và iPhone — thẻ có 3 việc, tải lại không sinh lại, "Bắt đầu việc 1" gửi tin nhắn; chưa thêm case vào `ai:eval` và chưa đo với model thật) |
 | M6 | **Tiến độ trực quan trong Context**: mỗi môn/dự án có thanh tiến độ (số topic đã vững trên tổng, luôn kèm mẫu số), đếm ngược tới mốc đánh giá gần nhất, ngày cập nhật cuối; trang tổng quan xếp các môn theo mức cần chú ý | M1 | Nhìn danh sách là biết môn nào chậm; không hiển thị phần trăm khi chưa có topic (hiện lời mời chạy M1) | Done (26/11/2026: thanh tiến độ kèm "x/y topic vững", đếm ngược mốc gần nhất, "Cập nhật n ngày trước" và sắp xếp "Cần chú ý" ở danh sách và trong màn của từng môn; unit test hàm sắp xếp/đếm ngày và e2e đạt trên desktop và iPhone, không có phần trăm hay thanh khi chưa có topic; chưa kiểm tra với dữ liệu thật sau khi chạy M1 bằng model thật) |
 
+### Đợt 2b — Nhịp ngày và tuần (P1, ý tưởng 26/11/2026, chưa làm)
+
+Mục tiêu: Jarvis tự hỏi và tự tổng kết theo nhịp sống, để dữ liệu được cập nhật kể cả khi bạn quên báo. Mọi thay đổi vẫn đi qua thẻ duyệt như hiện nay.
+
+**Ràng buộc kỹ thuật cần biết trước:** một web app không tự bật lên đúng giờ. Muốn Jarvis "gõ cửa" lúc 11h hay 18h phải có Web Push (iOS 16.4+, app đã thêm vào màn hình chính) và một job chạy định kỳ trên server (Vercel Cron), tức là phải deploy trước. Vì vậy chia hai bước: bước 1 hỏi khi bạn mở app (làm được ngay trên localhost), bước 2 mới thêm thông báo đúng giờ.
+
+| Mục | Nội dung | Phụ thuộc | Tiêu chí chấp nhận | Trạng thái |
+|---|---|---|---|---|
+| N1 | **Check-in theo buổi (khi mở app)**: ngày chia 4 buổi theo giờ Việt Nam: sáng 06–11, trưa 11–13, chiều 13–18, tối 18–23 (chỉnh được trong Settings). Lần mở app đầu tiên sau khi một buổi kết thúc, đầu màn Chat hiện thẻ cho buổi vừa qua. **Nếu trong buổi đó bạn đã tương tác** (tin nhắn, log tiến độ, sửa tài liệu, duyệt đề xuất): thẻ tóm tắt việc đã làm và hỏi "Ghi lại như vậy nhé?", bấm là ra đề xuất cập nhật (log + tài liệu trạng thái, đường M3). **Nếu chưa tương tác**: thẻ hỏi ngắn "Buổi sáng bạn đã làm gì?" kèm vài gợi ý từ thẻ định hướng hôm đó; trả lời đi qua Chat như báo tiến độ. Bỏ qua được, không hỏi lại buổi đã bỏ. Nhiều buổi bị lỡ thì gộp thành một thẻ | M3, M5 | Mỗi buổi tối đa một thẻ; buổi có tương tác thì tóm tắt chỉ nêu việc truy được về dữ liệu của buổi đó; buổi không tương tác thì không gọi AI (chỉ hiện câu hỏi); unit test chia buổi theo múi giờ; e2e với AI giả lập | Not Started |
+| N2 | **Tổng kết tuần và nén context dài hạn**: lần mở app đầu tiên từ tối Chủ nhật (hoặc bấm tay), AI đọc log, check-in, tin nhắn và thay đổi tài liệu trong tuần rồi sinh: (1) bản tổng kết tuần (đã xong gì từng môn/dự án, so với kế hoạch, việc trôi, đề xuất trọng tâm tuần sau), lưu thành tài liệu `Tuần <số>` trong một thư mục tổng kết; (2) đề xuất cập nhật tài liệu trạng thái của từng môn bằng `replace_section` (nén các dòng tiến độ lẻ trong tuần thành một đoạn cô đọng), có diff để duyệt từng mục. Bản cũ vẫn khôi phục được qua lịch sử phiên bản | M4, N1 | Duyệt xong, tài liệu trạng thái ngắn lại mà không mất thông tin (case `ai:eval`: hỏi lại tiến độ sau khi nén vẫn đúng); không ghi gì khi chưa duyệt; mỗi tuần một bản tổng kết | Not Started |
+| N3 | **Thông báo đúng giờ trên iPhone (Web Push)**: cuối mỗi buổi và tối Chủ nhật gửi thông báo mở thẳng thẻ N1/N2; tắt được từng loại, có giờ yên lặng | N1, N2, R4 (deploy) | Thông báo tới đúng giờ trên iPhone đã cài PWA; bấm vào mở đúng thẻ; tắt là hết | Not Started |
+
+**Độ khó ước lượng:** N1 trung bình (tái dùng khung thẻ định hướng M5: bảng lưu theo ngày, sinh khi mở app). N2 trung bình–cao (đọc khối lượng lớn, rủi ro nén làm mất ý, cần eval). N3 cao (service worker, khóa VAPID, bảng subscription, cron; xem phân tích ở mục cũ số 2).
+
+**Thứ tự khuyến nghị:** M4 → N1 → N2, rồi deploy (R4) → N3. M2 làm xen kẽ bất kỳ lúc nào.
+
 ### Đợt 3 — Trợ lý tự đào sâu và có kỹ năng (P1)
 
 | Mục | Nội dung | Phụ thuộc | Trạng thái |
