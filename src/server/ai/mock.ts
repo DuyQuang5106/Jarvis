@@ -2,7 +2,7 @@ import { isFromDocumentsRequest } from '@/lib/from-documents';
 import { AiProviderError } from '../errors';
 import { normalizeVi } from './match-areas';
 import { CHECKIN_MESSAGE } from '@/lib/checkin-message';
-import { BRIEF_PROMPT_MARKER, CHECKIN_PROMPT_MARKER } from './prompt';
+import { BRIEF_PROMPT_MARKER, CHECKIN_PROMPT_MARKER, WEEKLY_REVIEW_MARKER } from './prompt';
 import type { AiProvider, ProviderEvent, StreamRequest } from './provider';
 
 type MockState = {
@@ -148,6 +148,41 @@ async function* checkinSummary(system: string, activity: string): AsyncGenerator
   yield { type: 'text', delta: `${JSON.stringify(reply)}\n\`\`\`` };
 }
 
+export const MOCK_WEEKLY_REVIEW = 'MOCK_WEEKLY: tuần có hoạt động.';
+
+/**
+ * Weekly review: a fixed review, plus one `replace_section` on the first section listed under "Mục nên nén"
+ * in `<week_activity>` when the state holds that document.
+ */
+function weeklyReview(state: MockState | null, system: string): { text: string; proposal: unknown | null } {
+  const block = /<week_activity>\n([\s\S]*?)\n<\/week_activity>/.exec(system)?.[1] ?? '';
+  const list = block.slice(block.indexOf('## Mục nên nén'));
+  const m = /^- (.+?) · (.+?) › (.+?) \((\d+) dòng/m.exec(list);
+  const area = m && state?.areas.find((a) => a.name === m[1]);
+  const doc = area && state?.documents?.find((d) => d.areaId === area.id && d.title === m![2]);
+  const text = [
+    '## Ý chính',
+    `- ${MOCK_WEEKLY_REVIEW}`,
+    `- MOCK_WEEKLY: ${m ? `ghi gọn ${m[2]} › ${m[3]}` : 'không có mục nào cần ghi gọn'}.`,
+    '## Đã làm theo từng môn/dự án',
+    `- ${m?.[1] ?? 'Không có hoạt động'}`,
+    '## So với kế hoạch',
+    '- Đúng kế hoạch.',
+    '## Việc bị trôi',
+    '- Không có.',
+    '## Trọng tâm tuần sau',
+    '1. Ôn tiếp.',
+  ].join('\n');
+  if (!m || !doc || !state) return { text, proposal: null };
+  return {
+    text,
+    proposal: {
+      summary: `Ghi gọn ${doc.title}`,
+      actions: [{ type: 'replace_section', documentId: doc.documentId, heading: m[3], markdown: `- ${state.now.date}: MOCK_WEEKLY: gộp ${m[4]} dòng tiến độ của tuần.` }],
+    },
+  };
+}
+
 export function createMockProvider(): AiProvider {
   return {
     async *stream(req: StreamRequest): AsyncGenerator<ProviderEvent> {
@@ -200,6 +235,13 @@ export function createMockProvider(): AiProvider {
         };
         yield { type: 'text', delta: '```json\n' };
         yield { type: 'text', delta: `${JSON.stringify(brief)}\n\`\`\`` };
+        return;
+      }
+
+      if (system.includes(WEEKLY_REVIEW_MARKER) && offersProposal(req, system)) {
+        const review = weeklyReview(state, system);
+        if (review.proposal) yield* emitWithProposal(req, system, review.text, review.proposal);
+        else yield { type: 'text', delta: review.text };
         return;
       }
 

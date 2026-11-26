@@ -188,6 +188,16 @@ export const documentService = {
       if (current.revision !== expectedRevision) throw new ConflictError('Tài liệu đã thay đổi ở nơi khác.');
       if (current.title === title && current.bodyMd === bodyMd) return current;
       const now = new Date();
+      // The text being replaced must stay restorable: a document whose current revision has no version row
+      // (written outside this service) gets one first.
+      const [kept] = await tx.select({ id: documentVersions.id }).from(documentVersions)
+        .where(and(eq(documentVersions.documentId, id), eq(documentVersions.revision, current.revision))).limit(1);
+      if (!kept) {
+        await tx.insert(documentVersions).values({
+          documentId: id, revision: current.revision, title: current.title, bodyMd: current.bodyMd,
+          origin: 'manual', batchId: null, createdAt: current.updatedAt,
+        });
+      }
       const [updated] = await tx.update(documents).set({
         title, bodyMd, revision: current.revision + 1, updatedAt: now,
         searchText: computeSearchText(title, bodyMd, current.extractedText),

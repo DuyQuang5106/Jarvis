@@ -1,11 +1,14 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '@/db/client';
 import { messages, pendingActions } from '@/db/schema';
-import { runChatTurn, type TurnDeps, type TurnTimingReport } from '../chat/run-turn';
+import { runChatTurn, type TurnDeps, type TurnEvent, type TurnTimingReport } from '../chat/run-turn';
 import type { ContextRef, ContextScope } from './context-builder';
 import type { AiProvider } from './provider';
 import { approvePendingAction } from '../proposals/resolve';
+import { generateWeeklyReview } from '../review/weekly-review';
+import { APP_TZ } from '@/lib/dates';
+import { currentWeekStart } from '@/lib/weeks';
 import type { StoredProposal } from '../proposals/schema';
 
 /** A golden question. `*Match` strings are case-insensitive regexes; `context*` match referenced document names. */
@@ -22,6 +25,8 @@ export type EvalCase = {
   proposalMustInclude?: string[];
   /** Approve every action of the stored proposal, so a later case can check that the workspace remembers it. */
   approveProposal?: boolean;
+  /** Run the weekly review of the current week (`generateWeeklyReview`) instead of a chat turn; `question` is a label. */
+  weeklyReview?: boolean;
   maxFirstTokenMs?: number;
 };
 
@@ -61,6 +66,7 @@ const EvalCaseSchema = z
     expectProposal: z.boolean().optional(),
     proposalMustInclude: strings,
     approveProposal: z.boolean().optional(),
+    weeklyReview: z.boolean().optional(),
     maxFirstTokenMs: z.number().positive().optional(),
   })
   .strict();
@@ -92,7 +98,28 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
   let assistantMessageId: string | null = null;
   let firstTokenMs: number | null = null;
   const started = performance.now();
-  const turn = runChatTurn(
+  if (c.weeklyReview) {
+    const r = await generateWeeklyReview(
+      {
+        db: deps.db, provider: deps.provider, actionMode: deps.actionMode, dailyCap: 2_000_000_000, now: deps.now, tz: APP_TZ, model: deps.model,
+        onTiming: (t) => {
+          timing = t;
+        },
+      },
+      // Each run reviews again: the case checks this run's proposal.
+      { weekStart: currentWeekStart(deps.now, APP_TZ), regenerate: true },
+    );
+    if (!r.ok) failures.push(`lỗi: ${r.error}`);
+    else {
+      pendingActionId = r.review.pendingActionId;
+      proposed = pendingActionId !== null;
+      const [reply] = await deps.db.select({ id: messages.id }).from(messages)
+        .where(and(eq(messages.conversationId, r.review.conversationId), eq(messages.role, 'assistant')));
+      assistantMessageId = reply?.id ?? null;
+    }
+    firstTokenMs = (timing as TurnTimingReport | null)?.firstTokenMs ?? null;
+  }
+  const turn = c.weeklyReview ? (async function* (): AsyncGenerator<TurnEvent> {})() : runChatTurn(
     {
       db: deps.db,
       provider: deps.provider,

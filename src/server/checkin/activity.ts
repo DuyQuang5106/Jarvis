@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull, lt, notInArray, or } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { CHECKIN_MESSAGE } from '@/lib/checkin-message';
+import { WEEKLY_REVIEW_MESSAGE } from '@/lib/weekly-review-message';
 import { activityLogs, areas, documents, messages, pendingActions } from '@/db/schema';
 import { clip } from '../ai/clip';
 import { listAiExcludedAreas } from '../ai/context-builder';
@@ -20,6 +21,13 @@ export type ActivityItem = {
 export const ACTIVITY_LIMIT = 30;
 export const ACTIVITY_TEXT_MAX = 200;
 
+/** Limits of one read: per kind of item and in all (the latest are kept). Defaults: the check-in's. */
+export type ActivityOptions = {
+  limits?: Partial<Record<ActivityItem['kind'], number>>;
+  total?: number;
+  /** Keep the messages the check-in card sent (the weekly review reads them as check-in answers). */
+  keepCheckinMessages?: boolean;
+};
 
 const one = (s: string) => clip(s.replace(/\s+/g, ' ').trim(), ACTIVITY_TEXT_MAX);
 
@@ -47,10 +55,17 @@ function logText(log: typeof activityLogs.$inferSelect): string {
 /**
  * What the user did in `[start, end)`: their chat messages, record changes (not migration or seed), documents
  * edited and proposals approved. Anything tied to an area or document hidden from the AI is left out, since
- * the only reader is the AI summary. At most {@link ACTIVITY_LIMIT} items (the latest), oldest first, each cut
+ * the only reader is the AI. By default at most {@link ACTIVITY_LIMIT} items (the latest; see {@link ActivityOptions}), oldest first, each cut
  * to {@link ACTIVITY_TEXT_MAX} characters. A fixed number of queries, whatever the amount of activity.
  */
-export async function slotActivity(db: DbOrTx, start: Date, end: Date): Promise<{ items: ActivityItem[]; hasActivity: boolean }> {
+export async function slotActivity(
+  db: DbOrTx,
+  start: Date,
+  end: Date,
+  opts: ActivityOptions = {},
+): Promise<{ items: ActivityItem[]; hasActivity: boolean }> {
+  const limit = (kind: ActivityItem['kind']) => opts.limits?.[kind] ?? ACTIVITY_LIMIT;
+  const total = opts.total ?? ACTIVITY_LIMIT;
   const [excluded, docConditions] = await Promise.all([listAiExcludedAreas(db), visibleDocumentConditions(db)]);
   const excludedIds = excluded.map((a) => a.id);
   const [msgRows, logRows, docRows, proposalRows] = await Promise.all([
@@ -59,7 +74,7 @@ export async function slotActivity(db: DbOrTx, start: Date, end: Date): Promise<
       .from(messages)
       .where(and(eq(messages.role, 'user'), gte(messages.createdAt, start), lt(messages.createdAt, end)))
       .orderBy(desc(messages.createdAt))
-      .limit(ACTIVITY_LIMIT),
+      .limit(limit('message')),
     db
       .select({ log: activityLogs, area: areas.name })
       .from(activityLogs)
@@ -75,14 +90,14 @@ export async function slotActivity(db: DbOrTx, start: Date, end: Date): Promise<
         ),
       )
       .orderBy(desc(activityLogs.createdAt))
-      .limit(ACTIVITY_LIMIT),
+      .limit(limit('log')),
     db
       .select({ at: documents.updatedAt, title: documents.title, area: areas.name })
       .from(documents)
       .innerJoin(areas, eq(areas.id, documents.areaId))
       .where(and(gte(documents.updatedAt, start), lt(documents.updatedAt, end), ...docConditions))
       .orderBy(desc(documents.updatedAt))
-      .limit(ACTIVITY_LIMIT),
+      .limit(limit('document')),
     db
       .select({ at: pendingActions.resolvedAt, payload: pendingActions.actionsJson })
       .from(pendingActions)
@@ -94,12 +109,13 @@ export async function slotActivity(db: DbOrTx, start: Date, end: Date): Promise<
         ),
       )
       .orderBy(desc(pendingActions.resolvedAt))
-      .limit(ACTIVITY_LIMIT),
+      .limit(limit('proposal')),
   ]);
 
   const items: ActivityItem[] = [];
   for (const m of msgRows) {
-    if (CHECKIN_MESSAGE.test(m.content)) continue;
+    // The weekly review's own command is no work; the check-in card's messages report an earlier slot.
+    if (WEEKLY_REVIEW_MESSAGE.test(m.content) || (!opts.keepCheckinMessages && CHECKIN_MESSAGE.test(m.content))) continue;
     if (refAreaIds(m.metadata).some((id) => excludedIds.includes(id)) || matchAreas([m.content], excluded).length > 0) continue;
     items.push({ at: m.at, kind: 'message', area: null, text: one(m.content) });
   }
@@ -114,6 +130,6 @@ export async function slotActivity(db: DbOrTx, start: Date, end: Date): Promise<
     items.push({ at: p.at!, kind: 'proposal', area: null, text: one(`Duyệt đề xuất: ${typeof summary === 'string' ? summary : ''}`) });
   }
 
-  const latest = items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, ACTIVITY_LIMIT).reverse();
+  const latest = items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, total).reverse();
   return { items: latest, hasActivity: latest.length > 0 };
 }

@@ -7,10 +7,10 @@ import { buildContext, listAiExcludedAreas, type ContextRef, type ContextScope }
 import { hiddenDocumentIds } from '../ai/document-visibility';
 import { aliasWorkspaceState, resolveProposalAliases } from '../ai/id-aliases';
 import { matchAreas } from '../ai/match-areas';
-import { buildSystemPrompt } from '../ai/prompt';
+import { WEEKLY_REVIEW_MAX_ACTIONS, buildSystemPrompt } from '../ai/prompt';
 import type { AiProvider, ChatMessage } from '../ai/provider';
 import { AiCapExceededError } from '../errors';
-import { ProposalBlockFilter, parseProposal } from '../proposals/extract';
+import { ProposalBlockFilter, parseProposal, type ParseProposalResult } from '../proposals/extract';
 import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
 import { createPendingAction, ignoredProposalNotice, skippedActionsNotice, supersedeForMessage, type DroppedProposalReason } from '../proposals/store';
 import { countAiRequest } from '../services/ai-usage';
@@ -46,7 +46,22 @@ export type TurnDeps = {
   /** Receives the timing line once the turn ends (the evaluation harness reads it). */
   onTiming?: (report: TurnTimingReport) => void;
 };
-export type TurnInput = { conversationId?: string; message?: string; scope: ContextScope; regenerate?: boolean };
+export type TurnInput = {
+  conversationId?: string;
+  message?: string;
+  scope: ContextScope;
+  regenerate?: boolean;
+  /**
+   * The weekly review turn (`generateWeeklyReview`), never sent by the chat route: a new conversation named
+   * `title`, the whole workspace (scope `all`), `weekActivity` after `<workspace_state>` with the review
+   * rules, {@link WEEKLY_REVIEW_MAX_OUTPUT_TOKENS} output tokens, and only `replace_section` actions kept.
+   * Everything else (aliases, proposal parsing and storing, notices, saving, timing) is the normal turn.
+   */
+  weeklyReview?: { title: string; weekActivity: string };
+};
+
+/** `maxOutputTokens` of the weekly review turn: the review plus up to 8 rewritten sections. */
+export const WEEKLY_REVIEW_MAX_OUTPUT_TOKENS = 6000;
 
 const MAX_MESSAGE = 8000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 4000;
@@ -108,6 +123,17 @@ async function historyForModel(db: Db, history: MessageRow[]): Promise<ChatMessa
   });
 }
 
+/**
+ * The weekly review proposes only `replace_section` (at most {@link WEEKLY_REVIEW_MAX_ACTIONS}); any other
+ * action counts as skipped. Nothing left: dropped like a malformed proposal. Other turns: unchanged.
+ */
+function keepWeeklyActions(parsed: ParseProposalResult, weekly: boolean): ParseProposalResult {
+  if (!weekly || !parsed.ok) return parsed;
+  const kept = parsed.value.actions.filter((a) => a.type === 'replace_section').slice(0, WEEKLY_REVIEW_MAX_ACTIONS);
+  if (kept.length === 0) return { ok: false, reason: 'schema', issues: ['actions'] };
+  return { ...parsed, value: { ...parsed.value, actions: kept }, skipped: parsed.skipped + parsed.value.actions.length - kept.length };
+}
+
 /** One chat turn; whatever happens (reply, error, `Dừng`), exactly one `chat turn` timing line is logged. */
 export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGenerator<TurnEvent> {
   const started = performance.now();
@@ -132,6 +158,8 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
   // 1. Check the input and find the conversation. No awaits between the busy check and taking the lock.
   let existing: MessageRow[] | null = null;
   let text = '';
+  const weekly = input.weeklyReview ?? null;
+  if (weekly && (input.regenerate || input.conversationId)) return yield err(NOT_FOUND);
   if (input.regenerate) {
     if (!input.conversationId) return yield err(NOTHING_TO_RETRY);
     existing = await loadMessages(db, input.conversationId);
@@ -171,7 +199,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
         conversationId = input.conversationId;
         lock(conversationId);
       } else {
-        conversationId = (await createConversation(db, firstChars(text, TITLE_LEN))).id;
+        conversationId = (await createConversation(db, weekly ? weekly.title : firstChars(text, TITLE_LEN))).id;
         lock(conversationId);
       }
       current = await appendMessage(db, conversationId, 'user', text);
@@ -195,7 +223,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
     const ctx = await buildContext(db, {
       message: current.content,
       recentUserMessages: history.filter((m) => m.role === 'user' && m.content !== HIDDEN_HISTORY).map((m) => m.content),
-      scope: input.scope,
+      scope: weekly ? { mode: 'all' } : input.scope,
       now: deps.now,
     });
     timing.contextMs = Math.round(performance.now() - contextStarted);
@@ -204,10 +232,21 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
 
     // 6. Stream. Alias entity UUIDs so external AI proxies that scrub UUIDs cannot corrupt IDs.
     // A pure question gets no proposal machinery: no tool, no `<proposed_actions>` instructions.
-    const actionMode = allowsProposal(current.content) ? deps.actionMode : 'off';
+    // The weekly review is a long text that must come before its proposal: with a tool, models tend to answer
+    // with the tool call alone (seen with claude-sonnet-5), so it uses the `<proposed_actions>` block instead.
+    const allowed = allowsProposal(current.content) ? deps.actionMode : 'off';
+    const actionMode = weekly && allowed === 'tools' ? 'json' : allowed;
     const aliased = aliasWorkspaceState(ctx.state);
     const messages: ChatMessage[] = [
-      { role: 'system', content: buildSystemPrompt({ stateJson: aliased.json, actionMode, fromDocuments: isFromDocumentsRequest(current.content) }) },
+      {
+        role: 'system',
+        content: buildSystemPrompt({
+          stateJson: aliased.json,
+          actionMode,
+          fromDocuments: isFromDocumentsRequest(current.content),
+          ...(weekly ? { weeklyReview: { weekActivity: weekly.weekActivity } } : {}),
+        }),
+      },
       ...history,
       { role: 'user', content: current.content },
     ];
@@ -220,7 +259,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
       const events = deps.provider.stream({
         messages,
         tools,
-        maxOutputTokens: deps.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        maxOutputTokens: weekly ? WEEKLY_REVIEW_MAX_OUTPUT_TOKENS : (deps.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
         signal: deps.signal,
         onFinishReason: (reason) => {
           timing.finishReason = reason;
@@ -262,7 +301,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
     if (deps.signal?.aborted) return; // stopped: nothing of this reply is saved
 
     const resolvedProposal = rawProposal !== null ? resolveProposalAliases(rawProposal, aliased.aliasToReal) : null;
-    const parsed = resolvedProposal !== null ? parseProposal(resolvedProposal) : null;
+    const parsed = resolvedProposal !== null ? keepWeeklyActions(parseProposal(resolvedProposal), !!weekly) : null;
     if (reply.trim() === '') {
       if (parsed?.ok) {
         reply = parsed.value.summary;

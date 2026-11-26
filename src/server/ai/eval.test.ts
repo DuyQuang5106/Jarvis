@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { Db } from '@/db/client';
-import { conversations } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { conversations, documents } from '@/db/schema';
 import { createTestDb } from '@/db/testing';
 import { createArea } from '../services/areas';
 import { documentService } from '../services/documents';
@@ -34,6 +35,19 @@ test('một case đạt, một trượt vì câu trả lời, một trượt vì
   expect(results[0]).toMatchObject({ documents: 1, promptChars: expect.any(Number), firstTokenMs: expect.any(Number), totalMs: expect.any(Number) });
   expect(results[0].promptChars).toBeGreaterThan(0);
   expect(await db.select().from(conversations)).toHaveLength(3);
+});
+
+test('weeklyReview: chạy tổng kết tuần hiện tại, kiểm đề xuất và duyệt nó', async () => {
+  const area = await createArea(db, { kind: 'academic', name: 'Calculus', status: 'active' }, manual);
+  // 22/11/2026 is in the week of 16/11: two dated lines in its progress section.
+  const doc = await documentService.create(db, { areaId: area.id, title: 'STATE.md', bodyMd: '## Tiến độ\n\n- 2026-11-17: chương 1\n- 2026-11-19: chương 2\n' }, manual);
+  const [r] = await run([
+    { id: 'weekly', question: 'Tổng kết tuần', weeklyReview: true, expectProposal: true, proposalMustInclude: ['replace_section'], approveProposal: true },
+  ]);
+  expect(r.failures).toEqual([]);
+  expect(r.reply).toContain('## Ý chính');
+  const [after] = await db.select().from(documents).where(eq(documents.id, doc.id));
+  expect(after.bodyMd).toContain('MOCK_WEEKLY: gộp 2 dòng');
 });
 
 test('đề xuất, ngữ cảnh cấm, câu trả lời cấm và lỗi provider đều thành lý do trượt', async () => {

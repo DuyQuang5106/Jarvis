@@ -9,5 +9,7 @@
   { "id": "from-documents", "question": "Đọc tài liệu của Algebra và tạo đề xuất: các topic kèm trạng thái, mốc đánh giá, và việc tiếp theo.", "expectProposal": true, "proposalMustInclude": ["upsert_topic", "upsert_assessment"] },
   { "id": "project-decision", "question": "Dự án Question House: quyết định dùng Supabase thay vì Firebase vì cần truy vấn SQL", "expectProposal": true, "proposalMustInclude": ["create_document"] },
   { "id": "course-announcement", "question": "Algebra có thông báo: thi cuối kỳ dạng tự luận 90 phút, được mang 1 tờ A4 ghi chú", "expectProposal": true, "proposalMustInclude": ["append_to_document"] },
-  { "id": "project-question", "question": "Question House nên dùng Supabase hay Firebase?", "expectProposal": false }
+  { "id": "project-question", "question": "Question House nên dùng Supabase hay Firebase?", "expectProposal": false },
+  { "id": "weekly-review", "question": "Tổng kết tuần này (generateWeeklyReview)", "weeklyReview": true, "answerMustMatch": ["Ý chính", "Trọng tâm tuần sau"], "expectProposal": true, "proposalMustInclude": ["replace_section"], "approveProposal": true },
+  { "id": "recall-after-weekly", "question": "algebra đang học đến đâu rồi", "contextMustInclude": ["04_STATE"], "answerMustMatch": ["chương\\s*6|chapter\\s*6"], "expectProposal": false }
 ]
