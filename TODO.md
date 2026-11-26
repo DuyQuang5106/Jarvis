@@ -1,14 +1,62 @@
 # TODO — để phát triển sau
 
-**Trạng thái dự án lúc cập nhật (23/11/2026):** Phase 0–2 đã merge vào `main` (nền tảng, màn Context, Chat dựa trên dữ liệu). Phase 3 — AI đề xuất cập nhật có duyệt — đã có kế hoạch chi tiết ở `docs/superpowers/plans/2026-11-22-phase-3-ai-updates.md` nhưng **chưa bắt đầu**. Không mục nào dưới đây đã được làm.
+**Trạng thái dự án lúc cập nhật (26/11/2026):** Phase 0–3, Phase A, Phase B và Phase C0–C3 đã merge vào `main` (391 unit test xanh). Dùng thử với dữ liệu 9 môn HUST cho thấy Chat **chưa đạt**: trả lời "chưa xác định", chậm và bị cắt. Nguyên nhân đã đo được và lộ trình sửa nằm ở mục **"Điểm nghẽn và lộ trình"** ngay dưới đây; đó là ưu tiên số 1, trước mọi mục khác trong file.
 
-**Quy ước:** Ưu tiên `P0` = bắt buộc để workstream dùng được; `P1` = nên có trong cùng đợt; `P2` = làm sau được. Mọi mục mới đều ở trạng thái **Not Started**.
+**Quy ước:** Ưu tiên `P0` = bắt buộc để workstream dùng được; `P1` = nên có trong cùng đợt; `P2` = làm sau được.
+
+---
+
+## Điểm nghẽn và lộ trình (26/11/2026)
+
+### Điểm nghẽn, xếp theo mức ảnh hưởng (đo trên bản sao dữ liệu thật)
+
+1. **AI không được đưa đúng nội dung.** Hỏi "algebra đang học đến đâu rồi" thì context có 9 tài liệu nhưng không có `04_STATE.md`; 6 tài liệu lõi mỗi cái chỉ đóng góp ~170 ký tự là khối YAML đầu file. Hỏi "Hôm nay nên làm gì?" thì context kéo đoạn quiz PDF ngẫu nhiên. Một phần ba ngân sách (11 trên 31 nghìn ký tự) là log của lượt import.
+2. **Model và cấu hình làm chậm và cắt câu trả lời.** `gpt-6.2-sol` mất 44 giây mới ra chữ đầu tiên; `claude-sonnet-5` mất 5 giây. Giới hạn đầu ra 1.500 token, không báo khi bị cắt, không có trạng thái chờ.
+3. **Dữ liệu có cấu trúc trống hoàn toàn** (0 topic, 0 assessment, 0 task) trong khi mọi hiểu biết nằm trong 70 tài liệu (442 nghìn ký tự). Prompt cũ lại dạy AI coi bảng trống là "Confirmed: 0 topic". Không có cầu nối tài liệu → bản ghi, nên chưa thể vẽ tiến độ hay tóm tắt hằng ngày.
+4. **Vòng "học từ người dùng" yếu.** Báo tiến độ chỉ sinh một dòng log; tài liệu trạng thái không được cập nhật, nên lần hỏi sau AI vẫn không biết. (Lỗi "đề xuất không hợp lệ" đã hết sau commit alias ID ngày 24/11: tái hiện lại với cả hai model đều hợp lệ.)
+5. **AI chỉ có một lượt, không tự đọc thêm được** khi context ban đầu thiếu (B3/D2).
+6. **Không có bộ đánh giá bằng câu hỏi thật.** 391 test xanh chỉ kiểm cơ chế với AI giả lập, nên chất lượng câu trả lời tụt mà không test nào báo.
+7. **Chưa có lớp chủ động:** không tóm tắt hằng ngày, không hiển thị tiến độ.
+
+### Đợt 1 — Chat đúng, nhanh, không cụt (P0, đang làm)
+
+Kế hoạch chi tiết: `docs/superpowers/plans/2026-11-26-dot-1-chat-quality.md`. Gộp và thay các mục **D0, D5, D6** bên dưới.
+
+| Mục | Nội dung | Tiêu chí chấp nhận | Trạng thái |
+|---|---|---|---|
+| Q1 | Bỏ YAML frontmatter, đọc loại tài liệu | Không đoạn nào gửi cho AI chứa `document_type:` | In Progress |
+| Q2 | Context v2: nạp trọn tài liệu lõi theo ưu tiên, ngân sách 120 nghìn ký tự, bỏ log import | Hỏi về Algebra thì `04_STATE.md` đứng đầu và vào trọn; câu hỏi tổng thể có tài liệu trạng thái của từng môn | In Progress |
+| Q3 | Prompt v2: trả lời thẳng, dựa tài liệu, không lộ tên trường nội bộ | Câu trả lời không còn `status_unknown`, `no_topics`; bảng trống không bị coi là bằng chứng | In Progress |
+| Q4 | Giới hạn đầu ra 4.000 token (cấu hình được), báo khi bị cắt, trạng thái "Đang đọc N tài liệu…", log thời gian | Không còn câu trả lời cụt không lời giải thích | In Progress |
+| Q5 | Chỉ đề xuất khi người dùng báo hoặc ra lệnh; nêu lý do khi bỏ đề xuất | Hỏi thuần không sinh thẻ duyệt; mỗi lần bỏ đề xuất có lý do đọc được | In Progress |
+| Q6 | `pnpm ai:eval`: 6 câu hỏi thật chạy trên bản sao dữ liệu | Đạt 6/6; chữ đầu tiên dưới 20 giây | In Progress |
+| Q7 | Chọn model mặc định theo số đo của Q6 | `.env.local` và README ghi model được chọn kèm số đo | Not Started |
+
+### Đợt 2 — Trí nhớ có cấu trúc, tóm tắt hằng ngày, tiến độ trực quan (P0, sau Đợt 1)
+
+| Mục | Nội dung | Phụ thuộc | Tiêu chí chấp nhận | Trạng thái |
+|---|---|---|---|---|
+| M1 | **Cầu nối tài liệu → bản ghi** (thay D4): AI đọc tài liệu trạng thái, lịch và đề cương của một môn rồi đề xuất tạo topic (kèm trạng thái), lịch thi dự kiến và việc tiếp theo; người dùng duyệt theo lô | Đợt 1 | Sau khi duyệt, mỗi môn có topic và ít nhất một mốc đánh giá (ghi rõ "dự kiến" nếu chưa chính thức); không tạo gì khi chưa duyệt | Not Started |
+| M2 | **Lịch thi dự kiến** (D1): thêm cờ dự kiến/chính thức cho assessment và ngày bắt đầu học kỳ | M1 | Giao diện và AI luôn phân biệt "dự kiến" với "chính thức" | Not Started |
+| M3 | **Báo tiến độ cập nhật cả tài liệu trạng thái** (yêu cầu "gợi ý cập nhật tài liệu từ prompt"): khi người dùng báo tiến độ, đề xuất gồm cập nhật topic, thêm dòng vào mục tiến độ của tài liệu trạng thái, và log | Đợt 1 | Báo "Algebra học tới đầu chương 5" → duyệt → hỏi lại ở cuộc chat mới, AI trả lời đúng chương 5 | Not Started |
+| M4 | **Gợi ý cập nhật tài liệu dự án từ hội thoại**: cuối mỗi lượt có thông tin mới mà chưa được ghi (quyết định, blocker, kết quả thử nghiệm), AI chủ động đề xuất ghi vào đúng tài liệu của dự án, có diff để duyệt | M3 | Kể một quyết định kỹ thuật trong chat → có thẻ đề xuất sửa tài liệu dự án tương ứng; chỉ hỏi thì không có | Not Started |
+| M5 | **Tóm tắt định hướng hằng ngày**: lần mở app đầu tiên trong ngày sinh một thẻ ngắn ở đầu màn Chat gồm 3 việc nên làm hôm nay (kèm lý do), hạn sắp tới, mục lâu chưa cập nhật; có nút "Làm mới" và "Bắt đầu việc 1". Lưu theo ngày, không cần cron | M1, Đợt 1 | Thẻ xuất hiện đúng một lần mỗi ngày, đọc trong dưới 30 giây, mọi việc nêu ra đều truy được về dữ liệu; có e2e với AI giả lập và một case trong `ai:eval` | Not Started |
+| M6 | **Tiến độ trực quan trong Context**: mỗi môn/dự án có thanh tiến độ (số topic đã vững trên tổng, luôn kèm mẫu số), đếm ngược tới mốc đánh giá gần nhất, ngày cập nhật cuối; trang tổng quan xếp các môn theo mức cần chú ý | M1 | Nhìn danh sách là biết môn nào chậm; không hiển thị phần trăm khi chưa có topic (hiện lời mời chạy M1) | Not Started |
+
+### Đợt 3 — Trợ lý tự đào sâu và có kỹ năng (P1)
+
+| Mục | Nội dung | Phụ thuộc | Trạng thái |
+|---|---|---|---|
+| R1 | Vòng lặp công cụ chỉ đọc (B3/D2): `list_area_documents`, `search_documents`, `read_document` tối đa 3 vòng, có trạng thái "Đang đọc …" | Đợt 1 | Not Started |
+| R2 | Kỹ năng theo ngữ cảnh (C5/D3): đánh giá tiến độ ôn thi, lập kế hoạch tuần | R1, M2 | Not Started |
+| R3 | AI sắp xếp thư mục có duyệt (C4) | Đợt 1 | Not Started |
+| R4 | Deploy lên Vercel + Supabase và chạy checklist 17 tiêu chí trên iPhone | Đợt 1 | Not Started |
 
 ---
 
 ## Mục cũ (giữ nguyên)
 
-### 1. Trạng thái `Active` hiện màu xanh
+### 1. Trạng thái `Active` hiện màu xanh — **Done** (commit `86c9253`)
 
 - **Hiện tại:** mọi trạng thái dùng cùng một badge xám (`src/components/context/area-row.tsx:37`, `<Badge variant="secondary">`).
 - **Việc cần làm:** thêm map màu theo trạng thái (ví dụ `active` xanh lá, `blocked` đỏ, `on_hold` vàng, `completed` xám nhạt), dùng chung cho danh sách và drawer. Màu phải đủ tương phản ở cả chế độ sáng và tối, và nhãn chữ vẫn giữ nguyên (không chỉ dựa vào màu).
@@ -61,7 +109,7 @@
   - Chọn editor sau khi thử nhanh hai phương án: WYSIWYG xuất Markdown (ví dụ Tiptap + markdown) hoặc editor Markdown có xem trước (ví dụ CodeMirror). Tiêu chí: round-trip, gõ tiếng Việt có dấu trên iOS, ô nhập ≥16px, kích thước bundle.
   - Chốt workspace nằm trong `/context` dưới dạng chế độ toàn màn hình (`/context?item=<id>&doc=<docId>`), vẫn chỉ hai đích điều hướng chính.
   - Spec được sửa ở các mục liên quan và được owner đồng ý.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A1 — Schema và migration cho tài liệu
 - **Mô tả:** thêm bảng `documents` và `document_versions`, kèm index tìm kiếm. Cập nhật `TABLES`, `ENTITY_TYPES` (thêm `document`), `ORIGINS` (thêm `migration`), RLS và export.
@@ -72,7 +120,7 @@
   - Bật RLS, không policy; `pnpm verify:rls` và test schema phủ hai bảng mới.
   - `buildExport` tự có hai bảng mới qua `TABLES`; `schema_version` tăng lên 2.
   - Migration chạy được trên PGlite (test) và Supabase Postgres; có test tạo, sửa và xóa mềm.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A2 — Service ghi tài liệu (theo luật kiến trúc 1–2)
 - **Mô tả:** `documentService` trong `src/server/services/`: `create`, `rename`, `updateBody`, `reorder`, `softDelete`, `restore`, `restoreVersion`. Mỗi thao tác ghi dữ liệu và log trong cùng transaction.
@@ -82,7 +130,7 @@
   - **Log không nhiễu:** tạo, đổi tên, xóa, khôi phục mỗi thao tác một log. Sửa nội dung gộp thành **một** log `update` cho mỗi phiên sửa (mở lại sau ≥5 phút không sửa, hoặc đổi tài liệu, mới tính phiên mới). Nội dung dài trong log được rút gọn theo P1-R10.
   - **Chính sách version:** tạo `document_versions` khi bắt đầu phiên sửa mới, khi AI áp dụng thay đổi, khi khôi phục; không tạo cho từng lần autosave. Có giới hạn số version tối đa mỗi tài liệu, kèm cách dọn bản cũ.
   - Unit test: xung đột revision, gộp log, version, xóa mềm/khôi phục, rollback khi lỗi giữa chừng.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A3 — Lớp đọc và server actions cho tài liệu
 - **Mô tả:** `listDocuments(areaId)`, `getDocument(id)`, `listVersions(id)`; server actions qua `runAction` (Zod kiểm `id`, tiêu đề, độ dài nội dung).
@@ -91,7 +139,7 @@
   - Mọi đọc dữ liệu cho render nằm trong gate `requireOwner()` (luật 7).
   - Giới hạn kích thước một tài liệu (ví dụ 200.000 ký tự) có thông báo lỗi tiếng Việt.
   - Action trả `ActionResult`, không ném lỗi ra client.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A4 — Editor tài liệu
 - **Mô tả:** component editor theo quyết định A0, hỗ trợ heading, list, checklist, bảng, code block, autosave, undo/redo trong phiên.
@@ -101,7 +149,7 @@
   - Khi server báo xung đột revision: không ghi đè; hiện "Tài liệu đã thay đổi ở nơi khác" với lựa chọn tải bản mới (giữ bản đang gõ để chép) hoặc xem khác biệt.
   - Undo/redo trong phiên (Ctrl/Cmd+Z), checklist bấm được trên iPhone, ô nhập ≥16px, vùng chạm ≥44px, không tràn ngang.
   - e2e trên desktop và iphone: tạo, gõ, tải lại vẫn còn; checklist; bảng; xung đột giữa hai tab.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A5 — Thiết kế lại giao diện Workspace
 - **Mô tả:** chế độ workspace trong `/context`: cây tài liệu bên trái, editor rộng ở giữa, panel vận hành (Tasks, Milestones, Blockers, Topics, Assessments, Activity) mở bên phải hoặc dạng tab.
@@ -113,7 +161,7 @@
   - Trên iPhone: explorer mở dạng sheet, editor chiếm toàn màn hình, nút đóng ≥44px.
   - URL phản ánh tài liệu đang mở; Back và tải lại mở đúng tài liệu.
   - Academic và Projects dùng chung một engine và một bộ component (chỉ khác template và panel hiện mặc định).
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A6 — Lịch sử phiên bản và khôi phục
 - **Mô tả:** xem danh sách version của tài liệu, so khác biệt với bản hiện tại, khôi phục.
@@ -122,7 +170,7 @@
   - Danh sách hiện thời điểm, nguồn (`manual`, `ai_approved`, `migration`, `undo`).
   - Diff dạng dòng dễ đọc trên iPhone.
   - Khôi phục tạo version mới (không xóa lịch sử) và một log `update` với origin `undo`.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A7 — Tìm kiếm tài liệu
 - **Mô tả:** tìm toàn văn trong một workspace và trên toàn bộ Context, không phân biệt dấu.
@@ -132,7 +180,7 @@
   - Kết quả có tiêu đề, workspace, đoạn trích có tô từ khóa; bấm mở đúng tài liệu.
   - Gõ "tu tuong" tìm thấy "tư tưởng"; tài liệu đã xóa mềm không hiện.
   - Cùng một hàm truy vấn sẽ được Phase B dùng lại (B1).
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A8 — Liên kết từ tài liệu tới task và milestone
 - **Mô tả:** chèn liên kết tới task/milestone có sẵn trong tài liệu; hiển thị dạng chip có trạng thái sống.
@@ -142,7 +190,7 @@
   - Bộ chọn "Chèn liên kết" tìm task/milestone của workspace hiện tại.
   - Chip hiện trạng thái hiện tại (Todo/Done…, hạn); bấm mở panel tương ứng.
   - Bản ghi đã xóa hiện "liên kết hỏng", không làm vỡ trang.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A9 — Template tùy chọn
 - **Mô tả:** khi tạo tài liệu có thể chọn template; không bao giờ bắt buộc.
@@ -151,7 +199,7 @@
   - Bộ mặc định: Academic ("Tổng quan môn", "Syllabus & hình thức thi", "Tiến độ ôn tập"); Project ("Tổng quan dự án", "Nhật ký kỹ thuật", "Blockers & thử nghiệm").
   - Workspace mới có thể bắt đầu trống.
   - Template chỉ là nội dung khởi tạo; không tạo trường bắt buộc nào.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A10 — Chuyển dữ liệu form hiện có sang tài liệu (migration an toàn)
 - **Mô tả:** script và migration chuyển các trường linh hoạt và ghi chú gắn với môn/dự án thành tài liệu, không mất thông tin.
@@ -164,7 +212,7 @@
   - **Xác minh sau khi chạy:** tổng ký tự trường gốc = tổng ký tự nội dung đã chuyển (bỏ phần heading); số ghi chú = số tài liệu từ ghi chú.
   - **Không xóa cột cũ** trong đợt này: các cột chỉ còn đọc (UI không sửa nữa), xóa ở A11 sau ít nhất một đợt dùng thật.
   - **Hướng dẫn trong README:** xuất JSON sao lưu trước; chạy dry-run trên bản sao (PGlite nạp từ bản export) trước khi chạy trên Supabase.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### A11 — Tích hợp và dọn dẹp
 - **Mô tả:** cập nhật snapshot, seed/onboarding, export, e2e cho mô hình mới; xóa cột cũ khi đã ổn định.
@@ -175,7 +223,7 @@
   - Đề xuất Phase 3 đang chờ có đụng trường đã chuyển (`update_area.summary`, `goal`) bị chuyển sang `superseded`, và các field này bị bỏ khỏi schema hành động.
   - Migration xóa cột cũ chỉ chạy sau khi owner xác nhận; có bản export trước đó.
   - Toàn bộ e2e được cập nhật theo UI mới và xanh trên desktop và iphone.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ---
 
@@ -189,7 +237,7 @@
 - **Mô tả:** triển khai Phase 3 theo kế hoạch hiện có: engine đề xuất, duyệt và áp dụng cho bản ghi có cấu trúc.
 - **Ưu tiên:** P0 · **Phụ thuộc:** Phase 2 (đã xong)
 - **Tiêu chí chấp nhận:** đạt mục "Xong khi" của Phase 3; criteria 7, 8, 10, 12, 14, 16 của spec đạt.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B1 — Chỉ mục truy hồi tài liệu
 - **Mô tả:** chia tài liệu thành đoạn theo heading để tìm và trích dẫn; cập nhật chỉ mục trong cùng transaction khi tài liệu đổi.
@@ -199,7 +247,7 @@
   - Hàm `searchContext(query, { areaIds?, limit })` trả đoạn xếp hạng theo FTS, có `documentId`, `heading_path`, `updated_at`.
   - Không bao giờ trả đoạn của tài liệu hoặc workspace `ai_excluded`.
   - Test: tìm không dấu, xếp hạng, loại trừ riêng tư, cập nhật chỉ mục sau khi sửa.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B2 — Chọn ngữ cảnh tài liệu cho mỗi lượt chat
 - **Mô tả:** mở rộng `buildContext` (Phase 2): thêm dàn ý tài liệu, nội dung tài liệu chắt lọc ưu tiên và các đoạn liên quan nhất từ tài liệu thô cho câu hỏi theo từng workspace và xuyên workspace.
@@ -210,16 +258,16 @@
   - Ngân sách riêng cho tài liệu (ví dụ ≤40% của 32.000 ký tự), thứ tự cắt xác định và có test. Tầng 1 (trạng thái có cấu trúc) không bao giờ bị cắt.
   - `contextRefs` có thêm `documentId`; dòng "Dựa trên:" có chip mở đúng tài liệu.
   - Unit test với mock provider cho từng phạm vi.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
-### B3 — Công cụ đọc tài liệu cho AI (tùy chọn)
-- **Mô tả:** khi `AI_ACTION_MODE=tools`, cho model gọi `search_documents(query)` và `read_document(id, heading?)` để lấy thêm khi ngữ cảnh ban đầu thiếu.
-- **Ưu tiên:** P2 · **Phụ thuộc:** B2
+### B3 — Công cụ đọc tài liệu cho AI (tùy chọn → nâng cấp ở Phase D2)
+- **Mô tả:** khi `AI_ACTION_MODE=tools`, cho model gọi `list_area_documents`, `search_documents(query)` và `read_document_chunks(id, ...)` để chủ động đào sâu tài liệu gốc (Đề cương, Kế hoạch, Đề thi các năm) khi ngữ cảnh ban đầu thiếu. Chi tiết thiết kế nằm ở `docs/superpowers/plans/2026-11-24-deep-dive-pacing-skill-and-exam-schedule.md` (gắn với **D2** bên dưới).
+- **Ưu tiên:** P0 (nâng từ P2 lên P0) · **Phụ thuộc:** B2
 - **Tiêu chí chấp nhận:**
-  - Có giới hạn số lần gọi mỗi lượt.
-  - Tôn trọng `ai_excluded`.
+  - Có giới hạn số vòng lặp gọi tool mỗi lượt (tối đa 3 vòng) và trần tổng ký tự.
+  - Tôn trọng tuyệt đối `ai_excluded` ở cả workspace, thư mục cha, và tài liệu.
   - Chế độ `json`/`off` vẫn hoạt động chỉ với truy hồi phía server.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Not Started (kế hoạch chi tiết trong **D2**)
 
 ### B4 — Độ tin cậy và độ mới của ngữ cảnh
 - **Mô tả:** gắn siêu dữ liệu độ mới cho mỗi đoạn tài liệu và cập nhật system prompt để xử lý thông tin cũ hoặc mâu thuẫn.
@@ -228,7 +276,7 @@
   - Mỗi đoạn kèm `updated_at`, `days_since_update` (server tính) và nguồn sửa gần nhất (`manual`, `ai_approved`, `migration`).
   - Prompt: trạng thái có cấu trúc thắng tài liệu khi mâu thuẫn và AI phải nói rõ chỗ mâu thuẫn. Đoạn cũ hơn `stale_after_days` được coi là "có thể đã lỗi thời". Phân loại `Confirmed` / `User reported` / `Inferred` / `Unknown` áp dụng cho cả nội dung tài liệu.
   - Test với mock: ngữ cảnh mâu thuẫn tạo đúng các trường cần thiết trong state JSON.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B5 — Loại hành động đề xuất cho tài liệu
 - **Mô tả:** mở rộng union `ProposedAction` của Phase 3 với các thao tác tài liệu có neo chính xác.
@@ -244,7 +292,7 @@
   - **Kiểm tra ở backend:** tài liệu tồn tại, không `ai_excluded`, không bị xóa mềm. Heading hoặc `itemText` phải khớp đúng một vị trí. Có giới hạn độ dài.
   - **Server tự ghi mốc khi lưu đề xuất:** `baseRevision` và hash của section đích.
   - Chế độ `json` (`<proposed_actions>`) phủ các loại mới; `ai:probe` có thêm một ca hành động tài liệu.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B6 — Áp dụng có kiểm soát xung đột
 - **Mô tả:** áp dụng thao tác tài liệu trong cùng transaction với thao tác có cấu trúc của một lô duyệt.
@@ -255,7 +303,7 @@
   - **Xung đột theo section:** nếu chính section đích đã đổi (hash khác) thì báo xung đột, không ghi đè. Chỗ khác của tài liệu đổi thì vẫn áp dụng được (giảm xung đột giả).
   - Dòng đích bị khóa (`FOR UPDATE`) trong transaction.
   - Test: hai lần duyệt đồng thời chỉ áp dụng một lần; sửa tay section đích rồi duyệt → xung đột; sửa section khác rồi duyệt → áp dụng.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B7 — Giao diện duyệt có diff
 - **Mô tả:** mở rộng thẻ đề xuất của Phase 3: mỗi hành động tài liệu hiện đích (workspace › tài liệu › section) và diff.
@@ -265,7 +313,7 @@
   - Sửa nội dung đề xuất trước khi duyệt (được kiểm tra lại ở server); duyệt một phần.
   - Đọc được bằng một tay trên iPhone, không tràn ngang.
   - e2e với mock provider: đề xuất cập nhật tài liệu → duyệt → tài liệu đổi đúng một lần và có version; từ chối → không đổi.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B8 — Hoàn tác thay đổi do AI
 - **Mô tả:** hoàn tác lô AI vừa áp dụng.
@@ -274,7 +322,7 @@
   - **Hoàn tác thẳng:** khi đích chưa bị sửa tiếp. Bản ghi có cấu trúc dùng thay đổi bù; tài liệu khôi phục version trước. Log với origin `undo`, không xóa log cũ.
   - **Đích đã bị sửa tiếp:** không hoàn tác thẳng; đưa người dùng tới lịch sử version để khôi phục có chủ đích.
   - Test cả hai nhánh.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B9 — Định tuyến đề xuất tới đúng đích
 - **Mô tả:** quy tắc trong prompt kèm kiểm tra ở server để mỗi loại thông tin vào đúng chỗ.
@@ -286,7 +334,7 @@
     - Hoàn thành topic → cập nhật topic có cấu trúc, có thể thêm một dòng vào tài liệu tiến độ nếu có.
   - Server từ chối đề xuất chỉ ghi ngày vào tài liệu khi câu chat nói rõ một hạn (ví dụ cảnh báo trong thẻ duyệt).
   - Test với mock cho ba ví dụ: hoàn thành topic Algebra, blocker dự án, deadline mới.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B10 — Riêng tư cho tài liệu
 - **Mô tả:** mở rộng mọi đường loại trừ `ai_excluded` hiện có sang tài liệu.
@@ -294,7 +342,7 @@
 - **Tiêu chí chấp nhận:**
   - Tài liệu `ai_excluded` (hoặc thuộc workspace `ai_excluded`) không xuất hiện trong: Tầng 2, đoạn truy hồi, `recentLogs`, công cụ đọc, lịch sử chat (mở rộng P2-R3: tin nhắn có `contextRefs` trỏ tới tài liệu bị loại thì bị ẩn).
   - Test trên **toàn bộ** payload gửi provider (system và mọi message), giống test Phase 2.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### B11 — Bộ test nhất quán ngữ cảnh
 - **Mô tả:** bộ test và script đánh giá cho các tình huống ngữ cảnh khó.
@@ -304,7 +352,7 @@
   - **Unit test với mock** kiểm ngữ cảnh được chọn và state JSON.
   - **Script đánh giá thật** (giống `ai:probe`) chạy trên dữ liệu seed, ghi kết quả vào `docs/ai-probe-report.md` theo checklist hành vi mong đợi.
   - **Test hồi quy:** không bao giờ ghi đè bản mới hơn.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ---
 
@@ -321,7 +369,7 @@
   - Chốt adapter `FileStorage` (`put`, `getSignedUrl`/`stream`, `delete`) chạy đồng nhất trên test/PGlite local và Supabase production.
   - Phân định rõ 3 nhóm tệp: (1) Markdown `.md` (editor GFM + version + AI sửa section), (2) văn bản/dữ liệu đọc được (`.txt`, `.csv`, `.json`, code — xem/sửa text hoặc xem bảng), (3) tệp nhị phân (`.pdf`, ảnh, `.docx` — lưu Object Storage, trích xuất `extracted_text` để tìm kiếm/AI đọc, hỗ trợ upload bản mới).
   - Xác định giới hạn kích thước mỗi tệp (ví dụ 10–25 MB) và whitelist MIME an toàn (chống SVG script / XSS khi preview).
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### C1 — Schema & Service cây thư mục (`folders`)
 - **Mô tả:** Thêm bảng `folders` (`id`, `area_id`, `parent_id` tự tham chiếu, `name`, `sort_order`, `ai_excluded`, `deleted_at`, `created_at`, `updated_at`) và gắn `documents.folder_id` (nullable = ở thư mục gốc workspace) cùng `doc_role` (`context` | `raw` | `instruction`, mặc định `context`) + `pinned` boolean. Xây `folderService` theo luật kiến trúc 1–2 (mọi thao tác ghi đều ghi `activity_logs` trong cùng transaction).
@@ -332,7 +380,7 @@
   - **Kế thừa riêng tư:** nếu bất kỳ thư mục cha nào bật `ai_excluded = true`, toàn bộ thư mục con và tệp bên trong mặc định bị loại khỏi tìm kiếm AI và ngữ cảnh chat.
   - Tùy chọn tạo sẵn bộ thư mục gợi ý không bắt buộc khi mở workspace mới (ví dụ `Context/` cho bản chắt lọc từ ChatGPT và `Tài liệu gốc/` cho syllabus, đề, slide).
   - Bật RLS (`enableRLS()`), cập nhật `TABLES`, `ENTITY_TYPES` (thêm `folder`), export `schema_version`, có unit test đầy đủ (di chuyển vòng lặp, kế thừa `ai_excluded`, rollback).
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### C2 — Upload, lưu trữ tệp & Trình trích xuất nội dung (`extracted_text`)
 - **Mô tả:** Cho phép tải lên tệp ngoài `.md` vào thư mục của workspace, lưu tệp nhị phân qua `FileStorage` và trích xuất văn bản thuần vào DB (`mime_type`, `file_ext`, `storage_key`, `size_bytes`, `extracted_text`) để đồng bộ FTS (`search_tsv`) và `document_chunks` (Phase B).
@@ -342,7 +390,7 @@
   - Tệp text/CSV/JSON tự động đưa vào `search_text` / `search_tsv`; tệp PDF (và DOCX nếu bật) trích xuất text không dấu vào chỉ mục tìm kiếm để gõ không dấu vẫn tìm ra tệp.
   - Mọi route đọc/tải tệp đều qua gate `requireOwner()` và không lộ URL công khai không hết hạn; header `Content-Security-Policy` & `Content-Disposition` an toàn (không thực thi HTML/SVG upload).
   - Test: kiểm tra MIME sai/quá dung lượng bị từ chối bằng tiếng Việt, tệp `ai_excluded` không tải/truy hồi cho AI, xóa mềm giữ tệp an toàn trước khi dọn.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### C3 — Giao diện Mini File Explorer & Trình xem đa định dạng
 - **Mô tả:** Nâng cấp cột trái Workspace thành **Mini File Explorer**: cây thư mục thu gọn/mở rộng được, breadcrumb đường dẫn, tìm nhanh theo tên tệp/thư mục, kéo thả hoặc menu chuyển thư mục, upload nhiều định dạng và trình xem/sửa tương ứng ở giữa màn hình.
@@ -353,7 +401,7 @@
   - Ghi nhớ trạng thái mở thư mục và URL phản ánh thư mục/tệp đang chọn (`?item=<areaId>&folder=<folderId>&doc=<docId>`).
   - Dùng tốt một tay trên iPhone (Sheet cây thư mục, chạm ≥44px, input ≥16px, bảng/preview không làm tràn ngang trang).
   - e2e trên desktop và iphone: tạo thư mục lồng nhau, chuyển file vào thư mục, upload tệp mẫu, xem preview và tìm kiếm ra tệp.
-- **Trạng thái:** Not Started
+- **Trạng thái:** Done (đã merge vào `main`)
 
 ### C4 — AI quản lý thư mục & sắp xếp tệp (có duyệt)
 - **Mô tả:** Mở rộng `ProposedAction` và ngữ cảnh AI để AI nhìn được cấu trúc cây thư mục hiện tại của workspace và đề xuất tổ chức, phân loại hoặc đặt tài liệu mới vào đúng thư mục.
@@ -372,7 +420,7 @@
 - **Trạng thái:** Not Started
 
 ### C5 — Skills & Hướng dẫn AI kiểu `skills.md` (toàn cục & theo Workspace)
-- **Mô tả:** Cho phép định nghĩa tập hợp quy tắc/kỹ năng hướng dẫn AI hành xử (tương đương Custom Instructions của ChatGPT Projects / `skills.md`) ở cấp toàn app (trong Settings hoặc thư viện chung) và cấp từng Workspace (ví dụ: quy trình bóc tách syllabus ra assessment/topic, phong cách lập kế hoạch học tập, quy tắc review dự án code).
+- **Mô tả:** Cho phép định nghĩa tập hợp quy tắc/kỹ năng hướng dẫn AI hành xử (tương đương Custom Instructions của ChatGPT Projects / `skills.md`) ở cấp toàn app (trong Settings hoặc thư viện chung) và cấp từng Workspace (ví dụ: quy trình đánh giá tiến độ học tập theo lịch thi & đề cương ở **D3**, quy trình bóc tách syllabus ra assessment/topic, quy tắc review dự án code).
 - **Ưu tiên:** P1 · **Phụ thuộc:** B2, C1
 - **Tiêu chí chấp nhận:**
   - Tách biệt rõ khối **`<workspace_instructions>`** (chỉ nhận từ nguồn `instruction` do chính owner tạo/sửa) với khối **`<workspace_state>`** (nơi chứa dữ liệu, tài liệu chắt lọc và tài liệu thô vốn luôn bị xem là *DỮ LIỆU* không được ra lệnh cho AI).
@@ -380,6 +428,93 @@
   - **An toàn quyền ghi:** Tài liệu thô upload (`.pdf`, `.md` ngoại lai…) không bao giờ được gắn nhãn `instruction`, và AI trong chat không có action tạo hay chỉnh sửa `instruction` / `skills.md`.
   - Unit test: kiểm tra `instruction` được đưa đúng vị trí vào system prompt, tôn trọng `ai_excluded`, bị cắt theo trần ngân sách nếu quá dài, và AI không thể sửa `instruction`.
 - **Trạng thái:** Not Started
+
+---
+
+## Workstream 4 — Phase D: Lịch thi dự kiến theo chu kỳ, AI Deep-Dive Tools & Pacing Skill
+
+**Mục tiêu:** Khắc phục toàn bộ các lỗi thực tế phát hiện khi dùng thử với dữ liệu 9 môn HUST 2026.1 (cắt ngữ cảnh mất `04_STATE.md` / dính YAML frontmatter, thiếu lịch thi dự kiến & chu kỳ rà soát, AI chưa đào sâu tài liệu, đề xuất nhầm khi chỉ hỏi, và nghẽn stream/khó debug lỗi).
+
+> **Tài liệu thiết kế & kế hoạch implement chi tiết:** `docs/superpowers/plans/2026-11-24-deep-dive-pacing-skill-and-exam-schedule.md`
+
+### Tổng hợp các vấn đề thực tế đã phát hiện qua ảnh kiểm thử (24/11/2026)
+
+1. **Bỏ sót `04_STATE.md` & gửi nhầm phần YAML frontmatter thay vì nội dung thật** *(ảnh hỏi "algebra đang học đến đâu rồi" ra `0 topic`, không thấy tiến độ 4/10 Chương 5)*:
+   - `selectDocumentContext` (`src/server/ai/document-context.ts`) đang `.slice(0, 6)` tài liệu `context`, khiến `04_STATE.md` (file thứ 7 của Algebra) **bị cắt rớt hẳn** dù chứa tiến độ mới nhất (*4/10 Chương 5*, điểm *24/30*, dự kiến thi *đầu 01/2027*).
+   - Mỗi tài liệu chỉ lấy đúng **1 chunk (~850 ký tự)** đầu tiên khớp từ khóa, mà các file vừa import lại có khối YAML frontmatter (`--- entity: ... ---`) + đoạn mở đầu dài nên `05_LOG.md`, `07_MISSING_INFO.md` chỉ gửi phần header mà mất toàn bộ bảng trạng thái/log bên dưới. *(→ **D0**)*
+2. **Dữ liệu có cấu trúc sau import vẫn trống (`topics: 0`, `assessments: 0`) & thiếu lịch thi dự kiến theo chu kỳ**:
+   - Tài liệu đã nạp vào `documents` (231/232 file; riêng `DATABASE LAB REPORT.docx` là file đám mây OneDrive chưa sync offline), nhưng bảng `topics` và `assessments` vẫn trống nên AI đếm ra `0 topic` và `no_assessment_date`.
+   - Chưa có trường ngày bắt đầu học kỳ (`termStartDate`), lịch thi dự kiến (`estimated` vs `official`) và chu kỳ nhắc kiểm tra/cập nhật lại lịch định kỳ. *(→ **D1, D4**)*
+3. **AI chưa tự đào sâu vào Đề cương / Kế hoạch / Đề thi để đánh giá tiến độ nhanh hay chậm**:
+   - Mô hình one-shot context hiện tại không có tool chỉ đọc để chủ động mở thêm `02_COURSE_MAP.md`, `06_TIMELINE.md`, `DCHP.pdf` hay các đề thi trong `03_Đề_thi_&_Ôn_tập`, và chưa có Skill đánh giá tốc độ học dựa trên 5 trụ cột (ngày hiện tại + ngày thi + kế hoạch chi tiết + nội dung môn + đề thi). *(→ **D2, D3**)*
+4. **Đề xuất cập nhật nhầm khi người dùng chỉ hỏi** *(ảnh hỏi "algebra tôi đang học đến đâu rồi" lại ra thẻ `Sửa mục Algebra` + `Approve / Edit / Reject`)*:
+   - Model tự gọi nhầm `propose_changes` (`update_area` sửa trường `summary` thành câu meta *"chưa xác nhận tiến độ"*), và khi `reply` text trống thì `runChatTurn` hiển thị tóm tắt proposal thay cho câu trả lời. *(→ **D5**)*
+5. **Response chậm, nghẽn giữa chữ, hoặc báo `"Có lỗi xảy ra, thử lại."` / `"đề xuất không hợp lệ"` khó chẩn đoán** *(các ảnh khựng chữ `"bài đánh giá hay nhiệ"`, lỗi chung khi dev/build lệch, và ảnh báo đề xuất bị bỏ qua)*:
+   - `claude-sonnet-5` trên `codex.fosta.app` hay khựng/timeout giữa chừng (đã đổi `.env.local` sang `gpt-6.2-sol`, cần restart `pnpm dev` để nhận env mới).
+   - Khi chạy `pnpm build` song song lúc `pnpm dev` đang mở có thể gây lệch chunk/state khiến stream trả `"Có lỗi xảy ra, thử lại."`.
+   - `ndjson.ts` và `run-turn.ts` hiện không log chi tiết lý do khi proposal bị từ chối (`parseProposal` / `stampActions` / `hasDeadlineRoute`) và thiếu trạng thái streaming khi model đang xử lý tool, khiến người dùng khó biết vì sao bị từ chối hoặc bị treo. *(→ **D6**)*
+
+### D0 — Vá truy xuất ngữ cảnh ban đầu (`document-context.ts`: bỏ YAML frontmatter & mở rộng `context`)
+- **Mô tả:** Loại bỏ khối YAML frontmatter (`--- ... ---`) trước khi chia chunk trong `splitDocument`, bỏ giới hạn `.slice(0, 6)` đối với nhóm tài liệu `docRole === 'context'` của workspace đang chọn, và cho phép các file trạng thái/kế hoạch (`04_STATE`, `05_LOG`, `06_TIMELINE`) gửi nhiều chunk nội dung hơn trong ngân sách `DOCUMENT_CONTEXT_MAX`.
+- **Ưu tiên:** P0 · **Phụ thuộc:** B2
+- **Tiêu chí chấp nhận:**
+  - Chunk đầu tiên gửi cho AI của các file Markdown có frontmatter là nội dung/bảng dữ liệu thật, không bị khối `--- entity: ... ---` chiếm chỗ.
+  - Khi hỏi về một môn có 7+ file `context` (như Algebra), `04_STATE.md` luôn nằm trong `documents[]` và `Dựa trên:` chips.
+  - Hỏi *"algebra đang học đến đâu rồi"* AI đọc thấy ngay tiến độ *4/10 Chương 5*, điểm *24/30*, dự kiến thi *đầu 01/2027* ngay trong câu trả lời.
+- **Trạng thái:** Gộp vào **Đợt 1** (Q1–Q5)
+
+### D1 — Thông tin ngữ cảnh còn thiếu: Lịch thi dự kiến & Chu kỳ nhắc cập nhật lịch
+- **Mô tả:** Bổ sung mốc `termStartDate` (ngày bắt đầu Tuần 1 học kỳ trong `settings` để quy đổi *"Tuần N"* sang ngày thật) và trường lịch thi dự kiến cho `assessments` (`dateConfidence`: `'official' | 'estimated' | 'tentative'`, `examWindowStart`/`examWindowEnd`, `scheduleVerifiedAt`), kèm **chu kỳ nhắc cập nhật lịch định kỳ** (`scheduleReviewIntervalDays`, tự động rút ngắn khi cận kỳ thi mà lịch vẫn ở mức `estimated`).
+- **Ưu tiên:** P0 · **Phụ thuộc:** Phase 2
+- **Tiêu chí chấp nhận:**
+  - `AreaSummary.missing` & `<workspace_state>` gắn cờ rõ: `no_exam_schedule` (môn `active` chưa có lịch thi chính thức lẫn dự kiến) và `exam_schedule_unverified` (lịch dự kiến đã quá chu kỳ cần rà soát lại).
+  - Giao diện `/context` (huy hiệu danh sách, bảng Assessments, Settings) hiển thị rõ lịch dự kiến khác với lịch chính thức, cho phép bấm xác nhận đã rà soát lịch định kỳ.
+  - AI trong `/chat` & `Cập nhật nhanh` tự động nhắc người dùng cập nhật lại lịch thi/kế hoạch khi quá chu kỳ, và luôn ghi rõ mức `Estimated` nếu ngày thi chưa chính thức.
+- **Trạng thái:** Gộp vào **Đợt 2** (M2)
+
+### D2 — Vòng lặp AI đọc sâu tài liệu cụ thể (Read-Only Deep-Dive Tool Loop)
+- **Mô tả:** Mở rộng `runChatTurn` (hiện thực hóa **B3+**) cho phép AI chủ động gọi các tool chỉ đọc (`list_area_documents`, `search_documents`, `read_document_chunks`) dùng mã ID ngắn (`a1`, `d1`) khi cần kiểm tra kỹ Đề cương PDF, `06_TIMELINE.md`, `02_COURSE_MAP.md` hoặc Đề thi các năm trong `03_Đề_thi_&_Ôn_tập`.
+- **Ưu tiên:** P0 · **Phụ thuộc:** B2, C3, cơ chế alias ID
+- **Tiêu chí chấp nhận:**
+  - Tối đa 3 vòng tool đọc mỗi lượt và có trần tổng ký tự trả về (ví dụ ≤14.000 ký tự) để không phình token hay treo response.
+  - Tài liệu đọc thêm qua tool tự động xuất hiện trong chip `"Dựa trên:"` (`contextRefs`).
+  - Tuyệt đối không trả nội dung từ workspace/thư mục/tài liệu `ai_excluded` hay `instruction`.
+  - Stream phát tín hiệu trạng thái khi AI đang đọc tài liệu để tránh cảm giác nghẽn/đơ trên UI; cấu hình model mặc định tránh model hay timeout trên gateway.
+- **Trạng thái:** Not Started
+
+### D3 — Skill Đánh giá Tiến độ & Phân tích Ôn thi (`study-pacing.md`)
+- **Mô tả:** Xây dựng Skill chuẩn hóa quy trình suy luận cho AI khi người dùng hỏi *"tiến độ môn này nhanh hay chậm?"*, *"hôm nay nên học gì để kịp thi?"*: bắt buộc kiểm tra & truy xuất đủ **5 trụ cột** (`now.date`/tuần học kỳ + `ngày thi dự kiến` + `kế hoạch chi tiết` + `nội dung/trọng số môn học` + `nội dung đề thi`), đối chiếu tiến độ thực tế (`topics`/`05_LOG.md`) với quỹ thời gian & trọng số đề thi để kết luận rõ ràng.
+- **Ưu tiên:** P0 · **Phụ thuộc:** D1, D2, C5
+- **Tiêu chí chấp nhận:**
+  - Nếu thiếu dữ liệu trong ngữ cảnh ban đầu, AI gọi tool **D2** tìm trong tài liệu trước khi kết luận `Unknown`.
+  - Kết luận tách minh bạch `Confirmed` vs `Estimated` (lịch thi dự kiến) vs `Unknown`, kèm tối đa 3 ưu tiên ôn tập theo độ ăn điểm trong đề thi và gợi ý `propose_changes` để nạp `topics`/`assessments` vào DB (có duyệt).
+  - Có bộ test đánh giá (mock + live) trên dữ liệu môn HUST 2026.1 thật (ví dụ câu hỏi *"phân tích tiến độ môn Algebra — nhanh hay chậm?"*).
+- **Trạng thái:** Not Started
+
+### D4 — Bootstrap lịch thi dự kiến & topics cho các môn HUST 2026.1 đã import
+- **Mô tả:** Script/công cụ hỗ trợ đọc `02_COURSE_MAP.md`, `06_TIMELINE.md`, `07_MISSING_INFO.md` và đề cương PDF để gợi ý tạo sẵn `assessments` (lịch thi dự kiến) và danh sách chương `topics` cho 9 môn học kỳ 2026.1.
+- **Ưu tiên:** P1 · **Phụ thuộc:** D1
+- **Tiêu chí chấp nhận:**
+  - Hỗ trợ `--dry-run`, idempotent, không ghi đè dữ liệu người dùng đã sửa tay.
+- **Trạng thái:** Gộp vào **Đợt 2** (M1)
+
+### D5 — Chặn đề xuất cập nhật nhầm khi người dùng chỉ hỏi (`Proposal Intent Guard`)
+- **Mô tả:** Sửa lỗi model tự gọi `propose_changes` (ví dụ ghi đè `areas.summary` bằng câu *"tiến độ hiện tại chưa xác nhận..."*) khi người dùng chỉ hỏi thuần túy như *"algebra tôi đang học đến đâu rồi"*, khiến câu trả lời bị thay bằng thẻ `Approve / Edit / Reject` gây nhiễu.
+- **Ưu tiên:** P0 · **Phụ thuộc:** B9, D2
+- **Tiêu chí chấp nhận:**
+  - Prompt & backend phân biệt rõ câu hỏi tra cứu/phân tích với câu báo tiến độ hoặc yêu cầu sửa/lên lịch; dọn/chặn `update_area.summary` ghi chú meta không có thông tin mới.
+  - Khi người dùng hỏi *"algebra tôi đang học đến đâu rồi"*, không phát sinh thẻ `propose_changes` ngoài ý muốn (trừ khi người dùng thực sự yêu cầu lên lịch/cập nhật) và câu trả lời tổng hợp đầy đủ từ tài liệu + ghi chú.
+  - Có unit test & eval test hồi quy cho câu hỏi trạng thái thuần túy.
+- **Trạng thái:** Gộp vào **Đợt 1** (Q1–Q5)
+
+### D6 — Ổn định streaming, trạng thái chờ & log chẩn đoán lỗi Chat/Proposal
+- **Mô tả:** Khắc phục trải nghiệm nghẽn giữa chừng hoặc báo lỗi chung chung (`"Có lỗi xảy ra, thử lại."` / `"AI có đề xuất cập nhật nhưng đề xuất không hợp lệ"`): thêm log server rõ nguyên nhân khi proposal bị từ chối (`parseProposal`, `stampActions`, `routing`), cảnh báo/hiển thị trạng thái khi AI đang đọc tài liệu hoặc phản hồi chậm, và đảm bảo luồng `runChatTurn` tách sạch câu trả lời với thẻ đề xuất (không để `reply` rỗng biến mất khi proposal bị bỏ qua).
+- **Ưu tiên:** P0 · **Phụ thuộc:** D0, D2
+- **Tiêu chí chấp nhận:**
+  - Server log rõ mã/lý do proposal invalid ở dev (không lộ dữ liệu nhạy cảm ra client) để dễ debug.
+  - Khi stream chậm hoặc đang chạy tool loop, UI hiển thị trạng thái tiến trình và timeout/retry rõ ràng thay vì đứng im giữa chữ.
+  - Khi đề xuất bị bỏ qua nhưng model không viết văn bản kèm theo, giữ thông báo hữu ích hoặc giữ câu trả lời của AI tách bạch.
+- **Trạng thái:** Gộp vào **Đợt 1** (Q1–Q5)
 
 ---
 
@@ -420,5 +555,6 @@
 6. **B10 → B1 → B2 → B4:** riêng tư trước, rồi truy hồi và ngữ cảnh.
 7. **B5 → B6 → B7 → B9 → B8:** đề xuất, áp dụng, duyệt, định tuyến, hoàn tác.
 8. **B11** chạy liên tục từ B2 trở đi; **B3** chỉ làm nếu thực tế cho thấy truy hồi phía server chưa đủ.
-9. **C0 → C1 → C2 → C3:** chốt kiến trúc lưu trữ, thêm bảng `folders` và upload/trích xuất text, nâng cấp Explorer thành Mini File Explorer + trình xem đa định dạng.
+9. **C0 → C1 → C2 → C3:** chốt kiến trúc lưu trữ, thêm bảng `folders` và upload/trích xuất text, nâng cấp Explorer thành Mini File Explorer + trình xem đa định dạng *(đã xong)*.
 10. **C4 & C5** (sau C1 và B5–B7): mở rộng đề xuất AI cho quản lý cây thư mục & phân loại tệp có duyệt, kèm hệ thống `skills.md` / AI Instructions toàn cục & theo từng Workspace.
+11. **Phase D (D0 → D1 → D2 → D3 → D5 → D6 → D4):** vá lọc YAML frontmatter & giới hạn `context` (**D0**), bổ sung dữ liệu lịch thi dự kiến + chu kỳ rà soát lịch (**D1**), công cụ AI đọc sâu tài liệu cụ thể (**D2**), Skill đánh giá tiến độ nhanh/chậm (**D3**), chặn đề xuất cập nhật nhầm khi chỉ hỏi (**D5**), ổn định streaming & log chẩn đoán (**D6**), và bootstrap lịch/topics cho bộ môn HUST 2026.1 (**D4**). Xem chi tiết tại `docs/superpowers/plans/2026-11-24-deep-dive-pacing-skill-and-exam-schedule.md`.
