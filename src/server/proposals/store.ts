@@ -5,8 +5,25 @@ import type { ProposeChanges, StoredProposal } from './schema';
 import { hasDeadline, hasDeadlineRoute } from './routing';
 import { stampActions } from './validate';
 
-export const IGNORED_PROPOSAL_NOTICE =
-  '\n\n_(AI có đề xuất cập nhật nhưng đề xuất không hợp lệ nên đã bị bỏ qua. Chưa có gì được thay đổi; bạn có thể cập nhật trong Context.)_';
+export type DroppedProposalReason = 'parse' | 'schema' | 'deadline_route' | 'invalid_target';
+
+export type CreatePendingResult =
+  | { ok: true; id: string }
+  /** `detail` names what failed (action indices), never values the user or the model wrote. */
+  | { ok: false; reason: 'deadline_route' | 'invalid_target'; detail: string };
+
+const DROPPED_BECAUSE: Record<DroppedProposalReason, string> = {
+  parse: 'đề xuất không đúng định dạng nên đã bị bỏ qua. Bạn thử nói lại ngắn gọn hơn, hoặc cập nhật trong Context.',
+  schema: 'đề xuất không đúng định dạng nên đã bị bỏ qua. Bạn thử nói lại ngắn gọn hơn, hoặc cập nhật trong Context.',
+  deadline_route:
+    'đề xuất chỉ ghi hạn vào tài liệu mà không tạo task hay lịch thi có ngày, nên đã bị bỏ qua. Bạn thử nhắn lại kèm ngày cụ thể.',
+  invalid_target: 'đề xuất trỏ tới một mục không còn tồn tại nên đã bị bỏ qua. Bạn thử nêu rõ tên môn hoặc dự án.',
+};
+
+/** Appended to a chat reply whose proposal was dropped, saying why. */
+export function ignoredProposalNotice(reason: DroppedProposalReason): string {
+  return `\n\n_(AI có đề xuất cập nhật nhưng ${DROPPED_BECAUSE[reason]} Chưa có gì được thay đổi.)_`;
+}
 
 export async function createPendingAction(
   db: DbOrTx,
@@ -18,11 +35,15 @@ export async function createPendingAction(
     proposal: ProposeChanges;
     requestText?: string;
   },
-): Promise<{ id: string } | null> {
+): Promise<CreatePendingResult> {
   const requiresDeadlineRoute = hasDeadline(input.requestText ?? '');
-  if (requiresDeadlineRoute && !hasDeadlineRoute(input.proposal.actions)) return null;
+  if (requiresDeadlineRoute && !hasDeadlineRoute(input.proposal.actions)) {
+    return { ok: false, reason: 'deadline_route', detail: 'no dated task or assessment' };
+  }
   const stamped = await stampActions(db, input.proposal.actions);
-  if (!stamped.ok) return null;
+  if (!stamped.ok) {
+    return { ok: false, reason: 'invalid_target', detail: stamped.errors.map((e) => `actions[${e.index}]`).join(',') };
+  }
   const payload: StoredProposal = { summary: input.proposal.summary, actions: stamped.stored, ...(requiresDeadlineRoute ? { requiresDeadlineRoute } : {}) };
   const [row] = await db
     .insert(pendingActions)
@@ -35,7 +56,7 @@ export async function createPendingAction(
       status: 'pending',
     })
     .returning({ id: pendingActions.id });
-  return row;
+  return { ok: true, id: row.id };
 }
 
 export async function supersedeForMessage(db: DbOrTx, messageId: string): Promise<void> {

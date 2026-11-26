@@ -11,7 +11,7 @@ import type { AiProvider, ChatMessage } from '../ai/provider';
 import { AiCapExceededError } from '../errors';
 import { ProposalBlockFilter, parseProposal } from '../proposals/extract';
 import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
-import { createPendingAction, IGNORED_PROPOSAL_NOTICE, supersedeForMessage } from '../proposals/store';
+import { createPendingAction, ignoredProposalNotice, supersedeForMessage, type DroppedProposalReason } from '../proposals/store';
 import { countAiRequest } from '../services/ai-usage';
 import {
   appendMessage,
@@ -21,6 +21,7 @@ import {
   replaceReplies,
   updateMessageReply,
 } from '../services/conversations';
+import { allowsProposal } from './intent';
 
 export type TurnEvent =
   | { type: 'meta'; conversationId: string; userMessageId: string }
@@ -195,15 +196,17 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
     yield { type: 'status', message: READING(timing.documents) };
 
     // 6. Stream. Alias entity UUIDs so external AI proxies that scrub UUIDs cannot corrupt IDs.
+    // A pure question gets no proposal machinery: no tool, no `<proposed_actions>` instructions.
+    const actionMode = allowsProposal(current.content) ? deps.actionMode : 'off';
     const aliased = aliasWorkspaceState(ctx.state);
     const messages: ChatMessage[] = [
-      { role: 'system', content: buildSystemPrompt({ stateJson: aliased.json, actionMode: deps.actionMode }) },
+      { role: 'system', content: buildSystemPrompt({ stateJson: aliased.json, actionMode }) },
       ...history,
       { role: 'user', content: current.content },
     ];
     timing.promptChars = messages.reduce((n, m) => n + m.content.length, 0);
-    const tools = deps.actionMode === 'tools' ? [PROPOSE_CHANGES_TOOL] : undefined;
-    const filter = deps.actionMode === 'json' ? new ProposalBlockFilter() : null;
+    const tools = actionMode === 'tools' ? [PROPOSE_CHANGES_TOOL] : undefined;
+    const filter = actionMode === 'json' ? new ProposalBlockFilter() : null;
     let reply = '';
     let rawProposal: string | null = null;
     try {
@@ -277,23 +280,33 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
       ? await replaceReplies(db, conversationId, current.id, reply, metadata)
       : await appendMessage(db, conversationId, 'assistant', reply, metadata);
 
-    if (rawProposal !== null) {
-      const pending = parsed?.ok
-        ? await createPendingAction(db, {
-            source: 'chat',
-            conversationId,
-            messageId: saved.id,
-            proposal: parsed.value,
-            requestText: current.content,
-          })
-        : null;
-      if (pending) {
-        await updateMessageReply(db, saved.id, { metadata: { ...metadata, pendingActionId: pending.id } });
-        yield { type: 'proposal', pendingActionId: pending.id };
+    if (rawProposal !== null && parsed !== null) {
+      let dropped: { reason: DroppedProposalReason; issues: string[] } | null = null;
+      if (!parsed.ok) {
+        dropped = { reason: parsed.reason, issues: parsed.issues };
       } else {
-        const nextContent = reply + IGNORED_PROPOSAL_NOTICE;
-        await updateMessageReply(db, saved.id, { content: nextContent });
-        yield { type: 'text', delta: IGNORED_PROPOSAL_NOTICE };
+        const pending = await createPendingAction(db, {
+          source: 'chat',
+          conversationId,
+          messageId: saved.id,
+          proposal: parsed.value,
+          requestText: current.content,
+        });
+        if (pending.ok) {
+          await updateMessageReply(db, saved.id, { metadata: { ...metadata, pendingActionId: pending.id } });
+          timing.proposal = 'stored';
+          yield { type: 'proposal', pendingActionId: pending.id };
+        } else {
+          dropped = { reason: pending.reason, issues: pending.reason === 'invalid_target' ? pending.detail.split(',') : [] };
+        }
+      }
+      if (dropped) {
+        // Field paths and action indices only: never what the user or the model wrote.
+        console.warn('proposal dropped', dropped);
+        timing.proposal = `dropped:${dropped.reason}`;
+        const notice = ignoredProposalNotice(dropped.reason);
+        await updateMessageReply(db, saved.id, { content: reply + notice });
+        yield { type: 'text', delta: notice };
       }
     }
 

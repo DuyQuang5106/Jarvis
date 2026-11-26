@@ -11,6 +11,12 @@ import { approvePendingAction } from './resolve';
 import type { StoredProposal } from './schema';
 import { createPendingAction } from './store';
 
+/** The id of a proposal that must have been stored. */
+function storedId(result: Awaited<ReturnType<typeof createPendingAction>>): string {
+  if (!result.ok) throw new Error(`proposal dropped: ${result.reason}`);
+  return result.id;
+}
+
 const manual = { origin: 'manual' } as const;
 
 test('mock định tuyến tiến độ sang topic, vướng mắc sang blocker và hạn sang task có dueDate', async () => {
@@ -51,7 +57,7 @@ test('duyệt một phần vẫn phải giữ bản ghi deadline khi có thay đ
       ],
     },
   });
-  expect(pending).not.toBeNull();
-  expect(await approvePendingAction(db, pending!.id, { selectedKeys: [0] })).toMatchObject({ status: 'invalid' });
-  expect(await approvePendingAction(db, pending!.id, { selectedKeys: [1] })).toMatchObject({ status: 'partially_applied' });
+  const id = storedId(pending);
+  expect(await approvePendingAction(db, id, { selectedKeys: [0] })).toMatchObject({ status: 'invalid' });
+  expect(await approvePendingAction(db, id, { selectedKeys: [1] })).toMatchObject({ status: 'partially_applied' });
 });

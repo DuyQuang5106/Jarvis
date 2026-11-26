@@ -22,8 +22,8 @@ test('loadProposal: pending có preview, sau duyệt một phần conflict đặ
       ],
     },
   });
-  expect(created).not.toBeNull();
-  const id = created!.id;
+  expect(created.ok).toBe(true);
+  const id = created.ok ? created.id : '';
 
   const pendingView = await loadProposal(db, id);
   expect(pendingView).toMatchObject({ id, status: 'pending', summary: 'Cập nhật', appliedKeys: [] });

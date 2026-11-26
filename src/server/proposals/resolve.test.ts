@@ -8,6 +8,12 @@ import { noteService, topicService } from '../services/entities';
 import { approvePendingAction, rebasePendingAction, rejectPendingAction } from './resolve';
 import { createPendingAction } from './store';
 
+/** The id of a proposal that must have been stored. */
+function storedId(result: Awaited<ReturnType<typeof createPendingAction>>): string {
+  if (!result.ok) throw new Error(`proposal dropped: ${result.reason}`);
+  return result.id;
+}
+
 const manual = { origin: 'manual' as const };
 let db: Db;
 let areaId: string;
@@ -23,7 +29,7 @@ const propose = async (
   extra: Parameters<typeof createPendingAction>[1]['proposal']['actions'] = [],
   opts: { source?: 'chat' | 'capture'; noteId?: string } = {},
 ) =>
-  (
+  storedId(
     await createPendingAction(db, {
       source: opts.source ?? 'chat',
       noteId: opts.noteId,
@@ -35,8 +41,8 @@ const propose = async (
           ...extra,
         ],
       },
-    })
-  )!.id;
+    }),
+  );
 
 const topic = async () => (await db.select().from(topics).where(eq(topics.id, topicId)))[0];
 const pending = async (id: string) => (await db.select().from(pendingActions).where(eq(pendingActions.id, id)))[0];

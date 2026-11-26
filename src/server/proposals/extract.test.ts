@@ -46,6 +46,10 @@ test('parseProposal: thuần, có khoảng trắng, có code fence, hỏng, sai 
   expect(parseProposal(`\n  ${json}\n`)).toMatchObject({ ok: true });
   expect(parseProposal('```json\n' + json + '\n```')).toMatchObject({ ok: true });
   expect(parseProposal('```\n' + json + '\n```')).toMatchObject({ ok: true });
-  expect(parseProposal('{"summary":')).toEqual({ ok: false });
-  expect(parseProposal('{"summary":"s","actions":[{"type":"delete_task"}]}')).toEqual({ ok: false });
+  expect(parseProposal('{"summary":')).toEqual({ ok: false, reason: 'parse', issues: [] });
+  expect(parseProposal('{"summary":"s","actions":[{"type":"delete_task"}]}')).toMatchObject({
+    ok: false,
+    reason: 'schema',
+    issues: [expect.stringMatching(/^actions\.0/)],
+  });
 });

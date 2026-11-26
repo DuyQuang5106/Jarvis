@@ -95,6 +95,6 @@ test('đề xuất không hợp lệ: chỉ có văn bản và dòng báo (crite
   await page.goto('/chat');
   await page.getByPlaceholder('Nhắn gì đó…').fill('MOCK_BAD_PROPOSAL');
   await page.getByRole('button', { name: 'Gửi' }).click();
-  await expect(page.locator('[data-role="assistant"]').last()).toContainText('đề xuất không hợp lệ nên đã bị bỏ qua');
+  await expect(page.locator('[data-role="assistant"]').last()).toContainText('đã bị bỏ qua');
   await expect(page.getByTestId('proposal-card')).toHaveCount(0);
 });

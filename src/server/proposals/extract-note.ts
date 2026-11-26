@@ -101,7 +101,7 @@ export async function extractNoteProposal(
     });
   });
 
-  if (!pending) {
+  if (!pending.ok) {
     return { status: 'none', reason: 'AI không tìm thấy cập nhật nào hợp lệ trong ghi chú.' };
   }
   return { status: 'proposed', pendingActionId: pending.id };

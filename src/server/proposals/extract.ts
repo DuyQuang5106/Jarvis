@@ -66,7 +66,12 @@ export class ProposalBlockFilter {
   }
 }
 
-export function parseProposal(raw: string): { ok: true; value: ProposeChanges } | { ok: false } {
+/** A failed parse says why (`parse`: not JSON, `schema`: wrong shape) and which fields, never their values. */
+export type ParseProposalResult =
+  | { ok: true; value: ProposeChanges }
+  | { ok: false; reason: 'parse' | 'schema'; issues: string[] };
+
+export function parseProposal(raw: string): ParseProposalResult {
   let cleaned = raw.trim();
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -75,8 +80,9 @@ export function parseProposal(raw: string): { ok: true; value: ProposeChanges } 
   try {
     json = JSON.parse(cleaned);
   } catch {
-    return { ok: false };
+    return { ok: false, reason: 'parse', issues: [] };
   }
   const parsed = ProposeChangesSchema.safeParse(json);
-  return parsed.success ? { ok: true, value: parsed.data } : { ok: false };
+  if (parsed.success) return { ok: true, value: parsed.data };
+  return { ok: false, reason: 'schema', issues: parsed.error.issues.map((i) => i.path.map(String).join('.')) };
 }
