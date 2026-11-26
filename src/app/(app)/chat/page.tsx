@@ -4,11 +4,16 @@ import { ChatView, type ChatMessageView } from '@/components/chat/chat-view';
 import { getDb } from '@/db/client';
 import type { MessageRow } from '@/db/schema';
 import type { ContextRef } from '@/server/ai/context-builder';
+import { APP_TZ, todayIn } from '@/lib/dates';
 import { requireOwner } from '@/server/auth';
+import { getDailyBrief } from '@/server/brief/daily-brief';
 import { getPortfolioSnapshot } from '@/server/queries/snapshot';
 import { getConversation } from '@/server/services/conversations';
 
 export const metadata = { title: 'Chat' };
+
+// The daily brief server actions called from this page wait for the AI (same limit as /api/chat).
+export const maxDuration = 60;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -42,13 +47,22 @@ async function ChatContent({ searchParams }: { searchParams: SearchParams }) {
   const { c } = await searchParams;
   const id = typeof c === 'string' && UUID.test(c) ? c : null;
   const db = await getDb();
-  const [found, snapshot] = await Promise.all([id ? getConversation(db, id) : null, getPortfolioSnapshot(db, new Date())]);
+  const now = new Date();
+  const today = todayIn(APP_TZ, now);
+  // Only what is already stored: generating the brief is left to the card, so the page never waits for the AI.
+  const [found, snapshot, brief] = await Promise.all([
+    id ? getConversation(db, id) : null,
+    getPortfolioSnapshot(db, now),
+    getDailyBrief(db, today),
+  ]);
   return (
     <ChatView
       conversation={found ? { id: found.conversation.id, title: found.conversation.title } : null}
       messages={(found?.messages ?? []).map(toView).filter((m) => m !== null)}
       areas={snapshot.areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind, aiExcluded: a.aiExcluded }))}
       requestedId={typeof c === 'string' ? c : null}
+      brief={brief}
+      today={today}
     />
   );
 }

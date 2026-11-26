@@ -43,6 +43,8 @@ export function MessageList({
 
   useLayoutEffect(() => {
     const el = scroller.current;
+    // The empty state (orientation card, prompts) reads from the top; only a transcript is pinned to its end.
+    if (messages.length === 0 && draft === null && !after) return;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [messages, draft, draftStatus, after, pinKey]);
 

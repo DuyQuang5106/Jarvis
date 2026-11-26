@@ -6,8 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { firstChars } from '@/lib/utils';
 import type { ContextScope } from '@/server/ai/context-builder';
+import type { DailyBrief } from '@/server/brief/daily-brief';
 import type { TurnEvent } from '@/server/chat/run-turn';
 import { Composer } from './composer';
+import { DailyBriefCard } from './daily-brief-card';
 import type { ChatMessageView } from './message-bubble';
 import { MessageList } from './message-list';
 import { touchConversation } from './recent-chats-store';
@@ -38,12 +40,18 @@ export function ChatView({
   messages: initialMessages,
   areas,
   requestedId,
+  brief,
+  today,
 }: {
   conversation: { id: string; title: string } | null;
   messages: ChatMessageView[];
   areas: ChatAreaOption[];
   /** The `c` search param the server rendered these props for (null: none). */
   requestedId: string | null;
+  /** Today's stored orientation brief, or null (the card then asks for it itself). */
+  brief: DailyBrief | null;
+  /** The app day (YYYY-MM-DD) these props were rendered for. */
+  today: string;
 }) {
   const router = useRouter();
   const urlId = useSearchParams().get('c');
@@ -249,7 +257,11 @@ export function ChatView({
         empty={
           // Stale props (see above) are about to be replaced: no prompts to click in the meantime.
           !stale && (
-            <div className="m-auto flex max-w-xl flex-col items-center gap-4 py-8 text-center">
+            <div className="m-auto flex w-full max-w-xl flex-col items-center gap-4 py-4 text-center">
+              {/* Nothing the AI may read: no card, and no request for one. */}
+              {(brief || areas.some((a) => !a.aiExcluded)) && (
+                <DailyBriefCard initial={brief} today={today} onStart={sendMessage} disabled={streaming} />
+              )}
               {missing && <p className="text-sm text-muted-foreground">Không tìm thấy cuộc chat này. Bắt đầu cuộc chat mới bên dưới.</p>}
               <p className="text-lg font-medium">Hôm nay mình giúp gì được?</p>
               <SuggestedPrompts onPick={sendMessage} disabled={streaming} />
