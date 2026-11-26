@@ -45,3 +45,11 @@ export type PendingSource = (typeof PENDING_SOURCES)[number];
 
 export const MESSAGE_ROLES = ['user', 'assistant'] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
+
+/** The parts of a day the check-in asks about, in order (labels and times live in `@/lib/day-slots`). */
+export const SLOT_KEYS = ['morning', 'noon', 'afternoon', 'evening'] as const;
+export type SlotKey = (typeof SLOT_KEYS)[number];
+
+/** `pending` = summary generated, card not handled yet; the others are final. */
+export const CHECKIN_STATUSES = ['pending', 'recorded', 'answered', 'skipped'] as const;
+export type CheckinStatus = (typeof CHECKIN_STATUSES)[number];

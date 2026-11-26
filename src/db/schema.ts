@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   real,
   text,
   time,
@@ -18,6 +19,7 @@ import {
   AREA_KINDS,
   AREA_STATUSES,
   BLOCKER_STATUSES,
+  CHECKIN_STATUSES,
   DEADLINE_TYPES,
   DOC_ROLES,
   ENTITY_TYPES,
@@ -29,6 +31,7 @@ import {
   PENDING_SOURCES,
   PENDING_STATUSES,
   PRIORITIES,
+  SLOT_KEYS,
   TASK_STATUSES,
   TOPIC_STATUSES,
 } from './enums';
@@ -307,6 +310,22 @@ export const dailyBriefs = pgTable('daily_briefs', {
   createdAt: createdAt(),
 }).enableRLS();
 
+/**
+ * One row per handled (or summarised) check-in slot of a local day. A slot without a row is still to ask
+ * about; `pending` keeps the generated summary so reopening the app does not generate it again.
+ */
+export const checkins = pgTable(
+  'checkins',
+  {
+    day: date('day', { mode: 'string' }).notNull(),
+    slot: text('slot', { enum: SLOT_KEYS }).notNull(),
+    status: text('status', { enum: CHECKIN_STATUSES }).notNull(),
+    summary: jsonb('summary'),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.slot] })],
+).enableRLS();
+
 /** Every table by its SQL name: the single source for TABLE_NAMES, export and RLS checks. */
 export const TABLES = {
   areas,
@@ -329,6 +348,7 @@ export const TABLES = {
   settings,
   ai_usage: aiUsage,
   daily_briefs: dailyBriefs,
+  checkins,
 } as const;
 
 export const TABLE_NAMES: readonly string[] = Object.keys(TABLES);
@@ -353,3 +373,4 @@ export type PendingActionRow = typeof pendingActions.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;
 export type AiUsageRow = typeof aiUsage.$inferSelect;
 export type DailyBriefRow = typeof dailyBriefs.$inferSelect;
+export type CheckinRow = typeof checkins.$inferSelect;
