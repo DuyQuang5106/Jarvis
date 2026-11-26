@@ -4,6 +4,7 @@ import { activityLogs, areas, documents } from '@/db/schema';
 import type { AreaKind, DocRole, Origin } from '@/db/enums';
 import { daysUntil, todayIn } from '@/lib/dates';
 import { clip } from './context-truncate';
+import { splitFrontmatter } from './frontmatter';
 import { visibleDocumentConditions } from './document-visibility';
 import { normalizeVi } from './match-areas';
 import { readMarkdownLines } from './markdown-source';
@@ -16,7 +17,8 @@ export const DOCUMENT_CONTEXT_MAX = 12_800;
 
 type Chunk = { heading_path: string[]; ordinal: number; text: string };
 
-export function splitDocument(text: string, markdown: boolean): Chunk[] {
+export function splitDocument(input: string, markdown: boolean): Chunk[] {
+  const text = markdown ? splitFrontmatter(input).body : input;
   const chunks: Chunk[] = [];
   const headings: { level: number; title: string }[] = [];
   let pending = '';

@@ -97,3 +97,10 @@ test('chunk giữ đường dẫn và bỏ qua heading giả trong code block', 
   expect(result.at(-1)).toMatchObject({ heading_path: ['Thật', 'Con'], text: 'đoạn cuối' });
   expect(result.some((chunk) => chunk.heading_path.includes('Giả'))).toBe(false);
 });
+
+test('splitDocument bỏ frontmatter YAML trước khi chia đoạn', () => {
+  const result = splitDocument('---\nentity: HUST/MI1144E/Algebra\ndocument_type: state_snapshot\nstatus: PARTIAL\n---\n\n# 04 — STATE\n\nĐang học đến đầu Chương 5', true);
+  expect(result[0].text.startsWith('# 04 — STATE')).toBe(true);
+  expect(result[0].heading_path).toEqual(['04 — STATE']);
+  expect(result.some((chunk) => chunk.text.includes('document_type:') || chunk.heading_path.some((h) => h.includes('status')))).toBe(false);
+});
