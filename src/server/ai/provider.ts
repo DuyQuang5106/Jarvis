@@ -14,7 +14,10 @@ export type StreamRequest = {
   signal?: AbortSignal;
   /** Chẩn đoán: provider báo `finish_reason` cuối cùng (null nếu không có) khi stream kết thúc bình thường. */
   onFinishReason?: (reason: string | null) => void;
+  /** Token counts of this request, when the provider reports them (called at most once, at the end). */
+  onUsage?: (usage: TokenUsage) => void;
 };
+export type TokenUsage = { inputTokens: number; outputTokens: number };
 
 export interface AiProvider {
   stream(req: StreamRequest): AsyncIterable<ProviderEvent>;

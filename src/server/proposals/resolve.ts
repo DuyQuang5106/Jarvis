@@ -301,7 +301,7 @@ export async function approvePendingAction(
       const finalStatus = uniqueKeys.length < stored.actions.length ? 'partially_applied' : 'applied';
       const selectedMap = new Map(selected.map((s) => [s.key, s]));
       const updatedActions = stored.actions.map((item) => selectedMap.get(item.key) ?? item);
-      const updatedJson: StoredProposal = { ...stored, actions: updatedActions, appliedKeys: uniqueKeys, batchId };
+      const updatedJson: StoredProposal = { ...stored, actions: updatedActions, appliedKeys: uniqueKeys, batchId, appliedPreviews: previews };
       await tx
         .update(pendingActions)
         .set({ status: finalStatus, actionsJson: updatedJson })

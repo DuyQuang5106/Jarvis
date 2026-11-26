@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import { ChatView, type ChatMessageView } from '@/components/chat/chat-view';
 import { getDb } from '@/db/client';
 import type { MessageRow } from '@/db/schema';
-import type { ContextRef } from '@/server/ai/context-builder';
+import type { ReplyStats } from '@/server/chat/run-turn';
 import { APP_TZ, todayIn } from '@/lib/dates';
 import { requireOwner } from '@/server/auth';
 import { getDailyBrief } from '@/server/brief/daily-brief';
@@ -35,13 +35,12 @@ export default function ChatPage({ searchParams }: { searchParams: SearchParams 
 
 function toView(m: MessageRow): ChatMessageView | null {
   if (m.role !== 'user' && m.role !== 'assistant') return null;
-  const meta = (m.metadata ?? {}) as { contextRefs?: ContextRef[]; summaryCount?: number; pendingActionId?: string };
+  const meta = (m.metadata ?? {}) as { stats?: ReplyStats; pendingActionId?: string };
   return {
     id: m.id,
     role: m.role,
     content: m.content,
-    contextRefs: Array.isArray(meta.contextRefs) ? meta.contextRefs : [],
-    summaryCount: typeof meta.summaryCount === 'number' ? meta.summaryCount : 0,
+    stats: meta.stats && typeof meta.stats.totalMs === 'number' ? meta.stats : null,
     pendingActionId: typeof meta.pendingActionId === 'string' ? meta.pendingActionId : null,
   };
 }

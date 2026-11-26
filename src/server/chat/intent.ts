@@ -108,6 +108,20 @@ function reportsScore(text: string): boolean {
 /** A question: ends with `?` or holds a question phrase. `plain` is the accent-free form of `message`. */
 const isQuestion = (message: string, plain: string) => message.trim().endsWith('?') || QUESTION.some((p) => hasPhrase(plain, p));
 
+/** Extra question phrases that only matter when looking for a question anywhere in a longer message. */
+const ASIDE_QUESTION = ['ngay gi', 'ngay bao nhieu', 'hom nay la', 'may gio', 'o dau', 'tai sao', 'vi sao', 'lam sao', 'nhu the nao', 'biet khong', 'duoc khong'];
+
+/**
+ * The message asks something anywhere, not only at its end (`… by the way bạn biết hôm nay là ngày gì`).
+ * Used to make sure a report that also asks gets a written answer, not just a proposal.
+ */
+export function asksSomething(message: string): boolean {
+  const plain = normalizeVi(message);
+  // `kiểm tra`, `tóm tắt`… also name things (`bài kiểm tra Lab`): only the asking phrases count here.
+  const asking = QUESTION.filter((p) => !['kiem tra', 'phan tich', 'tom tat', 'liet ke', 'tinh hinh'].includes(p));
+  return message.includes('?') || [...asking, ...ASIDE_QUESTION].some((p) => hasPhrase(plain, p));
+}
+
 /**
  * The user tells something new (a decision, a result, a problem, an announcement) rather than asking:
  * `có nên chuyển sang Supabase không?` is still a question. `plain` is the accent-free form ({@link normalizeVi}),

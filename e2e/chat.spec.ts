@@ -16,25 +16,22 @@ test('cuộc chat mới có đúng năm prompt gợi ý', async ({ page }) => {
   await expect(page.getByTestId('suggested-prompts').getByRole('button')).toHaveText(['Hôm nay nên làm gì?', 'Đánh giá tuần này', 'Môn nào cần chú ý?', 'Dự án nào đang bị giãn?', 'Cập nhật nhanh']);
 });
 
-test('hỏi về một môn: trả lời từ DB, có nguồn, cuộc chat vào sidebar (criterion 5)', async ({ page, isMobile }) => {
+test('hỏi về một môn: trả lời từ DB, hiện thời gian thay cho nguồn, cuộc chat vào sidebar (criterion 5)', async ({ page, isMobile }) => {
   await page.goto('/chat');
   await send(page, 'Mobile Programming đang ở tình trạng nào?');
   await expect(lastAssistant(page)).toContainText('Mobile Programming=not_started');
   await expect(lastAssistant(page)).toContainText('detail:Mobile Programming');
   await expect(page).toHaveURL(/\/chat\?c=[0-9a-f-]{36}/);
-  const refs = lastAssistant(page).getByTestId('context-refs');
-  await expect(refs).toContainText('Dựa trên:');
-  await expect(refs).toContainText('Tổng quan 14 mục');
+  await expect(lastAssistant(page).getByTestId('reply-stats')).toContainText(/tổng \d+,\d giây/);
+  await expect(lastAssistant(page)).not.toContainText('Dựa trên');
   const chatUrl = page.url();
-  const chip = refs.getByRole('link', { name: /Mobile Programming/ });
-  if (isMobile) expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  await chip.click();
-  await expect(page.getByRole('dialog', { name: 'Mobile Programming' })).toBeVisible();
-  await page.goBack();
+  // Reopening the conversation shows the stats saved with the reply.
+  await page.reload();
+  await expect(lastAssistant(page).getByTestId('reply-stats')).toContainText(/tổng \d+,\d giây/);
   await expect(page).toHaveURL(chatUrl);
   await expect(page.locator('[data-role="user"]')).toHaveText(['Mobile Programming đang ở tình trạng nào?']);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
-  // Sending again after Back continues the same conversation.
+  // Sending again after a reload continues the same conversation.
   await send(page, 'còn Database thì sao?');
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(2);
   await expect(lastAssistant(page)).toContainText('detail:Database');

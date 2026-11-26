@@ -34,8 +34,6 @@ test.beforeEach(async ({ request, page }) => {
 
 test('duyệt sửa Markdown, xem một phiên bản AI rồi hoàn tác', async ({ page }) => {
   const card = await ask(page);
-  await expect(page.getByTestId('context-refs').getByRole('link', { name: /Tiến độ ôn tập/ }))
-    .toHaveAttribute('href', /[&?]doc=/);
   expect(await card.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(0);
   await card.getByRole('button', { name: 'Approve' }).click();
   await expect(card).toContainText('Đã áp dụng 1/1');

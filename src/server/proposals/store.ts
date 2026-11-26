@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { pendingActions } from '@/db/schema';
 import type { ProposeChanges, StoredProposal } from './schema';
+import { dropDuplicateWrites } from './dedupe';
 import { hasDeadline, hasDeadlineRoute } from './routing';
 import { stampEachAction } from './validate';
 
@@ -48,7 +49,9 @@ export async function createPendingAction(
   if (requiresDeadlineRoute && !hasDeadlineRoute(input.proposal.actions)) {
     return { ok: false, reason: 'deadline_route', detail: 'no dated task or assessment' };
   }
-  const stamped = await stampEachAction(db, input.proposal.actions);
+  const deduped = await dropDuplicateWrites(db, input.proposal.actions);
+  if (deduped.dropped > 0) console.info('proposal duplicate writes dropped', { count: deduped.dropped });
+  const stamped = await stampEachAction(db, deduped.actions);
   // Actions with a missing target are left out; the proposal is dropped only when none remains.
   if (stamped.stored.length === 0) {
     return { ok: false, reason: 'invalid_target', detail: stamped.errors.map((e) => `actions[${e.index}]`).join(',') };

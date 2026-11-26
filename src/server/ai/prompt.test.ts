@@ -36,9 +36,10 @@ test('luật đề xuất: thông tin mới được ghi vào đúng tài liệu
   for (const mode of ['tools', 'json'] as const) {
     const prompt = buildSystemPrompt({ stateJson: '{}', actionMode: mode });
     for (const phrase of [
-      'kể thông tin mới', 'quyết định, kết quả thử nghiệm, vướng mắc, thay đổi kế hoạch, thông báo',
+      'kể thông tin mới', 'quyết định, kết quả thử nghiệm, thông báo của giảng viên hay nhóm',
       '05_LOG.md', '04_STATE.md', 'create_blocker, kèm một dòng trong tài liệu',
-      'heading đúng y một heading có thật', 'không lặp cùng một dòng qua nhiều tài liệu','create_document với areaId của mục', 'title "STATE.md"',
+      'heading chép đúng y một heading có thật', 'MỖI THÔNG TIN GHI VÀO ĐÚNG MỘT TÀI LIỆU', '06_TIMELINE.md', 'upsert_assessment có dueDate',
+      'trả lời đủ từng câu hỏi đó', 'create_document với areaId của mục', 'title "STATE.md"',
       '"## Trạng thái hiện tại", "## Quyết định", "## Vướng mắc", "## Nhật ký"',
       '"- YYYY-MM-DD: …"', 'now.date', 'không suy diễn thêm', 'không đề xuất lại',
     ])

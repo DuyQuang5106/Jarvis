@@ -1,49 +1,45 @@
 # Báo cáo đánh giá AI
 
-- Ngày chạy: 2026-11-26T06:01:57.733Z
+- Ngày chạy: 2026-11-26T17:00:56.585Z
 - Model: claude-sonnet-5
 - Chế độ đề xuất: tools
-- Kết quả: 6/6 case đạt
+- Kết quả: 4/6 case đạt
 
 | Case | Kết quả | Chữ đầu tiên (ms) | Tổng (ms) | Tài liệu | Ký tự prompt | Lý do trượt |
 |---|---|---|---|---|---|---|
-| algebra-progress | đạt | 16279 | 17415 | 12 | 63723 | — |
-| algebra-today | đạt | 4830 | 6128 | 12 | 63719 | — |
-| algebra-pacing | đạt | 5494 | 11933 | 10 | 63281 | — |
-| today-portfolio | đạt | 5124 | 7424 | 7 | 54349 | — |
-| exam-schedule | đạt | 13883 | 18973 | 10 | 58446 | — |
-| report-progress | đạt | 7275 | 7286 | 12 | 64984 | — |
+| report-progress | đạt | 18097 | 18987 | 11 | 66945 | — |
+| recall-after-report | đạt | 6430 | 6487 | 12 | 64982 | — |
+| lab-report-once | trượt | 26780 | 29417 | 16 | 73971 | đề xuất ghi 2 chỗ trong tài liệu (tối đa 1) |
+| exam-dates-placement | trượt | 12532 | 13175 | 12 | 74306 | đề xuất ghi vào mục "Upcoming deadlines / assessments: **none verified in available sources**" (không được khớp /lab\|practical\|thực hành/i) |
+| report-with-aside-question | đạt | 14205 | 18004 | 14 | 76017 | — |
+| recall-database | đạt | 6978 | 9011 | 12 | 74408 | — |
 
 ## Câu trả lời (tối đa 300 ký tự mỗi case)
 
-### algebra-progress
-
-> Theo cập nhật gần nhất ngày 23/11, bạn đã học khoảng **4/10 phần của Chương 5**. Chưa có cập nhật mới hơn nên mình chưa rõ bạn đã học tiếp đến đâu.
-
-### algebra-today
-
-> Theo cập nhật gần nhất, phần Algebra đang học **Chương 5: Không gian Euclid và dạng toàn phương**; bạn ghi nhận đã đi được khoảng **4/10 phần** vào ngày 23/11. Hôm nay nên học tiếp phần Chương 5 còn lại, nhưng mình chưa biết chính xác bạn đã hoàn thành những mục nào.
-
-### algebra-pacing
-
-> Theo cập nhật gần nhất ngày 23/11, Algebra đang ở giai đoạn chuyển từ ôn kiến thức sang chuẩn bị cho cuối kỳ: bạn đã báo cáo **giữa kỳ 24/30**, mục tiêu là **A**, và đã học khoảng **4/10 phần Chương 5**. Bạn chưa làm một đề cuối kỳ viết trọn vẹn tính đến lần cập nhật đó.
-> 
-> - **Điểm thuận lợi:** kết q…
-
-### today-portfolio
-
-> Hôm nay, mình ưu tiên **môn Đại số**: theo ghi nhận gần nhất, bạn đang học khoảng 4/10 phần Chương 5 và chưa làm đề cuối kỳ trọn vẹn.
-> 
-> Giả định bạn có một buổi 2 giờ:
-> 1. **90 phút:** học tiếp phần còn lại của Chương 5, ghi rõ mục nào đã học xong.
-> 2. **30 phút:** làm vài câu tự luận Chương 3–5 không …
-
-### exam-schedule
-
-> Hiện mình chưa có **lịch thi chính thức** cho các môn trong dữ liệu. Riêng **Đại số tuyến tính** có ghi nhận kỳ thi *dự kiến đầu tháng 1/2027*, nhưng chưa có ngày giờ xác nhận. Các môn còn lại cũng chưa có ngày thi được ghi lại.
-> 
-> Bạn gửi ảnh hoặc nội dung thông báo trên LMS, mình sẽ giúp tổng hợp lị…
-
 ### report-progress
 
-> Ghi nhận tiến độ Algebra hiện tại: đang học đến đầu Chương 5; cập nhật tài liệu trạng thái và nhật ký tiến độ.
+> Mình sẽ ghi nhận bạn đã học xong Chương 5 và đang bắt đầu Chương 6 trong tiến độ Algebra; Chương 6 sẽ được tạo mới vì chưa có mục theo dõi tương ứng.
+
+### recall-after-report
+
+> Theo cập nhật hôm nay, bạn đã học xong Chương 5 và đang bắt đầu Chương 6. Trước đó, tài liệu ghi bạn mới ở khoảng 4/10 Chương 5, nên đây là tiến độ mới hơn.
+
+### lab-report-once
+
+> Mình sẽ ghi nhận bạn đã làm tốt và qua cả 3 nội dung Lab; đồng thời cập nhật bài kiểm tra Lab ở buổi 4–5, dự kiến ôn bằng 3 slide.
+
+### exam-dates-placement
+
+> Mình sẽ đề xuất ghi nhận lịch giữa kỳ ngày 04/12/2026 và lịch cuối kỳ dự kiến ngày 27/01/2027 vào danh sách thi Database và tài liệu lịch.
+
+### report-with-aside-question
+
+> Bạn đã học xong lý thuyết Chương 4; mình sẽ ghi nhận là đã học, chưa xem như đã luyện thành thạo. Hôm nay theo lịch trong workspace là **Thứ Năm, 26/11/2026**; bài giữa kỳ Database đang được ghi nhận vào **04/12**, còn phạm vi hết Chương 4 hiện là dự đoán của bạn, chưa phải thông báo chính thức.
+> 
+> Mì…
+
+### recall-database
+
+> Theo ghi nhận mới nhất, bạn đã học xong lý thuyết Chương 4 của Database và đang chuyển sang luyện bài tập trước kỳ giữa kỳ ngày 04/12. Bạn dự đoán đề giữa kỳ sẽ bao hết Chương 4; đây là nhận định của bạn, chưa phải phạm vi thi được xác nhận.
+> 
+> Phần Lab, bạn báo đã làm tốt cả 3 nội dung; buổi 4–5 sẽ k…

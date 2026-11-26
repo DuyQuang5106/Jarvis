@@ -69,7 +69,7 @@ export function MessageList({
           />
         ))}
         {draft !== null && (
-          <MessageBubble streaming status={draftStatus} message={{ id: DRAFT_ID, role: 'assistant', content: draft, contextRefs: [], summaryCount: 0 }} />
+          <MessageBubble streaming status={draftStatus} message={{ id: DRAFT_ID, role: 'assistant', content: draft }} />
         )}
         {after}
       </div>

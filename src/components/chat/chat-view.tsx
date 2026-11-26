@@ -179,8 +179,7 @@ export function ChatView({
                 id: e.assistantMessageId,
                 role: 'assistant',
                 content: text,
-                contextRefs: e.contextRefs,
-                summaryCount: e.summaryCount,
+                stats: e.stats,
                 pendingActionId,
               },
             ]);
@@ -213,7 +212,7 @@ export function ChatView({
     const text = raw.trim();
     if (!text || streaming) return;
     const id = localId();
-    setMessages((ms) => [...ms, { id, role: 'user', content: text, contextRefs: [], summaryCount: 0 }]);
+    setMessages((ms) => [...ms, { id, role: 'user', content: text }]);
     setInput('');
     void runTurn({ conversationId: conversationId ?? undefined, message: text, scope }, id);
   }
@@ -225,7 +224,7 @@ export function ChatView({
   function startPreset(preset: ChatPreset) {
     const id = localId();
     setScope(preset.scope);
-    setMessages([{ id, role: 'user', content: preset.message, contextRefs: [], summaryCount: 0 }]);
+    setMessages([{ id, role: 'user', content: preset.message }]);
     void runTurn({ message: preset.message, scope: preset.scope }, id);
   }
   useEffect(() => {

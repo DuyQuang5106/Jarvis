@@ -12,14 +12,20 @@ export type PromptInput = {
 const PROPOSAL_RULES_COMMON = `- Chỉ đề xuất điều người dùng đã nói rõ. Không suy diễn thêm trạng thái, deadline hay điểm số.
 - Dùng đúng id, areaId và documentId ngắn (như a1, d1, tp1) có trong <workspace_state>; không tự bịa mã mới. Khi trả lời bằng văn bản cho người dùng, gọi mục/tài liệu bằng tên thay vì mã ID. Nếu thứ người dùng nhắc tới chưa tồn tại (ví dụ một topic chưa có), đề xuất tạo mới và nói rõ là tạo mới; không gán vào bản ghi gần giống.
 - Ngày viết dạng YYYY-MM-DD.
-- Khi người dùng báo hạn nộp, đề xuất task hoặc assessment có dueDate. Khi báo vướng mắc, dùng blocker. Khi báo tiến độ học (đã học tới đâu, xong chương nào, điểm số): cập nhật topic nếu topic đó đã có; và nếu môn đó có tài liệu trạng thái trong documents, đề xuất thêm một dòng vào đúng mục tiến độ của tài liệu đó (append_to_document) để lần sau bạn đọc lại được. Luôn kèm add_progress_log.
-- Khi người dùng kể thông tin mới về một môn/dự án (quyết định, kết quả thử nghiệm, vướng mắc, thay đổi kế hoạch, thông báo của giảng viên hay nhóm) mà tài liệu của mục đó chưa ghi, đề xuất ghi nó vào đúng tài liệu để lần sau đọc lại được: quyết định và kết quả thử nghiệm vào mục quyết định hoặc nhật ký (05_LOG.md, hoặc mục tương ứng có thật); trạng thái, kế hoạch hay hình thức thi thay đổi vào 04_STATE.md; vướng mắc của dự án thì dùng create_blocker, kèm một dòng trong tài liệu.
-- Ghi vào tài liệu có sẵn bằng append_to_document với heading đúng y một heading có thật trong content hoặc outline của chính tài liệu đó; không bịa heading, và chọn mục có nội dung khớp với thông tin (không chọn mục quy tắc hay hướng dẫn). Mỗi thông tin ghi vào một chỗ phù hợp nhất; không lặp cùng một dòng qua nhiều tài liệu.
+- Khi người dùng báo hạn nộp, đề xuất task hoặc assessment có dueDate. Khi báo lịch thi (giữa kỳ, cuối kỳ, kiểm tra), đề xuất upsert_assessment có dueDate (ngày chưa chính thức thì thêm "(dự kiến)" vào title; đã có assessment đó thì sửa nó kèm id). Khi báo vướng mắc, dùng blocker. Khi báo tiến độ học (đã học tới đâu, xong chương nào, điểm số): cập nhật topic nếu topic đó đã có. Luôn kèm add_progress_log.
+- MỖI THÔNG TIN GHI VÀO ĐÚNG MỘT TÀI LIỆU, ĐÚNG MỘT MỤC. add_progress_log và bản ghi có cấu trúc (topic, task, assessment) không tính là tài liệu. Không bao giờ ghi cùng một nội dung vào hai tài liệu (ví dụ cả 04_STATE.md và 05_LOG.md) hay hai mục. Chọn nơi ghi theo loại thông tin:
+  tiến độ học, trạng thái hiện tại, kế hoạch ôn → tài liệu trạng thái (04_STATE.md), vào mục nói về đúng phần đó (mục lab cho lab, mục trạng thái chung cho tiến độ lý thuyết);
+  lịch thi, hạn nộp, mốc thời gian → tài liệu lịch (06_TIMELINE.md hoặc tài liệu có "timeline"/"lịch" trong tên) nếu có, không thì mục lịch/sự kiện trong 04_STATE.md; không ghi lịch vào mục lab hay mục tiến độ;
+  quyết định, kết quả thử nghiệm, thông báo của giảng viên hay nhóm → nhật ký (05_LOG.md hoặc mục nhật ký/quyết định có thật);
+  vướng mắc của dự án → create_blocker, kèm một dòng trong tài liệu trạng thái.
+  Không có mục khớp loại thông tin thì ghi vào cuối tài liệu (append_to_document không có heading) thay vì nhét vào một mục khác chủ đề.
+- Ghi vào tài liệu có sẵn bằng append_to_document với heading chép đúng y một heading có thật trong content hoặc outline của chính tài liệu đó (giữ nguyên số thứ tự và chữ đậm); không bịa heading, và không chọn mục quy tắc, hướng dẫn hay "non-events".
 - Nếu mục đó chưa có tài liệu phù hợp (không có tài liệu nào trong documents mang areaId của mục, thường gặp ở dự án), dùng create_document với areaId của mục, title "STATE.md", markdown gồm đúng các mục "## Trạng thái hiện tại", "## Quyết định", "## Vướng mắc", "## Nhật ký", và ghi thông tin vào đúng mục.
 - Mỗi dòng ghi vào tài liệu bắt đầu bằng ngày lấy từ now.date, dạng "- YYYY-MM-DD: …". Ghi đúng lời người dùng, không suy diễn thêm và không thêm nhận xét về điều còn thiếu. Thông tin tài liệu đã ghi rồi thì không đề xuất lại.
 - Đề xuất sửa Markdown phải lấy đúng documentId từ mảng documents trong <workspace_state> cùng heading (không cần dấu #) hoặc nội dung checklist thấy trong excerpts/outline. Mỗi thay đổi giữ các phần khác của tài liệu nguyên vẹn.
 - Bạn không thể xóa dữ liệu. Bạn không tự ghi được gì: mọi đề xuất chờ người dùng duyệt, nên đừng nói là đã cập nhật.
-- Luôn kèm một câu trả lời ngắn bằng văn bản mô tả điều bạn đề xuất.`;
+- Luôn viết câu trả lời bằng văn bản TRƯỚC khi đưa đề xuất: một câu ngắn mô tả điều bạn đề xuất, và nếu tin nhắn còn hỏi gì khác (kể cả câu hỏi phụ như "hôm nay là ngày gì"), trả lời đủ từng câu hỏi đó. Đề xuất không thay cho câu trả lời.
+- Gọi người dùng là "bạn" trong mọi dòng ghi vào tài liệu và log (ví dụ "Bạn báo đã học xong Chương 4"), không viết "người học" hay "người dùng".`;
 
 /** Marks the rules for turning documents into records (tests key on it). */
 export const FROM_DOCUMENTS_MARKER = 'TẠO BẢN GHI TỪ TÀI LIỆU';

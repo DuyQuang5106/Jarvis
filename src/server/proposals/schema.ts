@@ -226,6 +226,11 @@ export type StoredProposal = {
   requiresDeadlineRoute?: boolean;
   batchId?: string;
   undoneAt?: string;
+  /**
+   * Previews of the applied actions as they were right before applying. Once applied, a live preview compares
+   * against data that already holds the change (a document shows the appended line twice, a field shows no change).
+   */
+  appliedPreviews?: ActionPreview[];
 };
 
 export type ActionPreview = {

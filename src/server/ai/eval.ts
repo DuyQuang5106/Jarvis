@@ -25,6 +25,10 @@ export type EvalCase = {
   proposalMustInclude?: string[];
   /** Approve every action of the stored proposal, so a later case can check that the workspace remembers it. */
   approveProposal?: boolean;
+  /** At most this many document edits (append/replace) in the stored proposal: one report is written once. */
+  maxDocumentWrites?: number;
+  /** Case-insensitive regexes no document edit's heading may match (a schedule never goes under the lab section). */
+  proposalHeadingMustNotMatch?: string[];
   /** Run the weekly review of the current week (`generateWeeklyReview`) instead of a chat turn; `question` is a label. */
   weeklyReview?: boolean;
   maxFirstTokenMs?: number;
@@ -66,6 +70,8 @@ const EvalCaseSchema = z
     expectProposal: z.boolean().optional(),
     proposalMustInclude: strings,
     approveProposal: z.boolean().optional(),
+    maxDocumentWrites: z.number().int().nonnegative().optional(),
+    proposalHeadingMustNotMatch: strings,
     weeklyReview: z.boolean().optional(),
     maxFirstTokenMs: z.number().positive().optional(),
   })
@@ -75,7 +81,7 @@ const EvalCaseSchema = z
 export function parseEvalCases(json: string): EvalCase[] {
   const cases = z.array(EvalCaseSchema).parse(JSON.parse(json));
   for (const c of cases) {
-    for (const re of [...(c.answerMustMatch ?? []), ...(c.answerMustNotMatch ?? [])]) new RegExp(re, 'i');
+    for (const re of [...(c.answerMustMatch ?? []), ...(c.answerMustNotMatch ?? []), ...(c.proposalHeadingMustNotMatch ?? [])]) new RegExp(re, 'i');
   }
   return cases;
 }
@@ -164,11 +170,19 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
   for (const re of c.answerMustNotMatch ?? []) if (new RegExp(re, 'i').test(reply)) failures.push(`câu trả lời không được khớp /${re}/i`);
   if (c.expectProposal === true && !proposed) failures.push('cần có đề xuất');
   if (c.expectProposal === false && proposed) failures.push('không được có đề xuất');
-  if (pendingActionId && (c.proposalMustInclude?.length || c.approveProposal)) {
+  if (pendingActionId && (c.proposalMustInclude?.length || c.approveProposal || c.maxDocumentWrites !== undefined || c.proposalHeadingMustNotMatch?.length)) {
     const [row] = await deps.db.select().from(pendingActions).where(eq(pendingActions.id, pendingActionId));
     const stored = row.actionsJson as StoredProposal;
     const types = stored.actions.map((a) => a.action.type as string);
     for (const type of c.proposalMustInclude ?? []) if (!types.includes(type)) failures.push(`đề xuất thiếu hành động ${type}`);
+    const writes = stored.actions.flatMap((a) => (a.action.type === 'append_to_document' || a.action.type === 'replace_section' ? [a.action] : []));
+    if (c.maxDocumentWrites !== undefined && writes.length > c.maxDocumentWrites) {
+      failures.push(`đề xuất ghi ${writes.length} chỗ trong tài liệu (tối đa ${c.maxDocumentWrites})`);
+    }
+    for (const re of c.proposalHeadingMustNotMatch ?? []) {
+      const bad = writes.find((w) => w.heading && new RegExp(re, 'i').test(w.heading));
+      if (bad) failures.push(`đề xuất ghi vào mục "${bad.heading}" (không được khớp /${re}/i)`);
+    }
     if (c.approveProposal) {
       const approved = await approvePendingAction(deps.db, pendingActionId, { selectedKeys: stored.actions.map((a) => a.key) });
       if (approved.status !== 'applied') failures.push(`duyệt đề xuất: ${approved.status}`);

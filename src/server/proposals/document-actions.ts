@@ -26,6 +26,50 @@ export async function loadDocumentArea(db: DbOrTx, id: string) {
   return area && !area.aiExcluded && !area.archivedAt ? area : null;
 }
 
+type MarkdownLine = ReturnType<typeof readMarkdownLines>[number];
+
+/** Heading text compared loosely: no `#`, emphasis, numbering, accents, case or trailing punctuation. */
+export function looseHeading(text: string): string {
+  return text
+    .replace(/^ {0,3}#{1,6}[ \t]+/, '')
+    .replace(/[ \t]+#+[ \t]*$/, '')
+    .replace(/[*_`]/g, '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/gi, 'd')
+    .toLowerCase()
+    .replace(/^\s*\d+(?:\.\d+)*[.)]?\s+/, '')
+    .replace(/[\s:.\-–—]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The one heading a proposal names. Models often copy a heading slightly off (no numbering, no bold part,
+ * only its start, or a title the last approved edit changed), so the match loosens step by step: exact text,
+ * without `#`, loosely equal, then one loose text starting with the other. Each step must match exactly one.
+ */
+function findHeading(lines: MarkdownLine[], wanted: string): MarkdownLine | null {
+  const headings = lines.filter((line) => line.heading);
+  const stripped = wanted.replace(/^ {0,3}#{1,6}[ \t]+/, '').replace(/[ \t]+#+[ \t]*$/, '').trim();
+  const loose = looseHeading(wanted);
+  const steps: ((label: string) => boolean)[] = [
+    (label) => label === wanted,
+    (label) => label === stripped,
+    (label) => looseHeading(label) === loose,
+    (label) => {
+      const l = looseHeading(label);
+      return loose.length >= 4 && l.length >= 4 && (l.startsWith(loose) || loose.startsWith(l));
+    },
+  ];
+  for (const step of steps) {
+    const matches = headings.filter((line) => step(line.heading!.label));
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) return null; // ambiguous: never guess between two sections
+  }
+  return null;
+}
+
 export function editDocument(doc: Pick<DocumentRow, 'bodyMd' | 'title'>, action: ExistingDocumentAction) {
   const body = doc.bodyMd;
   if (action.type === 'rename_document') {
@@ -54,11 +98,8 @@ export function editDocument(doc: Pick<DocumentRow, 'bodyMd' | 'title'>, action:
     const next = body.trimEnd() ? body.trimEnd() + newline.repeat(2) + markdown + newline : markdown + newline;
     return { before: '', after: markdown, anchor: body, body: next, title: doc.title };
   }
-  const normalizedHeading = action.heading.replace(/^ {0,3}#{1,6}[ \t]+/, '').replace(/[ \t]+#+[ \t]*$/, '').trim();
-  const exactMatches = lines.filter((line) => line.heading?.label === action.heading);
-  const matches = exactMatches.length > 0 ? exactMatches : lines.filter((line) => line.heading?.label === normalizedHeading);
-  if (matches.length !== 1) return null;
-  const head = matches[0];
+  const head = findHeading(lines, action.heading);
+  if (!head) return null;
   const following = lines.find((line) => line.start > head.start && line.heading && line.heading.level <= head.heading!.level);
   const end = following?.start ?? body.length;
   const contentStart = head.heading!.end;

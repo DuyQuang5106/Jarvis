@@ -8,7 +8,7 @@ import { hiddenDocumentIds } from '../ai/document-visibility';
 import { aliasWorkspaceState, resolveProposalAliases } from '../ai/id-aliases';
 import { matchAreas } from '../ai/match-areas';
 import { WEEKLY_REVIEW_MAX_ACTIONS, buildSystemPrompt } from '../ai/prompt';
-import type { AiProvider, ChatMessage } from '../ai/provider';
+import type { AiProvider, ChatMessage, TokenUsage } from '../ai/provider';
 import { AiCapExceededError } from '../errors';
 import { ProposalBlockFilter, parseProposal, type ParseProposalResult } from '../proposals/extract';
 import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
@@ -22,7 +22,7 @@ import {
   replaceReplies,
   updateMessageReply,
 } from '../services/conversations';
-import { allowsProposal } from './intent';
+import { allowsProposal, asksSomething } from './intent';
 
 export type TurnEvent =
   | { type: 'meta'; conversationId: string; userMessageId: string }
@@ -30,7 +30,7 @@ export type TurnEvent =
   | { type: 'status'; message: string }
   | { type: 'text'; delta: string }
   | { type: 'proposal'; pendingActionId: string }
-  | { type: 'done'; assistantMessageId: string; contextRefs: ContextRef[]; summaryCount: number }
+  | { type: 'done'; assistantMessageId: string; contextRefs: ContextRef[]; summaryCount: number; stats: ReplyStats }
   | { type: 'error'; message: string };
 export type TurnDeps = {
   db: Db;
@@ -90,7 +90,13 @@ type TurnTiming = {
   documents: number | null;
   finishReason: string | null;
   proposal: string;
+  /** Summed over the turn's provider calls; null when the provider reports no usage. */
+  inputTokens: number | null;
+  outputTokens: number | null;
 };
+
+/** Shown under each assistant reply (saved in its metadata as `stats`). */
+export type ReplyStats = { inputTokens: number | null; outputTokens: number | null; firstTokenMs: number | null; totalMs: number };
 /** The `chat turn` log line. */
 export type TurnTimingReport = TurnTiming & { totalMs: number; model?: string };
 
@@ -134,10 +140,63 @@ function keepWeeklyActions(parsed: ParseProposalResult, weekly: boolean): ParseP
   return { ...parsed, value: { ...parsed.value, actions: kept }, skipped: parsed.skipped + parsed.value.actions.length - kept.length };
 }
 
+/** Reply of the aside call when the message holds no question beyond the report. */
+const NO_ASIDE = 'KHONG_CO';
+const ASIDE_MAX_OUTPUT_TOKENS = 1000;
+
+/**
+ * The aside call: the same prompt (so a provider cache can reuse it), the proposal as the assistant's turn,
+ * then a request to answer the questions the report also held. Yields its text after a blank line; returns
+ * it, or '' when there was nothing to answer or the call failed (the proposal stands either way).
+ */
+async function* answerAside(deps: TurnDeps, messages: ChatMessage[], summary: string, timing: TurnTiming): AsyncGenerator<TurnEvent, string> {
+  const followUp: ChatMessage[] = [
+    ...messages,
+    { role: 'assistant', content: `Mình đã đề xuất cập nhật (đang chờ bạn duyệt): ${summary}` },
+    {
+      role: 'user',
+      content: `Ngoài phần báo cập nhật, tin nhắn trước của tôi có hỏi gì khác không? Nếu có, trả lời ngắn từng câu hỏi đó, không nhắc lại đề xuất. Nếu không có câu hỏi nào, chỉ trả lời đúng ${NO_ASIDE}.`,
+    },
+  ];
+  let text = '';
+  try {
+    for await (const e of deps.provider.stream({
+      messages: followUp,
+      maxOutputTokens: ASIDE_MAX_OUTPUT_TOKENS,
+      signal: deps.signal,
+      onUsage: (u) => addUsage(timing, u),
+    })) {
+      if (e.type === 'text') text += e.delta;
+    }
+  } catch (e) {
+    if (!deps.signal?.aborted) console.error('chat turn aside failed', { name: (e as { name?: string })?.name });
+    return '';
+  }
+  text = text.trim();
+  if (!text || text.includes(NO_ASIDE)) return '';
+  const out = `\n\n${text}`;
+  yield { type: 'text', delta: out };
+  return out;
+}
+
+function addUsage(timing: TurnTiming, usage: TokenUsage) {
+  timing.inputTokens = (timing.inputTokens ?? 0) + usage.inputTokens;
+  timing.outputTokens = (timing.outputTokens ?? 0) + usage.outputTokens;
+}
+
 /** One chat turn; whatever happens (reply, error, `Dừng`), exactly one `chat turn` timing line is logged. */
 export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGenerator<TurnEvent> {
   const started = performance.now();
-  const timing: TurnTiming = { contextMs: null, firstTokenMs: null, promptChars: null, documents: null, finishReason: null, proposal: 'none' };
+  const timing: TurnTiming = {
+    contextMs: null,
+    firstTokenMs: null,
+    promptChars: null,
+    documents: null,
+    finishReason: null,
+    proposal: 'none',
+    inputTokens: null,
+    outputTokens: null,
+  };
   try {
     yield* turn(deps, input, timing, started);
   } finally {
@@ -264,6 +323,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
         onFinishReason: (reason) => {
           timing.finishReason = reason;
         },
+        onUsage: (u) => addUsage(timing, u),
       });
       for await (const e of events) {
         timing.firstTokenMs ??= elapsed();
@@ -306,6 +366,12 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
       if (parsed?.ok) {
         reply = parsed.value.summary;
         yield { type: 'text', delta: reply };
+        // A report that also asks something (`… hôm nay là ngày gì?`) answered with the tool call alone:
+        // ask once more for a written answer, without tools, so the question is not lost.
+        if (!weekly && asksSomething(current.content)) {
+          const answer = yield* answerAside(deps, messages, parsed.value.summary, timing);
+          if (answer) reply += answer;
+        }
       } else if (rawProposal === null) {
         console.error('chat turn failed', { name: 'EmptyReply', status: undefined });
         return yield err(PROVIDER_FAILED);
@@ -321,7 +387,14 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
     if (input.regenerate) {
       for (const old of oldReplies) await supersedeForMessage(db, old.id);
     }
-    const metadata: Record<string, unknown> = { contextRefs: ctx.refs, summaryCount: ctx.summaryCount, truncated: ctx.truncated };
+    const stats: ReplyStats = {
+      inputTokens: timing.inputTokens,
+      outputTokens: timing.outputTokens,
+      firstTokenMs: timing.firstTokenMs,
+      totalMs: elapsed(),
+    };
+    // contextRefs stay in metadata: history hiding (excluded areas, hidden documents) keys on them.
+    const metadata: Record<string, unknown> = { contextRefs: ctx.refs, summaryCount: ctx.summaryCount, truncated: ctx.truncated, stats };
     const saved = input.regenerate
       ? await replaceReplies(db, conversationId, current.id, reply, metadata)
       : await appendMessage(db, conversationId, 'assistant', reply, metadata);
@@ -364,7 +437,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
       }
     }
 
-    yield { type: 'done', assistantMessageId: saved.id, contextRefs: ctx.refs, summaryCount: ctx.summaryCount };
+    yield { type: 'done', assistantMessageId: saved.id, contextRefs: ctx.refs, summaryCount: ctx.summaryCount, stats };
   } finally {
     if (locked) inFlight.delete(locked);
   }

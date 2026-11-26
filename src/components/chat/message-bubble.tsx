@@ -7,15 +7,15 @@ import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { ContextRef } from '@/server/ai/context-builder';
-import { ContextRefs } from './context-refs';
+import type { ReplyStats as Stats } from '@/server/chat/run-turn';
+import { ReplyStats } from './reply-stats';
 
 export type ChatMessageView = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  contextRefs: ContextRef[];
-  summaryCount: number;
+  /** Tokens and timing of an assistant reply; null for user messages and replies saved before stats existed. */
+  stats?: Stats | null;
   pendingActionId?: string | null;
 };
 
@@ -182,7 +182,7 @@ export function MessageBubble({
               </Button>
             )}
           </div>
-          <ContextRefs refs={message.contextRefs} summaryCount={message.summaryCount} />
+          <ReplyStats stats={message.stats} />
           {footer}
         </>
       )}

@@ -24,10 +24,12 @@ export async function loadProposal(db: DbOrTx, id: string): Promise<ProposalView
   if (!row) return null;
   const stored = row.actionsJson as StoredProposal;
   const rawPreviews = await describeStored(db, stored.actions);
+  // Applied actions show the preview frozen at approval: a live one would compare against data that already holds the change.
+  const frozen = new Map((stored.appliedPreviews ?? []).map((p) => [p.key, p]));
   const previews =
     row.status === 'pending'
       ? rawPreviews
-      : rawPreviews.map((p) => ({ ...p, conflict: 'none' as const }));
+      : rawPreviews.map((p) => ({ ...(frozen.get(p.key) ?? p), conflict: 'none' as const }));
   return {
     id: row.id,
     status: row.status,
