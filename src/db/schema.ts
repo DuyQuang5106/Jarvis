@@ -300,6 +300,13 @@ export const noteDocumentMap = pgTable('note_document_map', {
   migratedAt: createdAt(),
 }).enableRLS();
 
+/** One orientation brief per app day (Asia/Ho_Chi_Minh); regenerating overwrites the row. */
+export const dailyBriefs = pgTable('daily_briefs', {
+  day: date('day', { mode: 'string' }).primaryKey(),
+  content: jsonb('content').notNull(),
+  createdAt: createdAt(),
+}).enableRLS();
+
 /** Every table by its SQL name: the single source for TABLE_NAMES, export and RLS checks. */
 export const TABLES = {
   areas,
@@ -321,6 +328,7 @@ export const TABLES = {
   pending_actions: pendingActions,
   settings,
   ai_usage: aiUsage,
+  daily_briefs: dailyBriefs,
 } as const;
 
 export const TABLE_NAMES: readonly string[] = Object.keys(TABLES);
@@ -344,3 +352,4 @@ export type MessageRow = typeof messages.$inferSelect;
 export type PendingActionRow = typeof pendingActions.$inferSelect;
 export type SettingsRow = typeof settings.$inferSelect;
 export type AiUsageRow = typeof aiUsage.$inferSelect;
+export type DailyBriefRow = typeof dailyBriefs.$inferSelect;
