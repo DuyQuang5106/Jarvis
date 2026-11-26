@@ -42,6 +42,8 @@ export type TurnDeps = {
   maxOutputTokens?: number;
   /** Model label for the timing log (no secrets). */
   model?: string;
+  /** Receives the timing line once the turn ends (the evaluation harness reads it). */
+  onTiming?: (report: TurnTimingReport) => void;
 };
 export type TurnInput = { conversationId?: string; message?: string; scope: ContextScope; regenerate?: boolean };
 
@@ -73,6 +75,8 @@ type TurnTiming = {
   finishReason: string | null;
   proposal: string;
 };
+/** The `chat turn` log line. */
+export type TurnTimingReport = TurnTiming & { totalMs: number; model?: string };
 
 /** Conversations with a turn in progress in this server process: a second concurrent turn is refused. */
 const inFlight = new Set<string>();
@@ -110,11 +114,13 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
   try {
     yield* turn(deps, input, timing, started);
   } finally {
-    console.info('chat turn', {
+    const report: TurnTimingReport = {
       ...timing,
       totalMs: Math.round(performance.now() - started),
       ...(deps.model ? { model: deps.model } : {}),
-    });
+    };
+    console.info('chat turn', report);
+    deps.onTiming?.(report);
   }
 }
 

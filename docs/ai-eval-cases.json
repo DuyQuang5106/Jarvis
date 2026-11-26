@@ -1,0 +1,8 @@
+[
+  { "id": "algebra-progress", "question": "algebra đang học đến đâu rồi", "contextMustInclude": ["04_STATE"], "answerMustMatch": ["chương\\s*5|chapter\\s*5"], "answerMustNotMatch": ["status_unknown|no_topics|no_assessment_date"], "expectProposal": false, "maxFirstTokenMs": 20000 },
+  { "id": "algebra-today", "question": "algebra hôm nay học gì ?", "contextMustInclude": ["04_STATE"], "answerMustNotMatch": ["status_unknown|no_topics"], "expectProposal": false },
+  { "id": "algebra-pacing", "question": "phân tích tiến độ môn algebra cho tôi", "contextMustInclude": ["04_STATE", "06_TIMELINE"], "expectProposal": false },
+  { "id": "today-portfolio", "question": "Hôm nay nên làm gì?", "contextMustInclude": ["04_STATE"], "answerMustNotMatch": ["status_unknown|no_topics"], "expectProposal": false },
+  { "id": "exam-schedule", "question": "kiểm tra lịch thi các môn", "expectProposal": false },
+  { "id": "report-progress", "question": "thêm tiến độ hiện tại Algebra: đang học đến đầu chương 5", "expectProposal": true }
+]

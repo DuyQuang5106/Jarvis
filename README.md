@@ -32,6 +32,7 @@ pnpm db:seed   # tùy chọn: nạp toàn bộ seed data vào PGlite local
 | `pnpm db:migrate` | Áp migration lên `MIGRATION_DATABASE_URL` (hoặc `DATABASE_URL`) |
 | `pnpm db:seed` | Nhập toàn bộ seed data (dev) |
 | `pnpm ai:probe` | Kiểm tra tương thích provider, ghi `docs/ai-probe-report.md` |
+| `pnpm ai:eval` | Hỏi các câu trong `docs/ai-eval-cases.json` qua lượt chat thật trên **bản sao** database (`EVAL_PGLITE_DIR`), ghi `docs/ai-eval-report.md`; thoát mã 1 nếu có case trượt |
 | `pnpm verify:rls` | Kiểm tra criterion 13 trên Supabase thật |
 
 ## Biến môi trường
@@ -51,7 +52,10 @@ Mẫu nằm ở `.env.example`. Copy thành `.env.local` (dev) hoặc `.env.prod
 | `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` | Cấu hình provider AI |
 | `AI_ACTION_MODE` | `tools`, `json` hoặc `off`; đặt theo `docs/ai-probe-report.md` |
 | `AI_DAILY_REQUEST_CAP` | Trần số request AI mỗi ngày (mặc định 200) |
+| `AI_CONTEXT_MAX_CHARS` | Số ký tự `<workspace_state>` tối đa mỗi lượt chat (mặc định 120000, tối thiểu 16000) |
+| `AI_MAX_OUTPUT_TOKENS` | Token trả lời tối đa mỗi lượt chat (mặc định 4000, khoảng 500–16000) |
 | `PGLITE_DIR` | Thư mục PGlite khi `DB_DRIVER=pglite` |
+| `EVAL_PGLITE_DIR` | Chỉ cho `pnpm ai:eval`: thư mục **bản sao** PGlite (không được trùng `PGLITE_DIR` hay `./.pglite`) |
 | `E2E` | Đặt `1` khi chạy e2e (do `pnpm dev:e2e` tự đặt) |
 
 Không commit file `.env*` chứa giá trị thật.
@@ -71,6 +75,15 @@ Các bước dưới đây do owner tự làm.
 ## Đổi provider AI
 
 Đổi `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` trong biến môi trường, chạy `pnpm ai:probe` để kiểm tra tương thích, rồi đặt `AI_ACTION_MODE` (`tools`, `json` hoặc `off`) theo kết quả trong [docs/ai-probe-report.md](./docs/ai-probe-report.md).
+
+Sau đó đo chất lượng trả lời bằng câu hỏi thật. Lượt chat ghi tin nhắn và đề xuất vào database, nên luôn chạy trên bản sao (dừng `pnpm dev` trước khi sao chép):
+
+```bash
+cp -r .pglite .pglite-eval
+EVAL_PGLITE_DIR=./.pglite-eval AI_MODEL=<model> pnpm ai:eval
+```
+
+Kết quả nằm ở `docs/ai-eval-report.md` (mỗi case chỉ giữ tối đa 300 ký tự câu trả lời). Thêm câu hỏi vào `docs/ai-eval-cases.json`; các trường `answerMustMatch`/`answerMustNotMatch` là regex không phân biệt hoa thường, `contextMustInclude`/`contextMustNotInclude` so với tên tài liệu AI đã đọc.
 
 ## Sao lưu
 
