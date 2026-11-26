@@ -15,8 +15,9 @@ import { getAreaDetails, type AreaDetails } from '../queries/area-details';
 import { getExcludedFolderIds } from '../queries/folders';
 import { describeLog } from '../queries/describe-log';
 import { getPortfolioSnapshot, pickStaleAreaIds, type AreaSummary, type PortfolioSnapshot } from '../queries/snapshot';
+import { getConfig } from '../config';
 import { getSettings } from '../services/settings';
-import { DOCUMENT_CONTEXT_MAX, selectDocumentContext, type DocumentContext } from './document-context';
+import { selectDocumentContext, type DocumentContext } from './document-context';
 import { hiddenDocumentIds, hiddenMigratedNoteIds } from './document-visibility';
 import { truncateState } from './context-truncate';
 import { matchAreas, normalizeVi } from './match-areas';
@@ -48,11 +49,12 @@ export type WorkspaceState = {
 };
 export type BuiltContext = { state: WorkspaceState; json: string; refs: ContextRef[]; summaryCount: number; truncated: boolean };
 
-export const DEFAULT_MAX_CHARS = 32000;
 const NOTE_LIMIT = 10;
-const LOG_LIMIT = 20;
-/** Logs loaded per area before privacy filtering, so dropped note logs rarely leave fewer than LOG_LIMIT. */
-const LOG_FETCH = 50;
+const LOG_LIMIT = 8;
+/** Logs loaded per area before privacy and noise filtering, so dropped logs rarely leave fewer than LOG_LIMIT. */
+const LOG_FETCH = 100;
+/** Share of the budget left after Tier 1 that documents may use; the rest is for `details`. */
+const DOCUMENT_SHARE = 0.7;
 const RECENT_USER_MESSAGES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -139,6 +141,10 @@ function isHiddenLog(log: ActivityLogRow, hidden: Set<string>, excludedFolders: 
   });
 }
 
+/** Import and seed logs, and "document created" logs, say nothing about the work itself. */
+const isNoiseLog = (log: ActivityLogRow) =>
+  log.origin === 'migration' || log.origin === 'seed' || (log.entityType === 'document' && log.action === 'create');
+
 function toDetail(d: AreaDetails, today: string, hidden: Set<string>, excludedFolders: Set<string>): AreaDetailForAi {
   const { area, academic: ac, project: pr } = d;
   const left = (date: string | null) => (date ? daysUntil(date, today) : null);
@@ -179,7 +185,7 @@ function toDetail(d: AreaDetails, today: string, hidden: Set<string>, excludedFo
       .slice(0, NOTE_LIMIT)
       .map((n) => ({ id: n.id, text: n.text, updatedAt: n.updatedAt.toISOString() })),
     recentLogs: d.logs
-      .filter((l) => !isHiddenLog(l, hidden, excludedFolders))
+      .filter((l) => !isNoiseLog(l) && !isHiddenLog(l, hidden, excludedFolders))
       .slice(0, LOG_LIMIT)
       .map((l) => ({ at: l.createdAt.toISOString(), origin: l.origin, ...describeLog(l) })),
   };
@@ -194,7 +200,7 @@ export async function buildContext(
   db: DbOrTx,
   input: { message: string; recentUserMessages: string[]; scope: ContextScope; now: Date; maxChars?: number },
 ): Promise<BuiltContext> {
-  const maxChars = input.maxChars ?? DEFAULT_MAX_CHARS;
+  const maxChars = input.maxChars ?? getConfig().aiContextMaxChars;
   const snapshot = await getPortfolioSnapshot(db, input.now);
   const excluded = new Set(snapshot.areas.filter((a) => a.aiExcluded).map((a) => a.id));
   const open = snapshot.areas.filter((a) => !a.aiExcluded);
@@ -238,7 +244,8 @@ export async function buildContext(
   const docContext = await selectDocumentContext(db, {
     areaIds: selectedAreaIds.length || input.scope.mode !== 'auto' ? selectedAreaIds : undefined,
     query: texts.join(' '), today: snapshot.today, timezone: snapshot.timezone, staleAfterDays: settings.staleAfterDays,
-    budget: Math.min(DOCUMENT_CONTEXT_MAX, Math.floor(maxChars * 0.4), maxChars - tierOneSize - 14),
+    // 14 = `,"documents":` plus the array brackets' slack.
+    budget: Math.floor((maxChars - tierOneSize - 14) * DOCUMENT_SHARE),
   });
   if (docContext.documents.length) full.documents = docContext.documents;
   const { state, truncated } = truncateState(full, (s) => serializeState(s).length <= maxChars);
@@ -247,8 +254,11 @@ export async function buildContext(
     const area = byId.get(d.areaId)!;
     return { areaId: area.id, name: area.name, kind: area.kind, updatedAt: area.updatedAt.toISOString() };
   });
+  // Truncation may have dropped documents or reduced them to `omitted`: cite only what is still read.
+  const read = new Set((state.documents ?? []).filter((doc) => doc.content !== undefined || doc.excerpts?.length).map((doc) => doc.documentId));
+  const docRefs = docContext.refs.filter((ref) => read.has(ref.documentId));
   return {
-    state, json: serializeState(state), refs: [...refs, ...docContext.refs], summaryCount: state.areas.length,
+    state, json: serializeState(state), refs: [...refs, ...docRefs], summaryCount: state.areas.length,
     truncated: truncated || docContext.truncated,
   };
 }

@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from 'vitest';
 import type { Db } from '@/db/client';
 import { createTestDb } from '@/db/testing';
 import { archiveArea, createArea } from '../services/areas';
+import { documentService } from '../services/documents';
 import { noteService, taskService, topicService } from '../services/entities';
 import { buildContext, serializeState, type ContextScope } from './context-builder';
 
@@ -147,19 +148,20 @@ test('staleAreaIds: tính lại top 3 từ các mục không bị loại', async
   expect((await build('hôm nay')).state.staleAreaIds).toEqual([b.id, c.id, d.id]);
 });
 
-test('chi tiết: chỉ 10 note và 20 log mới nhất, giữ đúng các trường', async () => {
+test('chi tiết: chỉ 10 note và 8 log mới nhất, giữ đúng các trường', async () => {
   const a = await createArea(db, { kind: 'academic', name: 'Database', status: 'active', academic: { term: 'HK1', credits: 3 } }, manual);
   for (let i = 0; i < 12; i++) await noteService.create(db, { areaId: a.id, text: `note ${i}` }, manual);
   await taskService.create(db, { areaId: a.id, title: 'Lab', dueDate: '2026-11-25', estimateMinutes: 30 }, manual);
   const d = (await build('Database')).state.details[0];
   expect(d.notes.map((n) => n.text)).toEqual(Array.from({ length: 10 }, (_, i) => `note ${11 - i}`));
-  expect(d.recentLogs).toHaveLength(14);
+  expect(d.recentLogs).toHaveLength(8);
+  expect(d.recentLogs[0].title).toBe('Tạo task “Lab”');
   expect(d.academic).toMatchObject({ term: 'HK1', credits: 3, targetGrade: 'A' });
   expect(d.project).toBeNull();
   expect(d.tasks).toMatchObject([{ title: 'Lab', status: 'todo', daysLeft: 3, deadlineType: 'flexible', estimateMinutes: 30, milestoneId: null }]);
   for (let i = 0; i < 10; i++) await noteService.create(db, { areaId: a.id, text: `more ${i}` }, manual);
   const d2 = (await build('Database')).state.details[0];
-  expect(d2.recentLogs).toHaveLength(20);
+  expect(d2.recentLogs).toHaveLength(8);
   expect(d2.recentLogs[0].title).toBe('Tạo ghi chú “more 9”');
   expect(d2.recentLogs[0]).toMatchObject({ origin: 'manual', at: expect.any(String) });
 });
@@ -246,4 +248,132 @@ test('"Cập nhật nhanh" mở rộng chi tiết các mục cũ nhất', async 
   expect(ctx.state.staleAreaIds).toEqual([a.id]);
   expect(ctx.state.details.map((d) => d.areaId)).toEqual([a.id]);
   void b;
+});
+
+const fm = (type: string) => `---\nentity: HUST/MI1144E/Algebra\ndocument_type: ${type}\ngenerated_date: 2026-11-24\n---\n\n`;
+const addDoc = (areaId: string, title: string, bodyMd: string, extra: { docRole?: 'context' | 'raw'; fileExt?: string; extractedText?: string } = {}) =>
+  documentService.create(db, { areaId, title, bodyMd, ...extra }, manual);
+
+async function algebraCourse(areaId: string) {
+  await addDoc(areaId, '00_SOURCE_AUDIT.md', fm('source_audit') + '# 00 — SOURCE AUDIT\n\nNguồn đã kiểm.');
+  await addDoc(areaId, '01_CONTEXT.md', fm('course_context') + '# 01 — CONTEXT\n\nBối cảnh môn.');
+  await addDoc(areaId, '02_COURSE_MAP.md', fm('course_map') + '# 02 — COURSE MAP\n\nChương 1 đến Chương 7.');
+  await addDoc(areaId, '04_STATE.md', fm('state_snapshot') + '# 04 — STATE\n\n## Tiến độ\n\nĐang học đến đầu Chương 5.\n\n---\n\nĐiểm giữa kỳ 24/30.');
+  await addDoc(areaId, '05_LOG.md', fm('course_event_log') + '# 05 — LOG\n\nBuổi 1.');
+  await addDoc(areaId, '06_TIMELINE.md', fm('academic_timeline') + '# 06 — TIMELINE\n\nThi cuối kỳ dự kiến tháng 1.');
+  await addDoc(areaId, '07_MISSING_INFO.md', fm('missing_information') + '# 07 — MISSING\n\nThiếu lịch thi.');
+  await addDoc(areaId, '08_EXTRA.md', '# Ghi chép thêm\n\nPhụ lục.');
+}
+
+test('môn có 7+ tài liệu context: tài liệu trạng thái vào trọn và đứng đầu', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  await algebraCourse(a.id);
+  const ctx = await build('algebra đang học đến đâu rồi');
+  const docs = ctx.state.documents!;
+  expect(docs[0].title).toBe('04_STATE.md');
+  expect(docs[0].content).toContain('Đang học đến đầu Chương 5');
+  expect(docs[0].content).toContain('24/30');
+  expect(docs.map((d) => d.docType).slice(0, 3)).toEqual(['state_snapshot', 'academic_timeline', 'course_event_log']);
+  expect(docs.map((d) => d.title)).toEqual([
+    '04_STATE.md', '06_TIMELINE.md', '05_LOG.md', '01_CONTEXT.md', '02_COURSE_MAP.md', '07_MISSING_INFO.md', '08_EXTRA.md', '00_SOURCE_AUDIT.md',
+  ]);
+  expect(docs.every((d) => d.content !== undefined && !d.omitted)).toBe(true);
+  expect(ctx.json).not.toContain('document_type:');
+  expect(ctx.refs.some((r) => r.name === '04_STATE.md')).toBe(true);
+  expect(ctx.truncated).toBe(false);
+});
+
+test('vượt ngân sách: trạng thái vẫn trọn, tài liệu bị bỏ được liệt kê omitted', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  await addDoc(a.id, '04_STATE.md', fm('state_snapshot') + '# 04 — STATE\n\n' + 's'.repeat(5000));
+  for (let i = 0; i < 6; i++) await addDoc(a.id, `1${i}_CHAPTER.md`, fm('course_context') + `# Chương ${i}\n\n## Phần A\n\n` + 'c'.repeat(20000));
+  const ctx = await build('algebra', { mode: 'auto' }, { maxChars: 40000 });
+  const docs = ctx.state.documents!;
+  expect(docs[0].title).toBe('04_STATE.md');
+  expect(docs[0].content!.length).toBeGreaterThan(4900);
+  expect(docs).toHaveLength(7);
+  expect(docs.some((d) => d.omitted)).toBe(true);
+  const omitted = docs.filter((d) => d.omitted);
+  expect(omitted.every((d) => d.content === undefined && d.outline?.length)).toBe(true);
+  expect(ctx.refs.some((r) => omitted.some((d) => d.documentId === r.documentId))).toBe(false);
+  expect(ctx.json.length).toBeLessThanOrEqual(40000);
+  expect(ctx.truncated).toBe(true);
+});
+
+test('ngân sách rất chặt: tài liệu lõi cuối chuyển sang omitted trước, trạng thái giữ lâu nhất', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  await addDoc(a.id, '04_STATE.md', fm('state_snapshot') + '# 04 — STATE\n\n' + 's'.repeat(5000));
+  await addDoc(a.id, '06_TIMELINE.md', fm('academic_timeline') + '# 06 — TIMELINE\n\n' + 't'.repeat(5000));
+  for (let i = 0; i < 12; i++) await noteService.create(db, { areaId: a.id, text: 'n'.repeat(900) }, manual);
+  const ctx = await build('algebra', { mode: 'auto' }, { maxChars: 16000 });
+  expect(ctx.json.length).toBeLessThanOrEqual(16000);
+  const docs = ctx.state.documents!;
+  expect(docs[0]).toMatchObject({ title: '04_STATE.md', content: expect.stringContaining('sss') });
+  expect(ctx.state.details).toHaveLength(1);
+  expect(ctx.refs.filter((r) => r.documentId).map((r) => r.documentId))
+    .toEqual(docs.filter((d) => d.content !== undefined || d.excerpts?.length).map((d) => d.documentId));
+});
+
+test('câu hỏi tổng thể: mỗi môn đóng góp tài liệu trạng thái, không kéo đoạn PDF vì từ thông dụng', async () => {
+  for (const name of ['Algebra', 'Database', 'Mobile']) {
+    const a = await createArea(db, { kind: 'academic', name, status: 'active' }, manual);
+    await addDoc(a.id, '04_STATE.md', fm('state_snapshot') + `# STATE ${name}\n\nTiến độ ${name}.`);
+    await addDoc(a.id, '01_CONTEXT.md', fm('course_context') + `# CONTEXT ${name}\n\nBối cảnh.`);
+    await addDoc(a.id, 'Quiz.pdf', '', { docRole: 'raw', fileExt: 'pdf', extractedText: 'Hôm nay làm bài tập quiz.' });
+  }
+  const secret = await createArea(db, { kind: 'project', name: 'Dự án kín', status: 'active', aiExcluded: true }, manual);
+  await addDoc(secret.id, '04_STATE.md', fm('state_snapshot') + '# STATE\n\nBÍ MẬT');
+  const done = await createArea(db, { kind: 'academic', name: 'Đã xong', status: 'completed' }, manual);
+  await addDoc(done.id, '04_STATE.md', fm('state_snapshot') + '# STATE\n\nMÔN_ĐÃ_XONG');
+  const ctx = await build('Hôm nay nên làm gì?');
+  const docs = ctx.state.documents!;
+  expect(ctx.state.details).toEqual([]);
+  expect(docs.filter((d) => d.docType === 'state_snapshot')).toHaveLength(3);
+  expect(docs).toHaveLength(3);
+  expect(docs.every((d) => d.docRole === 'context')).toBe(true);
+  expect(ctx.json).not.toContain('BÍ MẬT');
+  expect(ctx.json).not.toContain('MÔN_ĐÃ_XONG');
+  expect(ctx.refs.map((r) => r.name)).toEqual(['04_STATE.md', '04_STATE.md', '04_STATE.md']);
+});
+
+test('câu hỏi tổng thể có từ khóa thật: thêm trích đoạn tài liệu gốc', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  await addDoc(a.id, '04_STATE.md', fm('state_snapshot') + '# STATE\n\nTiến độ.');
+  await addDoc(a.id, 'Quiz.pdf', '', { docRole: 'raw', fileExt: 'pdf', extractedText: 'Định thức Laplace trong quiz.' });
+  const docs = (await build('định thức là gì')).state.documents!;
+  expect(docs.map((d) => d.title)).toEqual(['04_STATE.md', 'Quiz.pdf']);
+  expect(docs[1].excerpts?.[0].text).toContain('Laplace');
+});
+
+test('recentLogs bỏ log import và log tạo tài liệu', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  for (let i = 0; i < 30; i++) {
+    await documentService.create(db, { areaId: a.id, title: `Tệp ${i}.pdf`, bodyMd: '', fileExt: 'pdf', docRole: 'raw' }, { origin: 'migration' });
+  }
+  await addDoc(a.id, 'Ghi chép.md', '# Ghi chép');
+  const topic = await topicService.create(db, { areaId: a.id, title: 'Ma trận' }, manual);
+  await topicService.update(db, topic.id, { status: 'practiced' }, manual);
+  const ctx = await build('Algebra');
+  const logs = ctx.state.details[0].recentLogs;
+  expect(logs.length).toBeLessThanOrEqual(8);
+  expect(logs.every((l) => l.origin !== 'migration' && l.origin !== 'seed')).toBe(true);
+  expect(logs.some((l) => l.title.includes('Ghi chép'))).toBe(false);
+  expect(logs.some((l) => l.title.includes('Ma trận'))).toBe(true);
+});
+
+test('cùng dữ liệu cho cùng JSON', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  await algebraCourse(a.id);
+  expect((await build('algebra đang học đến đâu rồi')).json).toBe((await build('algebra đang học đến đâu rồi')).json);
+});
+
+test('nhiều môn được chọn: xen kẽ theo vòng theo thứ tự chọn', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active', priority: 'high' }, manual);
+  const b = await createArea(db, { kind: 'academic', name: 'Database', status: 'active', priority: 'low' }, manual);
+  for (const area of [a, b]) {
+    await addDoc(area.id, '01_CONTEXT.md', fm('course_context') + `# CONTEXT ${area.name}`);
+    await addDoc(area.id, '04_STATE.md', fm('state_snapshot') + `# STATE ${area.name}`);
+  }
+  const docs = (await build('x', { mode: 'academic' })).state.documents!;
+  expect(docs.map((d) => `${d.areaId === a.id ? 'A' : 'B'}:${d.title}`)).toEqual(['A:04_STATE.md', 'B:04_STATE.md', 'A:01_CONTEXT.md', 'B:01_CONTEXT.md']);
 });

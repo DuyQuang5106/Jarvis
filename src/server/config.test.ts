@@ -44,3 +44,10 @@ test('mọi vấn đề được gom vào một lỗi, cờ dev đứng trước
 test('ngoài production không bao giờ ném lỗi', () => {
   expect(() => assertSafeConfig(loadConfig({ NODE_ENV: 'development', E2E: '1' }))).not.toThrow();
 });
+
+test('AI_CONTEXT_MAX_CHARS: mặc định 120000, tối thiểu 16000', () => {
+  expect(loadConfig({ NODE_ENV: 'development' }).aiContextMaxChars).toBe(120000);
+  expect(loadConfig({ NODE_ENV: 'development', AI_CONTEXT_MAX_CHARS: '60000' }).aiContextMaxChars).toBe(60000);
+  expect(() => loadConfig({ NODE_ENV: 'development', AI_CONTEXT_MAX_CHARS: '15999' })).toThrow(/AI_CONTEXT_MAX_CHARS/);
+  expect(() => loadConfig({ NODE_ENV: 'development', AI_CONTEXT_MAX_CHARS: 'nhiều' })).toThrow(/AI_CONTEXT_MAX_CHARS/);
+});

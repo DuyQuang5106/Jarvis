@@ -7,7 +7,7 @@ import { runChatTurn, HIDDEN_HISTORY, type TurnEvent } from '../chat/run-turn';
 import { appendMessage, createConversation } from '../services/conversations';
 import { documentService } from '../services/documents';
 import { folderService } from '../services/folders';
-import { buildContext } from './context-builder';
+import { buildContext, serializeState } from './context-builder';
 import { searchContext, splitDocument } from './document-context';
 import type { AiProvider, StreamRequest } from './provider';
 
@@ -33,8 +33,9 @@ test('tìm FTS không dấu qua các workspace, theo đoạn mới nhất và v�
   expect((await searchContext(db, 'ma tran', { areaIds: [math.id] })).every((hit) => hit.documentId === mathDoc.id)).toBe(true);
   const scoped = await buildContext(db, { message: 'Học gì?', recentUserMessages: [], scope: { mode: 'item', areaId: math.id }, now });
   expect(scoped.state.documents).toEqual([expect.objectContaining({
-    documentId: mathDoc.id, possibly_stale: true, days_since_update: 54, outline: [['Cơ sở'], ['Cơ sở', 'Nhân ma trận']],
+    documentId: mathDoc.id, possibly_stale: true, days_since_update: 54, content: '# Cơ sở\n\n## Nhân ma trận\n\nCông thức ma trận.',
   })]);
+  expect(scoped.state.documents?.[0]).not.toHaveProperty('excerpts');
   await documentService.updateBody(db, mathDoc.id, '# Định thức\n\nKhai triển Laplace.', mathDoc.revision, manual);
   expect(await searchContext(db, 'ma tran', { areaIds: [math.id] })).toEqual([]);
   expect(await searchContext(db, 'dinh thuc', { areaIds: [math.id] })).toEqual(expect.arrayContaining([expect.objectContaining({ documentId: mathDoc.id, text: 'Khai triển Laplace.' })]));
@@ -52,7 +53,10 @@ test('tôn trọng ngân sách đã serialize và giữ đủ dữ liệu tầng
   const full = await buildContext(db, input);
   expect(limited.state.areas).toEqual(full.state.areas);
   expect(limited.json.length).toBeLessThanOrEqual(3200);
-  expect(JSON.stringify(limited.state.documents ?? []).replace(/</g, '\\u003c').length).toBeLessThanOrEqual(1280);
+  const tierOne = serializeState({ ...limited.state, details: [], documents: undefined }).length;
+  expect(JSON.stringify(limited.state.documents ?? []).replace(/</g, '\\u003c').length).toBeLessThanOrEqual(Math.floor((3200 - tierOne) * 0.7));
+  expect(limited.state.documents?.[0]).toMatchObject({ title: 'Tóm tắt mâu thuẫn', omitted: true });
+  expect(full.state.documents?.[0].content).toContain('## Chương 29');
   expect(limited.truncated).toBe(true);
   expect(full.state.areas[0].status).toBe('active');
   expect(full.state.documents?.[0].title).toBe('Tóm tắt mâu thuẫn');
@@ -103,4 +107,21 @@ test('splitDocument bỏ frontmatter YAML trước khi chia đoạn', () => {
   expect(result[0].text.startsWith('# 04 — STATE')).toBe(true);
   expect(result[0].heading_path).toEqual(['04 — STATE']);
   expect(result.some((chunk) => chunk.text.includes('document_type:') || chunk.heading_path.some((h) => h.includes('status')))).toBe(false);
+});
+
+test('câu hỏi tổng thể: tài liệu trạng thái bị ẩn không được chọn thay tài liệu nhìn thấy', async () => {
+  const db = await createTestDb();
+  const open = await makeArea(db, { name: 'Algebra' });
+  const folder = await folderService.create(db, { areaId: open.id, name: 'Kín', aiExcluded: true }, manual);
+  const state = '---\ndocument_type: state_snapshot\n---\n# STATE\n\n';
+  const direct = await documentService.create(db, { areaId: open.id, title: '04_STATE.md', bodyMd: state + 'RIENG_TRUC_TIEP' }, manual);
+  await documentService.setAiExcluded(db, direct.id, true, manual);
+  await documentService.create(db, { areaId: open.id, title: '04_STATE_FOLDER.md', bodyMd: state + 'RIENG_THU_MUC', folderId: folder.id }, manual);
+  const instruction = await documentService.create(db, { areaId: open.id, title: 'STATE_GUIDE.md', bodyMd: state + 'RIENG_HUONG_DAN' }, manual);
+  await documentService.setRole(db, instruction.id, 'instruction', manual);
+  await documentService.create(db, { areaId: open.id, title: '01_CONTEXT.md', bodyMd: '# Bối cảnh\n\nCÔNG_KHAI' }, manual);
+  const ctx = await buildContext(db, { message: 'Hôm nay nên làm gì?', recentUserMessages: [], scope: { mode: 'auto' }, now });
+  expect(ctx.state.documents?.map((doc) => doc.title)).toEqual(['01_CONTEXT.md']);
+  expect(ctx.json).toContain('CÔNG_KHAI');
+  expect(ctx.json).not.toMatch(/RIENG_/);
 });

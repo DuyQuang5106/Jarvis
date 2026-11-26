@@ -15,6 +15,8 @@ export type AppConfig = {
   aiModel?: string;
   aiActionMode: 'tools' | 'json' | 'off';
   aiDailyRequestCap: number;
+  /** Upper bound on serialized `<workspace_state>` characters per chat turn. */
+  aiContextMaxChars: number;
   storageDriver: 'memory' | 'local' | 'supabase';
   storageDir: string;
   supabaseStorageBucket?: string;
@@ -23,6 +25,9 @@ export type AppConfig = {
 };
 
 type Env = Record<string, string | undefined>;
+
+const DEFAULT_CONTEXT_MAX_CHARS = 120_000;
+const MIN_CONTEXT_MAX_CHARS = 16_000;
 
 function blank(v: string | undefined): string | undefined {
   const t = v?.trim();
@@ -44,6 +49,12 @@ export function loadConfig(env: Env): AppConfig {
   const cap = capRaw === undefined ? 200 : Number(capRaw);
   if (!Number.isInteger(cap) || cap < 0) {
     throw new ConfigError(`AI_DAILY_REQUEST_CAP=${capRaw} không hợp lệ; cần số nguyên không âm.`);
+  }
+
+  const contextRaw = blank(env.AI_CONTEXT_MAX_CHARS);
+  const contextMax = contextRaw === undefined ? DEFAULT_CONTEXT_MAX_CHARS : Number(contextRaw);
+  if (!Number.isInteger(contextMax) || contextMax < MIN_CONTEXT_MAX_CHARS) {
+    throw new ConfigError(`AI_CONTEXT_MAX_CHARS=${contextRaw} không hợp lệ; cần số nguyên từ ${MIN_CONTEXT_MAX_CHARS} trở lên.`);
   }
 
   const pgliteDir = blank(env.PGLITE_DIR) ?? './.pglite';
@@ -71,6 +82,7 @@ export function loadConfig(env: Env): AppConfig {
     aiModel: blank(env.AI_MODEL),
     aiActionMode: pick(env, 'AI_ACTION_MODE', ['tools', 'json', 'off'] as const, 'off'),
     aiDailyRequestCap: cap,
+    aiContextMaxChars: contextMax,
     storageDriver: pick(env, 'STORAGE_DRIVER', ['memory', 'local', 'supabase'] as const, defaultStorageDriver),
     storageDir: blank(env.STORAGE_DIR) ?? './.storage',
     supabaseStorageBucket,

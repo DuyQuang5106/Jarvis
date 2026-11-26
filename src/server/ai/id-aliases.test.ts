@@ -86,3 +86,22 @@ test('aliasWorkspaceState thay mọi UUID nhất quán và không còn chuỗi U
   expect(resolved.actions[3].id).toBe('00000000-0000-0000-0000-000000000000');
   expect(resolveProposalAliases('not-json', aliased.aliasToReal)).toBe('not-json');
 });
+
+test('aliasWorkspaceState giữ nguyên content, docType, omitted và outline của tài liệu', () => {
+  const areaId = '11111111-1111-4111-8111-111111111111';
+  const base = { areaId, docRole: 'context' as const, updated_at: '2026-11-24T00:00:00Z', days_since_update: 0, origin: 'manual' as const, possibly_stale: false };
+  const state: WorkspaceState = {
+    now: { date: '2026-11-24', weekday: 'Thứ Ba', weekStart: '2026-11-23', weekEnd: '2026-11-29', timezone: 'Asia/Ho_Chi_Minh' },
+    termGoal: null, areas: [], dueTasks: [], upcomingAssessments: [], staleAreaIds: [], details: [],
+    documents: [
+      { ...base, documentId: '22222222-2222-4222-8222-222222222222', title: '04_STATE.md', docType: 'state_snapshot', content: '# STATE\n\nĐang học Chương 5' },
+      { ...base, documentId: '33333333-3333-4333-8333-333333333333', title: '01_CONTEXT.md', docType: 'course_context', omitted: true, outline: [['Bối cảnh']] },
+    ],
+  };
+  const aliased = aliasWorkspaceState(state);
+  expect(aliased.state.documents).toEqual([
+    { ...state.documents![0], documentId: 'd1', areaId: 'a1' },
+    { ...state.documents![1], documentId: 'd2', areaId: 'a1' },
+  ]);
+  expect(UUID_RE.test(aliased.json)).toBe(false);
+});
