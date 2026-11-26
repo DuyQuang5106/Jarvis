@@ -24,14 +24,28 @@ import {
 
 export type TurnEvent =
   | { type: 'meta'; conversationId: string; userMessageId: string }
+  /** Transient progress shown while nothing has been written yet; never saved, never part of the reply. */
+  | { type: 'status'; message: string }
   | { type: 'text'; delta: string }
   | { type: 'proposal'; pendingActionId: string }
   | { type: 'done'; assistantMessageId: string; contextRefs: ContextRef[]; summaryCount: number }
   | { type: 'error'; message: string };
-export type TurnDeps = { db: Db; provider: AiProvider; actionMode: 'tools' | 'json' | 'off'; dailyCap: number; now: Date; signal?: AbortSignal };
+export type TurnDeps = {
+  db: Db;
+  provider: AiProvider;
+  actionMode: 'tools' | 'json' | 'off';
+  dailyCap: number;
+  now: Date;
+  signal?: AbortSignal;
+  /** `maxOutputTokens` for the provider (default 4000). */
+  maxOutputTokens?: number;
+  /** Model label for the timing log (no secrets). */
+  model?: string;
+};
 export type TurnInput = { conversationId?: string; message?: string; scope: ContextScope; regenerate?: boolean };
 
 const MAX_MESSAGE = 8000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 4000;
 const TITLE_LEN = 60;
 const HISTORY = 10;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,7 +57,21 @@ const PROVIDER_FAILED = 'Không gọi được AI. Dữ liệu của bạn khôn
 /** Stands in for a history message that touches an area now excluded from AI. */
 export const HIDDEN_HISTORY = '[Tin nhắn cũ đã ẩn vì liên quan mục không gửi cho AI]';
 
+/** Appended to a reply the provider cut at the output cap (`finish_reason = length`). */
+export const TRUNCATED_NOTICE = '\n\n_(Câu trả lời bị cắt vì quá dài. Nhắn "tiếp tục" để xem phần còn lại.)_';
+const READING = (n: number) => (n > 0 ? `Đang đọc ${n} tài liệu…` : 'Đang suy nghĩ…');
+
 const err = (message: string): TurnEvent => ({ type: 'error', message });
+
+/** Numbers and labels only for the one `chat turn` log line: never message, context or key content. */
+type TurnTiming = {
+  contextMs: number | null;
+  firstTokenMs: number | null;
+  promptChars: number | null;
+  documents: number | null;
+  finishReason: string | null;
+  proposal: string;
+};
 
 /** Conversations with a turn in progress in this server process: a second concurrent turn is refused. */
 const inFlight = new Set<string>();
@@ -74,8 +102,24 @@ async function historyForModel(db: Db, history: MessageRow[]): Promise<ChatMessa
   });
 }
 
+/** One chat turn; whatever happens (reply, error, `Dừng`), exactly one `chat turn` timing line is logged. */
 export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGenerator<TurnEvent> {
+  const started = performance.now();
+  const timing: TurnTiming = { contextMs: null, firstTokenMs: null, promptChars: null, documents: null, finishReason: null, proposal: 'none' };
+  try {
+    yield* turn(deps, input, timing, started);
+  } finally {
+    console.info('chat turn', {
+      ...timing,
+      totalMs: Math.round(performance.now() - started),
+      ...(deps.model ? { model: deps.model } : {}),
+    });
+  }
+}
+
+async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, started: number): AsyncGenerator<TurnEvent> {
   const { db } = deps;
+  const elapsed = () => Math.round(performance.now() - started);
 
   // 1. Check the input and find the conversation. No awaits between the busy check and taking the lock.
   let existing: MessageRow[] | null = null;
@@ -138,6 +182,7 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
     }
 
     // 5. Context.
+    const contextStarted = performance.now();
     const history = await historyForModel(db, before.slice(-HISTORY));
     const ctx = await buildContext(db, {
       message: current.content,
@@ -145,6 +190,9 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
       scope: input.scope,
       now: deps.now,
     });
+    timing.contextMs = Math.round(performance.now() - contextStarted);
+    timing.documents = ctx.state.documents?.filter((d) => d.content !== undefined || d.excerpts?.length).length ?? 0;
+    yield { type: 'status', message: READING(timing.documents) };
 
     // 6. Stream. Alias entity UUIDs so external AI proxies that scrub UUIDs cannot corrupt IDs.
     const aliased = aliasWorkspaceState(ctx.state);
@@ -153,12 +201,23 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
       ...history,
       { role: 'user', content: current.content },
     ];
+    timing.promptChars = messages.reduce((n, m) => n + m.content.length, 0);
     const tools = deps.actionMode === 'tools' ? [PROPOSE_CHANGES_TOOL] : undefined;
     const filter = deps.actionMode === 'json' ? new ProposalBlockFilter() : null;
     let reply = '';
     let rawProposal: string | null = null;
     try {
-      for await (const e of deps.provider.stream({ messages, tools, maxOutputTokens: 1500, signal: deps.signal })) {
+      const events = deps.provider.stream({
+        messages,
+        tools,
+        maxOutputTokens: deps.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        signal: deps.signal,
+        onFinishReason: (reason) => {
+          timing.finishReason = reason;
+        },
+      });
+      for await (const e of events) {
+        timing.firstTokenMs ??= elapsed();
         if (e.type === 'text') {
           if (filter) {
             const out = filter.push(e.delta);
@@ -202,6 +261,11 @@ export async function* runChatTurn(deps: TurnDeps, input: TurnInput): AsyncGener
         console.error('chat turn failed', { name: 'EmptyReply', status: undefined });
         return yield err(PROVIDER_FAILED);
       }
+    }
+    if (timing.finishReason === 'length') {
+      // Cut at the output cap: say so instead of leaving a reply that silently stops mid-sentence.
+      reply += TRUNCATED_NOTICE;
+      yield { type: 'text', delta: TRUNCATED_NOTICE };
     }
 
     // 7. Save the reply. Regenerate supersedes old proposals and replaces the old reply only now that the new one exists.

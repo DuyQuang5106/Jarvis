@@ -149,11 +149,31 @@ test('Dừng giữa chừng: giữ đúng một tin người dùng, bỏ phần 
   await expect(page.locator('[data-role="user"]')).toHaveCount(1);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(0);
   await expect(page.getByText('MOCK_SLOW_CHUNK_1')).toHaveCount(0);
-  // Longer than the whole mock reply (20 × 250ms): an un-cancelled turn would have saved its answer by now.
-  await page.waitForTimeout(5500);
+  // Longer than the whole mock reply (20 × 250ms, the first chunk included): an un-cancelled turn would have
+  // saved its answer by now.
+  await page.waitForTimeout(6000);
   await page.reload();
   await expect(page.locator('[data-role="user"]')).toHaveText(['MOCK_SLOW']);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(0);
+});
+
+test('chờ câu trả lời: hiện trạng thái trước chữ đầu tiên, rồi biến mất', async ({ page }) => {
+  await page.goto('/chat');
+  await send(page, 'MOCK_SLOW');
+  const status = lastAssistant(page).getByRole('status');
+  await expect(status).toContainText('Đang');
+  await expect(page.getByText('MOCK_SLOW_CHUNK_1')).toBeVisible();
+  await expect(status).toHaveCount(0);
+  await page.getByRole('button', { name: 'Dừng' }).click();
+});
+
+test('câu trả lời chạm trần độ dài: báo bị cắt, còn sau khi tải lại', async ({ page }) => {
+  await page.goto('/chat');
+  await send(page, 'MOCK_LENGTH');
+  await expect(lastAssistant(page)).toContainText('Phần đầu');
+  await expect(lastAssistant(page)).toContainText('bị cắt vì quá dài');
+  await page.reload();
+  await expect(lastAssistant(page)).toContainText('bị cắt vì quá dài');
 });
 
 test('đổi tên cuộc chat qua menu, còn sau khi tải lại', async ({ page, isMobile }) => {

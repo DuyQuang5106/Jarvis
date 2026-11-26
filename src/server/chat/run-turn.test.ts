@@ -6,16 +6,18 @@ import { createMockProvider } from '../ai/mock';
 import type { AiProvider, StreamRequest } from '../ai/provider';
 import { createArea, updateArea } from '../services/areas';
 import { noteService, taskService, topicService } from '../services/entities';
-import { runChatTurn, type TurnEvent, type TurnInput } from './run-turn';
+import { documentService } from '../services/documents';
+import { runChatTurn, TRUNCATED_NOTICE, type TurnDeps, type TurnEvent, type TurnInput } from './run-turn';
 
 const NOW = new Date('2026-11-22T03:00:00Z');
 const manual = { origin: 'manual' as const };
 let db: Db;
 beforeEach(async () => { db = await createTestDb(); });
 
-async function turn(input: Partial<TurnInput>, provider: AiProvider = createMockProvider(), dailyCap = 200) {
+async function turn(input: Partial<TurnInput>, provider: AiProvider = createMockProvider(), extra: number | Partial<TurnDeps> = {}) {
+  const more = typeof extra === 'number' ? { dailyCap: extra } : extra;
   const events: TurnEvent[] = [];
-  for await (const e of runChatTurn({ db, provider, actionMode: 'off', dailyCap, now: NOW }, { scope: { mode: 'auto' }, ...input })) events.push(e);
+  for await (const e of runChatTurn({ db, provider, actionMode: 'off', dailyCap: 200, now: NOW, ...more }, { scope: { mode: 'auto' }, ...input })) events.push(e);
   return events;
 }
 const textOf = (events: TurnEvent[]) => events.filter((e) => e.type === 'text').map((e) => (e as { delta: string }).delta).join('');
@@ -26,7 +28,7 @@ test('lượt đầu tạo cuộc chat, lưu hai tin nhắn, trả lời từ st
   const mob = await createArea(db, { kind: 'academic', name: 'Mobile Programming', status: 'not_started' }, manual);
   await topicService.create(db, { areaId: mob.id, title: 'Navigation', status: 'practiced' }, manual);
   const events = await turn({ message: 'Mobile Programming đang ở tình trạng nào?' });
-  expect(events.map((e) => e.type)).toEqual(['meta', 'text', 'text', 'done']);
+  expect(events.map((e) => e.type)).toEqual(['meta', 'status', 'text', 'text', 'done']);
   expect(textOf(events)).toBe('MOCK_STATE today=2026-11-22 | Mobile Programming=not_started | detail:Mobile Programming topics:Navigation=practiced');
   const [conv] = await db.select().from(conversations);
   expect(conv.title).toBe('Mobile Programming đang ở tình trạng nào?');
@@ -57,7 +59,7 @@ test('lượt sau đọc state mới (criterion 6) và gửi kèm lịch sử', 
   const second = await turn({ conversationId, message: 'giờ thì sao?' }, spy);
   expect(textOf(second)).toContain('Navigation=confident'); // auto khớp nhờ tin nhắn trước
   expect(seen[1].messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
-  expect(seen[1].maxOutputTokens).toBe(1500);
+  expect(seen[1].maxOutputTokens).toBe(4000);
   expect(seen[1].tools).toBeUndefined();
 });
 
@@ -72,8 +74,8 @@ test('chỉ gửi 10 tin nhắn gần nhất làm lịch sử', async () => {
 test('provider lỗi ngay: giữ tin nhắn người dùng, không lưu assistant', async () => {
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   const events = await turn({ message: 'MOCK_ERROR' });
-  expect(events.map((e) => e.type)).toEqual(['meta', 'error']);
-  expect((events[1] as { message: string }).message).toBe('Không gọi được AI. Dữ liệu của bạn không bị ảnh hưởng, có thể thử lại.');
+  expect(events.map((e) => e.type)).toEqual(['meta', 'status', 'error']);
+  expect((events[2] as { message: string }).message).toBe('Không gọi được AI. Dữ liệu của bạn không bị ảnh hưởng, có thể thử lại.');
   expect((await rows()).map((m) => m.role)).toEqual(['user']);
   expect(log).toHaveBeenCalledWith('chat turn failed', { name: 'AiProviderError', status: undefined });
   log.mockRestore();
@@ -82,7 +84,7 @@ test('provider lỗi ngay: giữ tin nhắn người dùng, không lưu assistan
 test('stream đứt giữa chừng: không lưu câu trả lời dở', async () => {
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   const events = await turn({ message: 'MOCK_PARTIAL_ERROR' });
-  expect(events.map((e) => e.type)).toEqual(['meta', 'text', 'error']);
+  expect(events.map((e) => e.type)).toEqual(['meta', 'status', 'text', 'error']);
   expect((await rows()).map((m) => m.role)).toEqual(['user']);
   log.mockRestore();
 });
@@ -93,7 +95,7 @@ test('thử lại sau lỗi không nhân đôi tin nhắn người dùng', async
   const first = await turn({ message: 'Hôm nay nên làm gì?' }, failing);
   const conversationId = cid(first);
   const retry = await turn({ conversationId, regenerate: true });
-  expect(retry.map((e) => e.type)).toEqual(['meta', 'text', 'text', 'done']);
+  expect(retry.map((e) => e.type)).toEqual(['meta', 'status', 'text', 'text', 'done']);
   expect((await rows()).map((m) => m.role)).toEqual(['user', 'assistant']);
   log.mockRestore();
 });
@@ -150,7 +152,7 @@ test('regenerate bị Dừng: giữ câu trả lời cũ, không ghi log lỗi',
     events.push(e);
     if (e.type === 'text') ac.abort();
   }
-  expect(events.map((e) => e.type)).toEqual(['meta', 'text', 'error']);
+  expect(events.map((e) => e.type)).toEqual(['meta', 'status', 'text', 'error']);
   expect(await rows()).toEqual(before);
   expect(log).not.toHaveBeenCalled();
   log.mockRestore();
@@ -268,4 +270,61 @@ test('signal được chuyển xuống provider', async () => {
   };
   await Array.fromAsync(runChatTurn({ db, provider, actionMode: 'off', dailyCap: 200, now: NOW, signal: ac.signal }, { scope: { mode: 'auto' }, message: 'hi' }));
   expect(seen).toBe(ac.signal);
+});
+
+test('phát status trước text và báo số tài liệu', async () => {
+  const algebra = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  await documentService.create(db, { areaId: algebra.id, title: '04_STATE', bodyMd: '# Trạng thái\nĐang học chương 5.' }, manual);
+  await documentService.create(db, { areaId: algebra.id, title: '06_TIMELINE', bodyMd: '# Lịch\nThi ngày 2027-01-05.' }, manual);
+  const events = await turn({ message: 'Algebra sao rồi' });
+  const i = events.findIndex((e) => e.type === 'status');
+  expect(i).toBeGreaterThan(-1);
+  expect(i).toBeLessThan(events.findIndex((e) => e.type === 'text'));
+  expect((events[i] as { message: string }).message).toBe('Đang đọc 2 tài liệu…');
+  expect((await rows()).at(-1)!.content).not.toContain('Đang đọc');
+});
+
+test('không có tài liệu: status là Đang suy nghĩ…', async () => {
+  const events = await turn({ message: 'xin chào' });
+  expect(events.find((e) => e.type === 'status')).toEqual({ type: 'status', message: 'Đang suy nghĩ…' });
+});
+
+test('finish_reason length: thêm ghi chú bị cắt và lưu cùng nội dung', async () => {
+  const events = await turn({ message: 'MOCK_LENGTH' });
+  expect(textOf(events)).toBe('Phần đầu' + TRUNCATED_NOTICE);
+  expect((await rows()).at(-1)!.content).toBe('Phần đầu' + TRUNCATED_NOTICE);
+});
+
+test('finish_reason khác length: không thêm ghi chú', async () => {
+  const provider: AiProvider = { async *stream(req) { yield { type: 'text', delta: 'Đủ.' }; req.onFinishReason?.('stop'); } };
+  expect(textOf(await turn({ message: 'xin chào' }, provider))).toBe('Đủ.');
+});
+
+test('truyền maxOutputTokens từ deps', async () => {
+  const seen: StreamRequest[] = [];
+  const spy: AiProvider = { stream: (req) => { seen.push(req); return createMockProvider().stream(req); } };
+  await turn({ message: 'xin chào' }, spy, { maxOutputTokens: 6000 });
+  expect(seen[0].maxOutputTokens).toBe(6000);
+});
+
+test('log thời gian không chứa nội dung', async () => {
+  const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+  await turn({ message: 'nội dung bí mật 123' });
+  const line = JSON.stringify(info.mock.calls);
+  expect(line).toContain('firstTokenMs');
+  expect(line).not.toContain('bí mật');
+  expect(info).toHaveBeenCalledTimes(1);
+  expect(info.mock.calls[0][0]).toBe('chat turn');
+  expect(info.mock.calls[0][1]).toMatchObject({ documents: 0, finishReason: null, proposal: 'none' });
+  info.mockRestore();
+});
+
+test('log thời gian vẫn ghi đúng một dòng khi provider lỗi', async () => {
+  const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  await turn({ message: 'MOCK_ERROR' });
+  expect(info).toHaveBeenCalledTimes(1);
+  expect(info.mock.calls[0][1]).toMatchObject({ firstTokenMs: null, proposal: 'none' });
+  info.mockRestore();
+  log.mockRestore();
 });

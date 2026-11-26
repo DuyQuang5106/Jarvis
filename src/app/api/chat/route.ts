@@ -44,6 +44,8 @@ const handler = withOwner(async (req) => {
       provider: getProvider(),
       actionMode: cfg.aiActionMode,
       dailyCap: cfg.aiDailyRequestCap,
+      maxOutputTokens: cfg.aiMaxOutputTokens,
+      model: cfg.aiProvider === 'mock' ? 'mock' : cfg.aiModel,
       now: new Date(),
       signal: req.signal,
     },

@@ -56,6 +56,8 @@ export function ChatView({
   const [title, setTitle] = useState<string | null>(conversation?.title ?? null);
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState<string | null>(null);
+  // Transient status (`Đang đọc N tài liệu…`) for the draft until its first text; never saved.
+  const [draftStatus, setDraftStatus] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [scope, setScope] = useState<ContextScope>(AUTO);
   const [input, setInput] = useState('');
@@ -71,6 +73,7 @@ export function ChatView({
     setTitle(conversation?.title ?? null);
     setMessages(initialMessages);
     setDraft(null);
+    setDraftStatus(null);
     setNotice(null);
     setScope(AUTO);
     setGeneration((g) => g + 1);
@@ -112,6 +115,7 @@ export function ChatView({
     let metaSeen = false;
     let pendingActionId: string | null = null;
     setDraft('');
+    setDraftStatus(null);
     setNotice(null);
     setPinKey((k) => k + 1);
     await stream.send(body, {
@@ -133,9 +137,13 @@ export function ChatView({
             }
             break;
           }
+          case 'status':
+            if (text === '') setDraftStatus(e.message);
+            break;
           case 'text':
             text += e.delta;
             setDraft(text);
+            setDraftStatus(null);
             break;
           case 'proposal':
             pendingActionId = e.pendingActionId;
@@ -143,6 +151,7 @@ export function ChatView({
           case 'done':
             replaced.current = null;
             setDraft(null);
+            setDraftStatus(null);
             setMessages((ms) => [
               ...ms,
               {
@@ -158,6 +167,7 @@ export function ChatView({
           case 'error':
             // The server saved nothing of a failed reply, so the partial text goes too.
             setDraft(null);
+            setDraftStatus(null);
             restoreReplaced();
             if (!metaSeen && pendingUserId && e.message === INVALID_MESSAGE) {
               // Refused before saving: the text goes back into the composer to be edited.
@@ -214,6 +224,7 @@ export function ChatView({
   function stop() {
     stream.abort();
     setDraft(null);
+    setDraftStatus(null);
     restoreReplaced();
     // The user message is kept (the server saved it before streaming); the partial reply is dropped.
     const lastUser = messages.findLast((m) => m.role === 'user');
@@ -232,6 +243,7 @@ export function ChatView({
       <MessageList
         messages={messages}
         draft={draft}
+        draftStatus={draftStatus}
         pinKey={pinKey}
         onRegenerate={streaming ? undefined : regenerate}
         empty={

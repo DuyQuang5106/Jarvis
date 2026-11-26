@@ -17,6 +17,8 @@ export type AppConfig = {
   aiDailyRequestCap: number;
   /** Upper bound on serialized `<workspace_state>` characters per chat turn. */
   aiContextMaxChars: number;
+  /** `maxOutputTokens` sent to the provider for a chat turn. */
+  aiMaxOutputTokens: number;
   storageDriver: 'memory' | 'local' | 'supabase';
   storageDir: string;
   supabaseStorageBucket?: string;
@@ -28,6 +30,9 @@ type Env = Record<string, string | undefined>;
 
 const DEFAULT_CONTEXT_MAX_CHARS = 120_000;
 const MIN_CONTEXT_MAX_CHARS = 16_000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 4000;
+const MIN_MAX_OUTPUT_TOKENS = 500;
+const MAX_MAX_OUTPUT_TOKENS = 16_000;
 
 function blank(v: string | undefined): string | undefined {
   const t = v?.trim();
@@ -57,6 +62,14 @@ export function loadConfig(env: Env): AppConfig {
     throw new ConfigError(`AI_CONTEXT_MAX_CHARS=${contextRaw} không hợp lệ; cần số nguyên từ ${MIN_CONTEXT_MAX_CHARS} trở lên.`);
   }
 
+  const outputRaw = blank(env.AI_MAX_OUTPUT_TOKENS);
+  const maxOutput = outputRaw === undefined ? DEFAULT_MAX_OUTPUT_TOKENS : Number(outputRaw);
+  if (!Number.isInteger(maxOutput) || maxOutput < MIN_MAX_OUTPUT_TOKENS || maxOutput > MAX_MAX_OUTPUT_TOKENS) {
+    throw new ConfigError(
+      `AI_MAX_OUTPUT_TOKENS=${outputRaw} không hợp lệ; cần số nguyên từ ${MIN_MAX_OUTPUT_TOKENS} đến ${MAX_MAX_OUTPUT_TOKENS}.`,
+    );
+  }
+
   const pgliteDir = blank(env.PGLITE_DIR) ?? './.pglite';
   const supabaseStorageBucket = blank(env.SUPABASE_STORAGE_BUCKET);
   const supabaseServiceRoleKey = blank(env.SUPABASE_SERVICE_ROLE_KEY);
@@ -83,6 +96,7 @@ export function loadConfig(env: Env): AppConfig {
     aiActionMode: pick(env, 'AI_ACTION_MODE', ['tools', 'json', 'off'] as const, 'off'),
     aiDailyRequestCap: cap,
     aiContextMaxChars: contextMax,
+    aiMaxOutputTokens: maxOutput,
     storageDriver: pick(env, 'STORAGE_DRIVER', ['memory', 'local', 'supabase'] as const, defaultStorageDriver),
     storageDir: blank(env.STORAGE_DIR) ?? './.storage',
     supabaseStorageBucket,

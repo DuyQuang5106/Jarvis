@@ -122,12 +122,15 @@ export function MarkdownContent({ text }: { text: string }) {
 export function MessageBubble({
   message,
   streaming = false,
+  status,
   onRegenerate,
   footer,
 }: {
   message: ChatMessageView;
   /** The reply is still arriving: show a blinking cursor and no actions. */
   streaming?: boolean;
+  /** While streaming and before the first text: what the server is doing (`Đang đọc 3 tài liệu…`). */
+  status?: string | null;
   /** Only the last assistant message gets `Tạo lại`. */
   onRegenerate?: () => void;
   /** Phase 3 renders the proposal card here. */
@@ -148,8 +151,14 @@ export function MessageBubble({
   return (
     <div data-role="assistant" aria-busy={streaming || undefined} className="min-w-0 space-y-2">
       <div className="text-base">
-        <MarkdownContent text={message.content} />
-        {streaming && (
+        {streaming && status && message.content === '' ? (
+          <p role="status" className="text-sm text-muted-foreground motion-safe:animate-pulse">
+            {status}
+          </p>
+        ) : (
+          <MarkdownContent text={message.content} />
+        )}
+        {streaming && !(status && message.content === '') && (
           <span
             aria-hidden
             className="ml-0.5 inline-block h-[1.1em] w-2 translate-y-[0.2em] bg-foreground motion-safe:animate-pulse"

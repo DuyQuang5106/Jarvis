@@ -72,10 +72,17 @@ export function createMockProvider(): AiProvider {
         yield { type: 'text', delta: `Ảnh đây: ${MOCK_IMAGE_MARKDOWN} hết.` };
         return;
       }
+      if (u.includes('MOCK_LENGTH')) {
+        // The reply hit the output cap: the provider reports `finish_reason = length`.
+        yield { type: 'text', delta: 'Phần đầu' };
+        req.onFinishReason?.('length');
+        return;
+      }
       if (u.includes('MOCK_SLOW')) {
-        // A long reply for testing `Dừng`: one chunk every SLOW_STEP_MS, stopping as soon as the request aborts.
+        // A long reply for testing `Dừng` and the waiting status: one chunk every SLOW_STEP_MS (the first one
+        // too, so the status shows before any text), stopping as soon as the request aborts.
         for (let i = 1; i <= SLOW_CHUNKS; i++) {
-          if (i > 1) await sleep(SLOW_STEP_MS, req.signal);
+          await sleep(SLOW_STEP_MS, req.signal);
           yield { type: 'text', delta: `MOCK_SLOW_CHUNK_${i} ` };
         }
         return;

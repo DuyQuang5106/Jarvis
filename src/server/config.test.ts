@@ -45,6 +45,15 @@ test('ngoài production không bao giờ ném lỗi', () => {
   expect(() => assertSafeConfig(loadConfig({ NODE_ENV: 'development', E2E: '1' }))).not.toThrow();
 });
 
+test('AI_MAX_OUTPUT_TOKENS: mặc định 4000, khoảng 500–16000', () => {
+  expect(loadConfig({ NODE_ENV: 'development' }).aiMaxOutputTokens).toBe(4000);
+  expect(loadConfig({ NODE_ENV: 'development', AI_MAX_OUTPUT_TOKENS: '500' }).aiMaxOutputTokens).toBe(500);
+  expect(loadConfig({ NODE_ENV: 'development', AI_MAX_OUTPUT_TOKENS: '16000' }).aiMaxOutputTokens).toBe(16000);
+  expect(() => loadConfig({ NODE_ENV: 'development', AI_MAX_OUTPUT_TOKENS: '499' })).toThrow(/AI_MAX_OUTPUT_TOKENS/);
+  expect(() => loadConfig({ NODE_ENV: 'development', AI_MAX_OUTPUT_TOKENS: '16001' })).toThrow(/AI_MAX_OUTPUT_TOKENS/);
+  expect(() => loadConfig({ NODE_ENV: 'development', AI_MAX_OUTPUT_TOKENS: '1e3x' })).toThrow(/AI_MAX_OUTPUT_TOKENS/);
+});
+
 test('AI_CONTEXT_MAX_CHARS: mặc định 120000, tối thiểu 16000', () => {
   expect(loadConfig({ NODE_ENV: 'development' }).aiContextMaxChars).toBe(120000);
   expect(loadConfig({ NODE_ENV: 'development', AI_CONTEXT_MAX_CHARS: '60000' }).aiContextMaxChars).toBe(60000);

@@ -16,6 +16,7 @@ const DRAFT_ID = 'draft';
 export function MessageList({
   messages,
   draft,
+  draftStatus = null,
   pinKey,
   onRegenerate,
   empty,
@@ -24,6 +25,8 @@ export function MessageList({
   messages: ChatMessageView[];
   /** The assistant reply being streamed, or null. */
   draft: string | null;
+  /** The server's waiting status for the reply being streamed, shown until its first text. */
+  draftStatus?: string | null;
   pinKey: number;
   onRegenerate?: () => void;
   /** Rendered instead of messages when there are none. */
@@ -41,7 +44,7 @@ export function MessageList({
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages, draft, after, pinKey]);
+  }, [messages, draft, draftStatus, after, pinKey]);
 
   const last = messages.at(-1);
   return (
@@ -64,7 +67,7 @@ export function MessageList({
           />
         ))}
         {draft !== null && (
-          <MessageBubble streaming message={{ id: DRAFT_ID, role: 'assistant', content: draft, contextRefs: [], summaryCount: 0 }} />
+          <MessageBubble streaming status={draftStatus} message={{ id: DRAFT_ID, role: 'assistant', content: draft, contextRefs: [], summaryCount: 0 }} />
         )}
         {after}
       </div>

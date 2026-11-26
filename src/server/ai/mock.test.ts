@@ -92,3 +92,14 @@ test('đề xuất qua tool_call hoặc <proposed_actions> cắt đôi thẻ m�
   expect(badRes.text).toBe('Đề xuất lỗi.');
   expect(badRes.toolCalls).toHaveLength(1);
 });
+
+test('MOCK_LENGTH phát "Phần đầu" rồi báo finish_reason length', async () => {
+  const reasons: (string | null)[] = [];
+  const { text } = await collect(createMockProvider().stream({
+    messages: [{ role: 'user', content: 'MOCK_LENGTH' }],
+    maxOutputTokens: 100,
+    onFinishReason: (r) => reasons.push(r),
+  }));
+  expect(text).toBe('Phần đầu');
+  expect(reasons).toEqual(['length']);
+});
