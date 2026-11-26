@@ -18,19 +18,28 @@
 6. **Không có bộ đánh giá bằng câu hỏi thật.** 391 test xanh chỉ kiểm cơ chế với AI giả lập, nên chất lượng câu trả lời tụt mà không test nào báo.
 7. **Chưa có lớp chủ động:** không tóm tắt hằng ngày, không hiển thị tiến độ.
 
-### Đợt 1 — Chat đúng, nhanh, không cụt (P0, đang làm)
+### Đợt 1 — Chat đúng, nhanh, không cụt (P0, xong 26/11/2026)
 
 Kế hoạch chi tiết: `docs/superpowers/plans/2026-11-26-dot-1-chat-quality.md`. Gộp và thay các mục **D0, D5, D6** bên dưới.
 
 | Mục | Nội dung | Tiêu chí chấp nhận | Trạng thái |
 |---|---|---|---|
-| Q1 | Bỏ YAML frontmatter, đọc loại tài liệu | Không đoạn nào gửi cho AI chứa `document_type:` | In Progress |
-| Q2 | Context v2: nạp trọn tài liệu lõi theo ưu tiên, ngân sách 120 nghìn ký tự, bỏ log import | Hỏi về Algebra thì `04_STATE.md` đứng đầu và vào trọn; câu hỏi tổng thể có tài liệu trạng thái của từng môn | In Progress |
-| Q3 | Prompt v2: trả lời thẳng, dựa tài liệu, không lộ tên trường nội bộ | Câu trả lời không còn `status_unknown`, `no_topics`; bảng trống không bị coi là bằng chứng | In Progress |
-| Q4 | Giới hạn đầu ra 4.000 token (cấu hình được), báo khi bị cắt, trạng thái "Đang đọc N tài liệu…", log thời gian | Không còn câu trả lời cụt không lời giải thích | In Progress |
-| Q5 | Chỉ đề xuất khi người dùng báo hoặc ra lệnh; nêu lý do khi bỏ đề xuất | Hỏi thuần không sinh thẻ duyệt; mỗi lần bỏ đề xuất có lý do đọc được | In Progress |
-| Q6 | `pnpm ai:eval`: 6 câu hỏi thật chạy trên bản sao dữ liệu | Đạt 6/6; chữ đầu tiên dưới 20 giây | In Progress |
-| Q7 | Chọn model mặc định theo số đo của Q6 | `.env.local` và README ghi model được chọn kèm số đo | Not Started |
+| Q1 | Bỏ YAML frontmatter, đọc loại tài liệu | Không đoạn nào gửi cho AI chứa `document_type:` | Done |
+| Q2 | Context v2: nạp trọn tài liệu lõi theo ưu tiên, ngân sách 120 nghìn ký tự, bỏ log import | Hỏi về Algebra thì `04_STATE.md` đứng đầu và vào trọn; câu hỏi tổng thể có tài liệu trạng thái của từng môn | Done |
+| Q3 | Prompt v2: trả lời thẳng, dựa tài liệu, không lộ tên trường nội bộ | Câu trả lời không còn `status_unknown`, `no_topics`; bảng trống không bị coi là bằng chứng | Done |
+| Q4 | Giới hạn đầu ra 4.000 token (cấu hình được), báo khi bị cắt, trạng thái "Đang đọc N tài liệu…", log thời gian | Không còn câu trả lời cụt không lời giải thích | Done |
+| Q5 | Chỉ đề xuất khi người dùng báo hoặc ra lệnh; nêu lý do khi bỏ đề xuất | Hỏi thuần không sinh thẻ duyệt; mỗi lần bỏ đề xuất có lý do đọc được | Done |
+| Q6 | `pnpm ai:eval`: 6 câu hỏi thật chạy trên bản sao dữ liệu | Đạt 6/6; chữ đầu tiên dưới 20 giây | Done |
+| Q7 | Chọn model mặc định theo số đo của Q6 | `.env.local` và README ghi model được chọn kèm số đo | Done |
+
+**Kết quả đo (26/11/2026, 6 câu hỏi thật trên bản sao dữ liệu, `docs/ai-eval-report.md`):**
+
+| Model | Case đạt | Chữ đầu tiên | Tổng thời gian |
+|---|---|---|---|
+| `claude-sonnet-5` (đã chọn làm mặc định) | 6/6 | 5–16 giây | 6–19 giây |
+| `gpt-6.2-sol` | 5/6 (một case quá 20 giây) | 20–65 giây | 23–84 giây |
+
+Sửa thêm ngoài kế hoạch: đề xuất gồm nhiều thay đổi không còn bị bỏ cả gói khi một thay đổi sai; phần hợp lệ được giữ và câu trả lời ghi rõ đã bỏ bao nhiêu.
 
 ### Đợt 2 — Trí nhớ có cấu trúc, tóm tắt hằng ngày, tiến độ trực quan (P0, sau Đợt 1)
 

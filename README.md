@@ -83,6 +83,8 @@ cp -r .pglite .pglite-eval
 EVAL_PGLITE_DIR=./.pglite-eval AI_MODEL=<model> pnpm ai:eval
 ```
 
+Đo ngày 26/11/2026 trên dữ liệu thật: `claude-sonnet-5` đạt 6/6 case, chữ đầu tiên sau 5–16 giây; `gpt-6.2-sol` đạt 5/6, chữ đầu tiên sau 20–65 giây. Vì vậy `AI_MODEL=claude-sonnet-5` là lựa chọn mặc định.
+
 Kết quả nằm ở `docs/ai-eval-report.md` (mỗi case chỉ giữ tối đa 300 ký tự câu trả lời). Thêm câu hỏi vào `docs/ai-eval-cases.json`; các trường `answerMustMatch`/`answerMustNotMatch` là regex không phân biệt hoa thường, `contextMustInclude`/`contextMustNotInclude` so với tên tài liệu AI đã đọc.
 
 ## Sao lưu
