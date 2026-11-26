@@ -4,5 +4,6 @@
   { "id": "algebra-pacing", "question": "phân tích tiến độ môn algebra cho tôi", "contextMustInclude": ["04_STATE", "06_TIMELINE"], "expectProposal": false },
   { "id": "today-portfolio", "question": "Hôm nay nên làm gì?", "contextMustInclude": ["04_STATE"], "answerMustNotMatch": ["status_unknown|no_topics"], "expectProposal": false },
   { "id": "exam-schedule", "question": "kiểm tra lịch thi các môn", "expectProposal": false },
-  { "id": "report-progress", "question": "thêm tiến độ hiện tại Algebra: đang học đến đầu chương 5", "expectProposal": true }
+  { "id": "report-progress", "question": "thêm tiến độ hiện tại Algebra: đã học xong chương 5, đang bắt đầu chương 6", "expectProposal": true, "proposalMustInclude": ["append_to_document", "add_progress_log"], "approveProposal": true },
+  { "id": "recall-after-report", "question": "algebra đang học đến đâu rồi", "contextMustInclude": ["04_STATE"], "answerMustMatch": ["chương\\s*6|chapter\\s*6"], "expectProposal": false }
 ]

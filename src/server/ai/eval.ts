@@ -1,10 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '@/db/client';
-import { messages } from '@/db/schema';
+import { messages, pendingActions } from '@/db/schema';
 import { runChatTurn, type TurnDeps, type TurnTimingReport } from '../chat/run-turn';
 import type { ContextRef, ContextScope } from './context-builder';
 import type { AiProvider } from './provider';
+import { approvePendingAction } from '../proposals/resolve';
+import type { StoredProposal } from '../proposals/schema';
 
 /** A golden question. `*Match` strings are case-insensitive regexes; `context*` match referenced document names. */
 export type EvalCase = {
@@ -16,6 +18,10 @@ export type EvalCase = {
   answerMustMatch?: string[];
   answerMustNotMatch?: string[];
   expectProposal?: boolean;
+  /** Action types the stored proposal must contain (e.g. `append_to_document`). */
+  proposalMustInclude?: string[];
+  /** Approve every action of the stored proposal, so a later case can check that the workspace remembers it. */
+  approveProposal?: boolean;
   maxFirstTokenMs?: number;
 };
 
@@ -53,6 +59,8 @@ const EvalCaseSchema = z
     answerMustMatch: strings,
     answerMustNotMatch: strings,
     expectProposal: z.boolean().optional(),
+    proposalMustInclude: strings,
+    approveProposal: z.boolean().optional(),
     maxFirstTokenMs: z.number().positive().optional(),
   })
   .strict();
@@ -80,6 +88,7 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
   let timing: TurnTimingReport | null = null;
   let reply = '';
   let proposed = false;
+  let pendingActionId: string | null = null;
   let assistantMessageId: string | null = null;
   let firstTokenMs: number | null = null;
   const started = performance.now();
@@ -103,7 +112,10 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
   for await (const e of turn) {
     if ((e.type === 'text' || e.type === 'proposal') && firstTokenMs === null) firstTokenMs = Math.round(performance.now() - started);
     if (e.type === 'text') reply += e.delta;
-    else if (e.type === 'proposal') proposed = true;
+    else if (e.type === 'proposal') {
+      proposed = true;
+      pendingActionId = e.pendingActionId;
+    }
     else if (e.type === 'done') assistantMessageId = e.assistantMessageId;
     else if (e.type === 'error') failures.push(`lỗi: ${e.message}`);
   }
@@ -125,6 +137,16 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
   for (const re of c.answerMustNotMatch ?? []) if (new RegExp(re, 'i').test(reply)) failures.push(`câu trả lời không được khớp /${re}/i`);
   if (c.expectProposal === true && !proposed) failures.push('cần có đề xuất');
   if (c.expectProposal === false && proposed) failures.push('không được có đề xuất');
+  if (pendingActionId && (c.proposalMustInclude?.length || c.approveProposal)) {
+    const [row] = await deps.db.select().from(pendingActions).where(eq(pendingActions.id, pendingActionId));
+    const stored = row.actionsJson as StoredProposal;
+    const types = stored.actions.map((a) => a.action.type as string);
+    for (const type of c.proposalMustInclude ?? []) if (!types.includes(type)) failures.push(`đề xuất thiếu hành động ${type}`);
+    if (c.approveProposal) {
+      const approved = await approvePendingAction(deps.db, pendingActionId, { selectedKeys: stored.actions.map((a) => a.key) });
+      if (approved.status !== 'applied') failures.push(`duyệt đề xuất: ${approved.status}`);
+    }
+  }
   const first = firstTokenMs ?? totalMs;
   if (c.maxFirstTokenMs !== undefined && (firstTokenMs === null || firstTokenMs > c.maxFirstTokenMs)) {
     failures.push(`chữ đầu tiên sau ${first} ms (tối đa ${c.maxFirstTokenMs} ms)`);
