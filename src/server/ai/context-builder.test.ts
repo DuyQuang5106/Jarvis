@@ -377,3 +377,25 @@ test('nhiều môn được chọn: xen kẽ theo vòng theo thứ tự chọn',
   const docs = (await build('x', { mode: 'academic' })).state.documents!;
   expect(docs.map((d) => `${d.areaId === a.id ? 'A' : 'B'}:${d.title}`)).toEqual(['A:04_STATE.md', 'B:04_STATE.md', 'A:01_CONTEXT.md', 'B:01_CONTEXT.md']);
 });
+
+test('scope một mục: tài liệu lõi bị cắt vẫn mang outline gồm heading nằm sau chỗ cắt', async () => {
+  const a = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  await addDoc(a.id, '05_LOG.md', fm('course_event_log') + '# 05 — LOG\n\n## Buổi học\n\n' + 'b'.repeat(6000) + '\n\n## Thông báo của giảng viên\n\nChưa có.');
+  const ctx = await build('ghi lại thông báo', { mode: 'item', areaId: a.id }, { maxChars: 9000 });
+  const [log] = ctx.state.documents!;
+  expect(log.title).toBe('05_LOG.md');
+  expect(log.content ?? '').not.toContain('Thông báo của giảng viên');
+  expect(log.outline).toEqual(expect.arrayContaining([['05 — LOG', 'Thông báo của giảng viên']]));
+});
+
+test('dự án chưa có tài liệu: vẫn có areaId trong areas và details để tạo tài liệu mới', async () => {
+  const qh = await createArea(db, { kind: 'project', name: 'Question House', status: 'active' }, manual);
+  const other = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  await addDoc(other.id, '04_STATE.md', fm('state_snapshot') + '# 04 — STATE\n\nỔn.');
+  for (const scope of [{ mode: 'auto' }, { mode: 'item', areaId: qh.id }] as ContextScope[]) {
+    const ctx = await build('Question House: quyết định dùng Supabase', scope);
+    expect(ctx.state.areas.map((x) => x.id)).toContain(qh.id);
+    expect(ctx.state.details.map((d) => d.areaId)).toEqual([qh.id]);
+    expect((ctx.state.documents ?? []).filter((d) => d.areaId === qh.id)).toEqual([]);
+  }
+});

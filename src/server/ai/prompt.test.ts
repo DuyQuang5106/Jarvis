@@ -25,6 +25,21 @@ test('luật đề xuất: báo tiến độ học thì ghi vào tài liệu tr�
   }
 });
 
+test('luật đề xuất: thông tin mới được ghi vào đúng tài liệu, hoặc tạo STATE.md khi mục chưa có', () => {
+  for (const mode of ['tools', 'json'] as const) {
+    const prompt = buildSystemPrompt({ stateJson: '{}', actionMode: mode });
+    for (const phrase of [
+      'kể thông tin mới', 'quyết định, kết quả thử nghiệm, vướng mắc, thay đổi kế hoạch, thông báo',
+      '05_LOG.md', '04_STATE.md', 'create_blocker, kèm một dòng trong tài liệu',
+      'heading đúng y một heading có thật', 'không lặp cùng một dòng qua nhiều tài liệu','create_document với areaId của mục', 'title "STATE.md"',
+      '"## Trạng thái hiện tại", "## Quyết định", "## Vướng mắc", "## Nhật ký"',
+      '"- YYYY-MM-DD: …"', 'now.date', 'không suy diễn thêm', 'không đề xuất lại',
+    ])
+      expect(prompt).toContain(phrase);
+  }
+  expect(buildSystemPrompt({ stateJson: '{}', actionMode: 'off' })).not.toContain('STATE.md');
+});
+
 test('ký tự $ trong state được giữ nguyên', () => {
   expect(buildSystemPrompt({ stateJson: '{"a":"$&$1"}', actionMode: 'off' })).toContain('{"a":"$&$1"}');
 });

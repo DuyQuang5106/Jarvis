@@ -11,6 +11,10 @@ const PROPOSAL_RULES_COMMON = `- Chỉ đề xuất điều người dùng đã 
 - Dùng đúng id, areaId và documentId ngắn (như a1, d1, tp1) có trong <workspace_state>; không tự bịa mã mới. Khi trả lời bằng văn bản cho người dùng, gọi mục/tài liệu bằng tên thay vì mã ID. Nếu thứ người dùng nhắc tới chưa tồn tại (ví dụ một topic chưa có), đề xuất tạo mới và nói rõ là tạo mới; không gán vào bản ghi gần giống.
 - Ngày viết dạng YYYY-MM-DD.
 - Khi người dùng báo hạn nộp, đề xuất task hoặc assessment có dueDate. Khi báo vướng mắc, dùng blocker. Khi báo tiến độ học (đã học tới đâu, xong chương nào, điểm số): cập nhật topic nếu topic đó đã có; và nếu môn đó có tài liệu trạng thái trong documents, đề xuất thêm một dòng vào đúng mục tiến độ của tài liệu đó (append_to_document) để lần sau bạn đọc lại được. Luôn kèm add_progress_log.
+- Khi người dùng kể thông tin mới về một môn/dự án (quyết định, kết quả thử nghiệm, vướng mắc, thay đổi kế hoạch, thông báo của giảng viên hay nhóm) mà tài liệu của mục đó chưa ghi, đề xuất ghi nó vào đúng tài liệu để lần sau đọc lại được: quyết định và kết quả thử nghiệm vào mục quyết định hoặc nhật ký (05_LOG.md, hoặc mục tương ứng có thật); trạng thái, kế hoạch hay hình thức thi thay đổi vào 04_STATE.md; vướng mắc của dự án thì dùng create_blocker, kèm một dòng trong tài liệu.
+- Ghi vào tài liệu có sẵn bằng append_to_document với heading đúng y một heading có thật trong content hoặc outline của chính tài liệu đó; không bịa heading, và chọn mục có nội dung khớp với thông tin (không chọn mục quy tắc hay hướng dẫn). Mỗi thông tin ghi vào một chỗ phù hợp nhất; không lặp cùng một dòng qua nhiều tài liệu.
+- Nếu mục đó chưa có tài liệu phù hợp (không có tài liệu nào trong documents mang areaId của mục, thường gặp ở dự án), dùng create_document với areaId của mục, title "STATE.md", markdown gồm đúng các mục "## Trạng thái hiện tại", "## Quyết định", "## Vướng mắc", "## Nhật ký", và ghi thông tin vào đúng mục.
+- Mỗi dòng ghi vào tài liệu bắt đầu bằng ngày lấy từ now.date, dạng "- YYYY-MM-DD: …". Ghi đúng lời người dùng, không suy diễn thêm và không thêm nhận xét về điều còn thiếu. Thông tin tài liệu đã ghi rồi thì không đề xuất lại.
 - Đề xuất sửa Markdown phải lấy đúng documentId từ mảng documents trong <workspace_state> cùng heading (không cần dấu #) hoặc nội dung checklist thấy trong excerpts/outline. Mỗi thay đổi giữ các phần khác của tài liệu nguyên vẹn.
 - Bạn không thể xóa dữ liệu. Bạn không tự ghi được gì: mọi đề xuất chờ người dùng duyệt, nên đừng nói là đã cập nhật.
 - Luôn kèm một câu trả lời ngắn bằng văn bản mô tả điều bạn đề xuất.`;
@@ -37,12 +41,12 @@ function proposalSection(mode: PromptInput['actionMode'], fromDocuments = false)
 function baseProposalSection(mode: PromptInput['actionMode']): string {
   if (mode === 'tools') {
     return `ĐỀ XUẤT CẬP NHẬT
-- Khi người dùng báo tiến độ, báo một thay đổi, hoặc yêu cầu sửa dữ liệu, hãy gọi tool propose_changes. Không gọi khi họ chỉ hỏi.
+- Khi người dùng báo tiến độ, báo một thay đổi, kể thông tin mới, hoặc yêu cầu sửa dữ liệu, hãy gọi tool propose_changes. Không gọi khi họ chỉ hỏi.
 ${PROPOSAL_RULES_COMMON}`;
   }
   if (mode === 'json') {
     return `ĐỀ XUẤT CẬP NHẬT
-- Khi người dùng báo tiến độ, báo một thay đổi, hoặc yêu cầu sửa dữ liệu, hãy đặt Ở CUỐI câu trả lời một khối <proposed_actions>{...}</proposed_actions> chứa đúng một object JSON theo schema dưới đây, không kèm code fence. Không thêm khối này khi họ chỉ hỏi.
+- Khi người dùng báo tiến độ, báo một thay đổi, kể thông tin mới, hoặc yêu cầu sửa dữ liệu, hãy đặt Ở CUỐI câu trả lời một khối <proposed_actions>{...}</proposed_actions> chứa đúng một object JSON theo schema dưới đây, không kèm code fence. Không thêm khối này khi họ chỉ hỏi.
 ${PROPOSAL_RULES_COMMON}
 Schema: ${JSON.stringify(PROPOSE_CHANGES_TOOL.parameters)}`;
   }

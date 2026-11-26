@@ -7,7 +7,7 @@ import type { AiProvider, ProviderEvent, StreamRequest } from './provider';
 type MockState = {
   now: { date: string };
   areas: { id: string; name: string; status: string; kind?: string }[];
-  documents?: { documentId: string; areaId: string; title: string; docRole: string }[];
+  documents?: { documentId: string; areaId: string; title: string; docRole: string; content?: string; outline?: string[][] }[];
   details: {
     areaId: string;
     name: string;
@@ -53,6 +53,34 @@ function fromDocumentsProposal(state: MockState): { summary: string; actions: Re
   }
   if (!has(detail.tasks, 'Làm bài tập Chương 1')) actions.push({ type: 'create_task', areaId, title: 'Làm bài tập Chương 1' });
   return actions.length ? { summary: `Tạo bản ghi từ tài liệu của ${detail.name}`, actions } : null;
+}
+
+/** Headings of a state document, from its text or (when only listed) its outline, in document order. */
+function documentHeadings(doc: NonNullable<MockState['documents']>[number]): string[] {
+  if (doc.content !== undefined) {
+    return [...doc.content.matchAll(/^ {0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$/gm)].map((m) => m[1].trim());
+  }
+  return (doc.outline ?? []).map((path) => path[path.length - 1]).filter(Boolean);
+}
+
+/**
+ * `MOCK_DECISION`: the decision goes under a real heading of the first Markdown document of the area named in
+ * the message (a decision/log heading when there is one), or into a new `STATE.md` when the area has none.
+ */
+function decisionProposal(state: MockState, message: string): { summary: string; actions: Record<string, unknown>[] } | null {
+  const norm = normalizeVi(message);
+  const area = state.areas.find((a) => normalizeVi(a.name).length > 0 && norm.includes(normalizeVi(a.name)));
+  if (!area) return null;
+  const line = `- ${state.now.date}: ${message.replace('MOCK_DECISION', '').trim()}`;
+  for (const doc of state.documents ?? []) {
+    if (doc.areaId !== area.id) continue;
+    const headings = documentHeadings(doc);
+    if (!headings.length) continue;
+    const heading = headings.find((h) => /quyet dinh|nhat ky|log/.test(normalizeVi(h))) ?? headings[0];
+    return { summary: `Ghi quyết định vào ${doc.title}`, actions: [{ type: 'append_to_document', documentId: doc.documentId, heading, markdown: line }] };
+  }
+  const markdown = [`# Trạng thái ${area.name}`, '## Trạng thái hiện tại', `## Quyết định\n\n${line}`, '## Vướng mắc', '## Nhật ký'].join('\n\n') + '\n';
+  return { summary: `Tạo STATE.md cho ${area.name}`, actions: [{ type: 'create_document', areaId: area.id, title: 'STATE.md', markdown }] };
 }
 
 function parseState(system: string): MockState | null {
@@ -157,6 +185,15 @@ export function createMockProvider(): AiProvider {
           summary: 'Hỏng',
           actions: [{ type: 'update_task', id: '00000000-0000-4000-8000-000000000000', patch: { status: 'done' } }],
         });
+        return;
+      }
+
+      // A turn without the proposal machinery (a pure question) falls through to the plain state reply.
+      const offersProposal = !!req.tools?.some((t) => t.name === 'propose_changes') || system.includes('<proposed_actions>');
+      if (u.includes('MOCK_DECISION') && state && offersProposal) {
+        const proposal = decisionProposal(state, u);
+        if (proposal) yield* emitWithProposal(req, system, 'Đề xuất ghi quyết định vào tài liệu.', proposal);
+        else yield { type: 'text', delta: 'Không rõ ghi vào môn hay dự án nào.' };
         return;
       }
 

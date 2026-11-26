@@ -6,5 +6,8 @@
   { "id": "exam-schedule", "question": "kiểm tra lịch thi các môn", "expectProposal": false },
   { "id": "report-progress", "question": "thêm tiến độ hiện tại Algebra: đã học xong chương 5, đang bắt đầu chương 6", "expectProposal": true, "proposalMustInclude": ["append_to_document", "add_progress_log"], "approveProposal": true },
   { "id": "recall-after-report", "question": "algebra đang học đến đâu rồi", "contextMustInclude": ["04_STATE"], "answerMustMatch": ["chương\\s*6|chapter\\s*6"], "expectProposal": false },
-  { "id": "from-documents", "question": "Đọc tài liệu của Algebra và tạo đề xuất: các topic kèm trạng thái, mốc đánh giá, và việc tiếp theo.", "expectProposal": true, "proposalMustInclude": ["upsert_topic", "upsert_assessment"] }
+  { "id": "from-documents", "question": "Đọc tài liệu của Algebra và tạo đề xuất: các topic kèm trạng thái, mốc đánh giá, và việc tiếp theo.", "expectProposal": true, "proposalMustInclude": ["upsert_topic", "upsert_assessment"] },
+  { "id": "project-decision", "question": "Dự án Question House: quyết định dùng Supabase thay vì Firebase vì cần truy vấn SQL", "expectProposal": true, "proposalMustInclude": ["create_document"] },
+  { "id": "course-announcement", "question": "Algebra có thông báo: thi cuối kỳ dạng tự luận 90 phút, được mang 1 tờ A4 ghi chú", "expectProposal": true, "proposalMustInclude": ["append_to_document"] },
+  { "id": "project-question", "question": "Question House nên dùng Supabase hay Firebase?", "expectProposal": false }
 ]

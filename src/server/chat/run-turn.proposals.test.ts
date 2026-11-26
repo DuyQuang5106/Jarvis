@@ -1,11 +1,12 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { Db } from '@/db/client';
-import { messages, pendingActions, topics } from '@/db/schema';
+import { documents, messages, pendingActions, topics } from '@/db/schema';
 import { createTestDb } from '@/db/testing';
 import { createMockProvider } from '../ai/mock';
 import type { AiProvider, StreamRequest } from '../ai/provider';
 import { ignoredProposalNotice } from '../proposals/store';
 import { createArea } from '../services/areas';
+import { documentService } from '../services/documents';
 import { topicService } from '../services/entities';
 import { runChatTurn, type TurnEvent, type TurnInput } from './run-turn';
 
@@ -132,4 +133,36 @@ test('đề xuất được lưu: log thời gian ghi stored', async () => {
   await turn('tools', { message: 'Tôi đã hoàn thành chương 1 Mobile' });
   expect(info.mock.calls[0][1]).toMatchObject({ proposal: 'stored' });
   info.mockRestore();
+});
+
+const storedActions = async () => {
+  const [pending] = await db.select().from(pendingActions);
+  return (pending.actionsJson as { actions: { action: Record<string, unknown> }[] }).actions.map((a) => a.action);
+};
+
+test.each(['tools', 'json'] as const)('chế độ %s: kể quyết định của dự án chưa có tài liệu → đề xuất create_document STATE.md, chưa ghi gì', async (mode) => {
+  const qh = await createArea(db, { kind: 'project', name: 'Question House', status: 'active' }, manual);
+  const events = await turn(mode, { message: 'MOCK_DECISION Question House: quyết định dùng Supabase thay vì Firebase' });
+  expect(events.map((e) => e.type).slice(-2)).toEqual(['proposal', 'done']);
+  const [action] = await storedActions();
+  expect(action).toMatchObject({ type: 'create_document', areaId: qh.id, title: 'STATE.md' });
+  for (const heading of ['## Trạng thái hiện tại', '## Quyết định', '## Vướng mắc', '## Nhật ký'])
+    expect(action.markdown).toContain(heading);
+  expect(action.markdown).toContain('- 2026-11-22: Question House: quyết định dùng Supabase thay vì Firebase');
+  expect(await db.select().from(documents)).toEqual([]);
+});
+
+test('kể quyết định của môn có tài liệu → append_to_document dưới heading có thật của tài liệu đó', async () => {
+  const doc = await documentService.create(db, { areaId, title: 'Ghi chép.md', bodyMd: '# Ghi chép\n\n## Mục tiêu\n\nQua môn.\n\n## Quyết định\n\n- cũ\n' }, manual);
+  await turn('tools', { message: 'MOCK_DECISION Mobile Programming chốt dùng Flutter cho bài lớn' });
+  expect(await storedActions()).toEqual([
+    { type: 'append_to_document', documentId: doc.id, heading: 'Quyết định', markdown: '- 2026-11-22: Mobile Programming chốt dùng Flutter cho bài lớn' },
+  ]);
+});
+
+test('câu hỏi có cùng từ khóa không có đề xuất', async () => {
+  await createArea(db, { kind: 'project', name: 'Question House', status: 'active' }, manual);
+  const events = await turn('tools', { message: 'MOCK_DECISION Question House nên dùng Supabase hay Firebase?' });
+  expect(events.some((e) => e.type === 'proposal')).toBe(false);
+  expect(await db.select().from(pendingActions)).toEqual([]);
 });

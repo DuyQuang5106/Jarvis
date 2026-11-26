@@ -1,5 +1,48 @@
 import { expect, test } from 'vitest';
-import { allowsProposal } from './intent';
+import { normalizeVi } from '../ai/match-areas';
+import { allowsProposal, reportsNewInformation } from './intent';
+
+const tells = (text: string) => reportsNewInformation(normalizeVi(text), text);
+
+test.each([
+  'Dự án Question House: quyết định dùng Supabase thay vì Firebase vì cần truy vấn SQL',
+  'Nhóm chốt dùng React Native cho bản đầu',
+  'Từ tuần sau sẽ dùng Postgres cho phần lưu trữ',
+  'StewieSAT chuyển sang dùng bộ điều khiển mới',
+  'Research Assistant: LangChain thì không dùng nữa',
+  'Đã thử chạy mô hình trên GPU, nhanh gấp 3 lần',
+  'Kết quả thử nghiệm: độ chính xác đạt 82%',
+  'Bản build iOS bị lỗi khi đăng nhập',
+  'Mình bị kẹt ở phần xác thực OAuth',
+  'Phát hiện dữ liệu huấn luyện bị trùng 10%',
+  'Thay đổi kế hoạch: làm bản web trước, app để sau',
+  'Algebra có thông báo: thi cuối kỳ dạng tự luận 90 phút, được mang 1 tờ A4 ghi chú',
+  'Thầy thông báo lùi hạn nộp báo cáo sang tuần sau',
+  'Nhóm thống nhất họp vào thứ Năm',
+  'ATGT Competition có deadline mới là 2026-12-10',
+])('kể thông tin mới: %s', (text) => {
+  expect(tells(text)).toBe(true);
+  expect(allowsProposal(text)).toBe(true);
+});
+
+test.each([
+  'Có nên chuyển sang Supabase không?',
+  'Question House nên dùng Supabase hay Firebase?',
+  'Kết quả thi giữa kỳ Algebra là gì',
+  'Kết quả thử nghiệm hôm qua thế nào?',
+  'Bao giờ có kết quả?',
+  'Quyết định dùng Supabase có ổn không?',
+  'Chốt phương án nào thì hợp lý?',
+  'Tại sao bản build bị lỗi?',
+  'Mình đang vướng chỗ nào?',
+  'Đã thử cách nào cho lỗi đăng nhập chưa?',
+  'Có thông báo gì mới của Algebra không?',
+  'Khi nào lùi hạn?',
+  'Kiểm tra giúp phát hiện trùng lặp dữ liệu',
+])('hỏi, cùng từ khóa: %s', (text) => {
+  expect(tells(text)).toBe(false);
+  expect(allowsProposal(text)).toBe(false);
+});
 
 test.each([
   ['algebra đang học đến đâu rồi', false],
