@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { firstChars } from '@/lib/utils';
 import type { ContextScope } from '@/server/ai/context-builder';
 import type { DailyBrief } from '@/server/brief/daily-brief';
+import type { PendingCheckin } from '@/server/checkin/checkin';
 import type { TurnEvent } from '@/server/chat/run-turn';
 import { takeChatPreset, type ChatPreset } from './chat-preset';
+import { CheckinCard } from './checkin-card';
 import { Composer } from './composer';
 import { DailyBriefCard } from './daily-brief-card';
 import type { ChatMessageView } from './message-bubble';
@@ -42,6 +44,7 @@ export function ChatView({
   areas,
   requestedId,
   brief,
+  checkin,
   today,
 }: {
   conversation: { id: string; title: string } | null;
@@ -51,6 +54,8 @@ export function ChatView({
   requestedId: string | null;
   /** Today's stored orientation brief, or null (the card then asks for it itself). */
   brief: DailyBrief | null;
+  /** The check-in card to show on a new conversation (summary possibly still to generate), or null. */
+  checkin: PendingCheckin | null;
   /** The app day (YYYY-MM-DD) these props were rendered for. */
   today: string;
 }) {
@@ -277,6 +282,9 @@ export function ChatView({
           // Stale props (see above) are about to be replaced: no prompts to click in the meantime.
           !stale && (
             <div className="m-auto flex w-full max-w-xl flex-col items-center gap-4 py-4 text-center">
+              {checkin && (
+                <CheckinCard key={checkin.slots.map((s) => `${s.day}:${s.slot}`).join(',')} initial={checkin} onSend={sendMessage} disabled={streaming} />
+              )}
               {/* Nothing the AI may read: no card, and no request for one. */}
               {(brief || areas.some((a) => !a.aiExcluded)) && (
                 <DailyBriefCard initial={brief} today={today} onStart={sendMessage} disabled={streaming} />

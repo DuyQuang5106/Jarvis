@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DaySlotsSchema } from '@/lib/day-slots';
 import {
   AREA_KINDS,
   AREA_STATUSES,
@@ -200,6 +201,9 @@ export const UpdateSettingsInput = z.object({
     .max(240, { error: 'Số phút tập trung tối đa 240.' })
     .nullable()
     .optional(),
+  /** Kept in `preferences_json`, like `daySlots`. */
+  checkinsEnabled: z.boolean({ error: 'Bật check-in phải là đúng/sai.' }).optional(),
+  daySlots: DaySlotsSchema.optional(),
 });
 
 // ---- conversations

@@ -17,3 +17,21 @@ test('updateSettings và markOnboarded', async () => {
   expect((await getSettings(db)).onboardedAt).toEqual(new Date('2026-11-22T03:00:00Z'));
   await expect(updateSettings(db, { staleAfterDays: 0 })).rejects.toThrow();
 });
+
+test('updateSettings: check-in và giờ các buổi lưu trong preferences_json, giữ các khóa khác; giờ sai bị từ chối', async () => {
+  const db = await createTestDb();
+  const { settings } = await import('@/db/schema');
+  await getSettings(db);
+  await db.update(settings).set({ preferencesJson: { other: 1 } });
+  const daySlots = {
+    morning: { start: '07:00', end: '11:30' },
+    noon: { start: '11:30', end: '13:00' },
+    afternoon: { start: '13:00', end: '18:00' },
+    evening: { start: '18:00', end: '22:00' },
+  };
+  const row = await updateSettings(db, { checkinsEnabled: false, daySlots });
+  expect(row.preferencesJson).toEqual({ other: 1, checkinsEnabled: false, daySlots });
+  expect((await updateSettings(db, { checkinsEnabled: true })).preferencesJson).toEqual({ other: 1, checkinsEnabled: true, daySlots });
+  await expect(updateSettings(db, { daySlots: { ...daySlots, noon: { start: '11:00', end: '13:00' } } })).rejects.toThrow('chồng lên buổi trước');
+  expect((await getSettings(db)).preferencesJson).toEqual({ other: 1, checkinsEnabled: true, daySlots });
+});

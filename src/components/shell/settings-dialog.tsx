@@ -7,9 +7,18 @@ import { signOut } from '@/app/login/actions';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { SLOT_KEYS, SLOT_NAME, readCheckinPrefs, type DaySlots, type SlotKey } from '@/lib/day-slots';
 import { ThemeToggle } from './theme-toggle';
 
-type Form = { termGoal: string; staleAfterDays: string; defaultFocusMinutes: string; timezone: string };
+type Form = {
+  termGoal: string;
+  staleAfterDays: string;
+  defaultFocusMinutes: string;
+  timezone: string;
+  checkinsEnabled: boolean;
+  daySlots: DaySlots;
+};
 
 export function SettingsDialog() {
   const uid = useId();
@@ -43,6 +52,7 @@ export function SettingsDialog() {
       staleAfterDays: String(s.staleAfterDays),
       defaultFocusMinutes: s.defaultFocusMinutes === null ? '' : String(s.defaultFocusMinutes),
       timezone: s.timezone,
+      ...readCheckinPrefs(s.preferencesJson),
     });
   }
 
@@ -55,9 +65,14 @@ export function SettingsDialog() {
     }
   }
 
-  function set<K extends keyof Form>(key: K, value: string) {
+  function set<K extends keyof Form>(key: K, value: Form[K]) {
     setSaved(false);
     setForm((f) => (f ? { ...f, [key]: value } : f));
+  }
+
+  function setSlot(slot: SlotKey, edge: 'start' | 'end', value: string) {
+    setSaved(false);
+    setForm((f) => (f ? { ...f, daySlots: { ...f.daySlots, [slot]: { ...f.daySlots[slot], [edge]: value } } } : f));
   }
 
   function save(e: React.FormEvent) {
@@ -72,6 +87,8 @@ export function SettingsDialog() {
         termGoal: form.termGoal.trim() || null,
         staleAfterDays: stale === '' ? Number.NaN : Number(stale),
         defaultFocusMinutes: focus === '' ? null : Number(focus),
+        checkinsEnabled: form.checkinsEnabled,
+        daySlots: form.daySlots,
       });
       if (res.ok) setSaved(true);
       else setError(res.error);
@@ -109,6 +126,42 @@ export function SettingsDialog() {
             <label htmlFor={`${uid}-tz`} className="text-sm font-medium">Múi giờ</label>
             <Input id={`${uid}-tz`} value={form?.timezone ?? ''} readOnly className="h-11 md:text-base" />
           </div>
+          <fieldset className="space-y-3 rounded-lg border p-3">
+            <legend className="px-1 text-sm font-medium">Check-in theo buổi</legend>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor={`${uid}-checkins`} className="text-sm">
+                Hỏi việc đã làm khi một buổi kết thúc
+              </label>
+              <Switch
+                id={`${uid}-checkins`}
+                checked={form?.checkinsEnabled ?? true}
+                onCheckedChange={(v) => set('checkinsEnabled', v)}
+                disabled={!ready || pending}
+              />
+            </div>
+            {SLOT_KEYS.map((slot) => (
+              <div key={slot} className="grid grid-cols-[4rem_1fr_auto_1fr] items-center gap-2">
+                <span className="text-sm">{SLOT_NAME[slot]}</span>
+                <Input
+                  type="time"
+                  aria-label={`${SLOT_NAME[slot]} bắt đầu`}
+                  value={form?.daySlots[slot].start ?? ''}
+                  onChange={(e) => setSlot(slot, 'start', e.target.value)}
+                  disabled={!ready || pending || !form?.checkinsEnabled}
+                  className="h-11 min-w-0 md:text-base"
+                />
+                <span aria-hidden className="text-muted-foreground">–</span>
+                <Input
+                  type="time"
+                  aria-label={`${SLOT_NAME[slot]} kết thúc`}
+                  value={form?.daySlots[slot].end ?? ''}
+                  onChange={(e) => setSlot(slot, 'end', e.target.value)}
+                  disabled={!ready || pending || !form?.checkinsEnabled}
+                  className="h-11 min-w-0 md:text-base"
+                />
+              </div>
+            ))}
+          </fieldset>
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium">Giao diện</span>
             <ThemeToggle />
