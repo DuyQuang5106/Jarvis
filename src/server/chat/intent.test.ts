@@ -26,6 +26,9 @@ test.each([
   ['Computer Networks sao rồi?', false],
   ['tạo', true],
   ['tại sao vậy', true],
+  ['Đọc tài liệu của Algebra và tạo đề xuất: các topic kèm trạng thái, mốc đánh giá, và việc tiếp theo.', true],
+  ['Đọc tài liệu của Mạng là gì? và tạo đề xuất: các milestone kèm trạng thái, và việc tiếp theo.', true],
+  ['đọc tài liệu Algebra rồi đề xuất topic được không?', true],
 ])('khớp trọn từ: allowsProposal(%s) = %s', (text, expected) => {
   expect(allowsProposal(text)).toBe(expected);
 });

@@ -1,3 +1,4 @@
+import { isFromDocumentsRequest } from '@/lib/from-documents';
 import { normalizeVi } from '../ai/match-areas';
 
 /** The user reports something done or asks for a change (accent-free, whole words). */
@@ -80,6 +81,8 @@ function reportsScore(text: string): boolean {
  * commands something (even with a question mark), true by default.
  */
 export function allowsProposal(message: string): boolean {
+  // `Tạo từ tài liệu` is a command whatever the area is called (a name may read like a question).
+  if (isFromDocumentsRequest(message)) return true;
   const plain = normalizeVi(message);
   if (REPORT_OR_COMMAND.some((p) => hasPhrase(plain, p)) || reportsReachedPoint(plain) || reportsScore(message)) return true;
   const asks = message.trim().endsWith('?') || QUESTION.some((p) => hasPhrase(plain, p));

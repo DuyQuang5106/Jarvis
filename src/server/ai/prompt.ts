@@ -1,6 +1,11 @@
 import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
 
-export type PromptInput = { stateJson: string; actionMode: 'tools' | 'json' | 'off' };
+export type PromptInput = {
+  stateJson: string;
+  actionMode: 'tools' | 'json' | 'off';
+  /** The turn asks to turn an area's documents into records (`Tạo từ tài liệu`): adds the rules for it. */
+  fromDocuments?: boolean;
+};
 
 const PROPOSAL_RULES_COMMON = `- Chỉ đề xuất điều người dùng đã nói rõ. Không suy diễn thêm trạng thái, deadline hay điểm số.
 - Dùng đúng id, areaId và documentId ngắn (như a1, d1, tp1) có trong <workspace_state>; không tự bịa mã mới. Khi trả lời bằng văn bản cho người dùng, gọi mục/tài liệu bằng tên thay vì mã ID. Nếu thứ người dùng nhắc tới chưa tồn tại (ví dụ một topic chưa có), đề xuất tạo mới và nói rõ là tạo mới; không gán vào bản ghi gần giống.
@@ -10,7 +15,26 @@ const PROPOSAL_RULES_COMMON = `- Chỉ đề xuất điều người dùng đã 
 - Bạn không thể xóa dữ liệu. Bạn không tự ghi được gì: mọi đề xuất chờ người dùng duyệt, nên đừng nói là đã cập nhật.
 - Luôn kèm một câu trả lời ngắn bằng văn bản mô tả điều bạn đề xuất.`;
 
-function proposalSection(mode: PromptInput['actionMode']): string {
+/** Marks the rules for turning documents into records (tests key on it). */
+export const FROM_DOCUMENTS_MARKER = 'TẠO BẢN GHI TỪ TÀI LIỆU';
+
+const FROM_DOCUMENTS_RULES = `${FROM_DOCUMENTS_MARKER}
+- Lượt này người dùng yêu cầu đọc tài liệu của một môn/dự án và đề xuất bản ghi có cấu trúc. Đây là ngoại lệ của luật "chỉ đề xuất điều người dùng đã nói rõ": nguồn là tài liệu trong \`documents\` của đúng mục đó (tài liệu trạng thái, lịch, đề cương). Chỉ đề xuất điều tài liệu thật sự ghi; không thêm chương, ngày hay trạng thái mà tài liệu không có.
+- Môn học: một upsert_topic cho mỗi chương/đơn vị kiến thức thấy trong đề cương hoặc tài liệu trạng thái, theo đúng thứ tự trong tài liệu. status mặc định là not_started; chỉ dùng familiar, practiced hay confident khi tài liệu ghi rõ đã học, đã luyện hay đã vững, và không bao giờ cao hơn mức tài liệu cho thấy. evidence là một câu ngắn nêu tài liệu nói gì (ví dụ "04_STATE: đã học xong, chưa làm bài tập").
+- Môn học: một upsert_assessment cho mỗi kỳ thi/bài kiểm tra tài liệu nhắc tới. Ngày chưa chính thức thì thêm "(dự kiến)" vào title. Chỉ điền dueDate khi tài liệu ghi một ngày cụ thể; không có ngày cụ thể thì bỏ trống dueDate.
+- Dự án: dùng upsert_milestone cho từng mốc/deliverable (targetDate chỉ khi tài liệu ghi ngày cụ thể) thay cho topic và assessment.
+- Tối đa 3 create_task cho những việc cụ thể nên làm tiếp theo, rút ra từ tài liệu.
+- Không tạo lại bản ghi đã có trong \`details\` (cùng tên hoặc cùng chương); chỉ đề xuất sửa bản ghi đó (kèm id) khi tài liệu cho thấy trạng thái hoặc ngày khác.
+- Mọi hành động dùng areaId của đúng mục được yêu cầu. Không cần add_progress_log và không sửa tài liệu trong lượt này.
+- Không quá 20 hành động trong một đề xuất, xếp điều quan trọng nhất trước; nếu còn sót, nói rõ trong câu trả lời là còn phần chưa đề xuất.
+- Nếu không đọc được tài liệu nào của mục đó (không có, hoặc chỉ được liệt kê tên), không đề xuất gì và nói rõ lý do.`;
+
+function proposalSection(mode: PromptInput['actionMode'], fromDocuments = false): string {
+  const base = baseProposalSection(mode);
+  return fromDocuments && mode !== 'off' ? `${base}\n\n${FROM_DOCUMENTS_RULES}` : base;
+}
+
+function baseProposalSection(mode: PromptInput['actionMode']): string {
   if (mode === 'tools') {
     return `ĐỀ XUẤT CẬP NHẬT
 - Khi người dùng báo tiến độ, báo một thay đổi, hoặc yêu cầu sửa dữ liệu, hãy gọi tool propose_changes. Không gọi khi họ chỉ hỏi.
@@ -62,7 +86,7 @@ export function buildSystemPrompt(input: PromptInput): string {
   // Function replacer: `$` sequences inside the state JSON must stay literal.
   return TEMPLATE
     .replace('{{DATA}}', () => DATA_RULES)
-    .replace('{{PROPOSALS}}', () => proposalSection(input.actionMode))
+    .replace('{{PROPOSALS}}', () => proposalSection(input.actionMode, input.fromDocuments))
     .replace('{{STATE}}', () => input.stateJson);
 }
 

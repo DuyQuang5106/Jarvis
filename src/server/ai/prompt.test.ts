@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { BRIEF_PROMPT_MARKER, buildBriefSystemPrompt, buildSystemPrompt } from './prompt';
+import { BRIEF_PROMPT_MARKER, FROM_DOCUMENTS_MARKER, buildBriefSystemPrompt, buildSystemPrompt } from './prompt';
 
 test('prompt kết thúc bằng khối state và chứa các luật cốt lõi', () => {
   const prompt = buildSystemPrompt({ stateJson: '{"now":{"date":"2026-11-22"}}', actionMode: 'off' });
@@ -54,4 +54,26 @@ test('prompt định hướng hằng ngày: cùng luật đọc dữ liệu, đ�
   expect(prompt).not.toContain('propose_changes');
   // The chat prompt is not mistaken for the brief prompt by the mock.
   expect(buildSystemPrompt({ stateJson: '{}', actionMode: 'tools' })).not.toContain(BRIEF_PROMPT_MARKER);
+});
+
+test('luật tạo bản ghi từ tài liệu chỉ có khi lượt đó yêu cầu, và không đổi phần còn lại của prompt', () => {
+  for (const mode of ['tools', 'json'] as const) {
+    const plain = buildSystemPrompt({ stateJson: '{}', actionMode: mode });
+    const withRules = buildSystemPrompt({ stateJson: '{}', actionMode: mode, fromDocuments: true });
+    expect(plain).not.toContain(FROM_DOCUMENTS_MARKER);
+    expect(withRules).toContain(FROM_DOCUMENTS_MARKER);
+    for (const phrase of [
+      'upsert_topic cho mỗi chương', 'mặc định là not_started', 'không bao giờ cao hơn mức tài liệu cho thấy', 'evidence',
+      'upsert_assessment cho mỗi kỳ thi', '"(dự kiến)"', 'Chỉ điền dueDate khi tài liệu ghi một ngày cụ thể',
+      'upsert_milestone', 'Tối đa 3 create_task', 'Không tạo lại bản ghi đã có', 'Không quá 20 hành động',
+    ])
+      expect(withRules).toContain(phrase);
+    // The extra rules sit between the common proposal rules and the state; nothing else moves.
+    const start = withRules.indexOf(`\n\n${FROM_DOCUMENTS_MARKER}`);
+    const end = withRules.indexOf('\n\n<workspace_state>');
+    expect(withRules.slice(0, start) + withRules.slice(end)).toBe(plain);
+    expect(withRules.endsWith('<workspace_state>\n{}\n</workspace_state>')).toBe(true);
+  }
+  const off = buildSystemPrompt({ stateJson: '{}', actionMode: 'off', fromDocuments: true });
+  expect(off).toBe(buildSystemPrompt({ stateJson: '{}', actionMode: 'off' }));
 });

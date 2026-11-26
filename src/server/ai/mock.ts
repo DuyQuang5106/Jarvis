@@ -1,3 +1,4 @@
+import { isFromDocumentsRequest } from '@/lib/from-documents';
 import { AiProviderError } from '../errors';
 import { normalizeVi } from './match-areas';
 import { BRIEF_PROMPT_MARKER } from './prompt';
@@ -5,10 +6,54 @@ import type { AiProvider, ProviderEvent, StreamRequest } from './provider';
 
 type MockState = {
   now: { date: string };
-  areas: { id: string; name: string; status: string }[];
+  areas: { id: string; name: string; status: string; kind?: string }[];
   documents?: { documentId: string; areaId: string; title: string; docRole: string }[];
-  details: { areaId: string; name: string; topics: { id: string; title: string; status: string }[] }[];
+  details: {
+    areaId: string;
+    name: string;
+    kind?: string;
+    topics: { id: string; title: string; status: string }[];
+    assessments?: { title: string }[];
+    milestones?: { title: string }[];
+    tasks?: { title: string }[];
+  }[];
 };
+
+/** `YYYY-MM-DD` plus `days`. */
+function addDays(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** How far ahead the mock puts its tentative exam. */
+export const MOCK_EXAM_IN_DAYS = 14;
+
+/**
+ * `Tạo từ tài liệu`: a fixed set of records for the scoped area (the first area in `details`, which is the
+ * one area an `item` scope loads), skipping titles the area already has. Null when nothing is left to propose.
+ */
+function fromDocumentsProposal(state: MockState): { summary: string; actions: Record<string, unknown>[] } | null {
+  const detail = state.details[0];
+  if (!detail) return null;
+  const areaId = detail.areaId;
+  const has = (rows: { title: string }[] | undefined, title: string) => (rows ?? []).some((r) => r.title === title);
+  const actions: Record<string, unknown>[] = [];
+  if (detail.kind === 'project') {
+    for (const [title, status] of [['Bản chạy được đầu tiên', 'in_progress'], ['Bản dùng thử', 'not_started']] as const)
+      if (!has(detail.milestones, title)) actions.push({ type: 'upsert_milestone', areaId, title, status });
+  } else {
+    const topics = [
+      ['Chương 1', 'familiar', 'Tài liệu ghi đã học xong, chưa làm bài tập.'],
+      ['Chương 2', 'not_started', null],
+      ['Chương 3', 'not_started', null],
+    ] as const;
+    for (const [title, status, evidence] of topics)
+      if (!has(detail.topics, title)) actions.push({ type: 'upsert_topic', areaId, title, status, ...(evidence ? { evidence } : {}) });
+    if (!has(detail.assessments, 'Giữa kỳ (dự kiến)'))
+      actions.push({ type: 'upsert_assessment', areaId, title: 'Giữa kỳ (dự kiến)', dueDate: addDays(state.now.date, MOCK_EXAM_IN_DAYS) });
+  }
+  if (!has(detail.tasks, 'Làm bài tập Chương 1')) actions.push({ type: 'create_task', areaId, title: 'Làm bài tập Chương 1' });
+  return actions.length ? { summary: `Tạo bản ghi từ tài liệu của ${detail.name}`, actions } : null;
+}
 
 function parseState(system: string): MockState | null {
   const m = /<workspace_state>\n([\s\S]*)\n<\/workspace_state>/.exec(system);
@@ -112,6 +157,13 @@ export function createMockProvider(): AiProvider {
           summary: 'Hỏng',
           actions: [{ type: 'update_task', id: '00000000-0000-4000-8000-000000000000', patch: { status: 'done' } }],
         });
+        return;
+      }
+
+      if (isFromDocumentsRequest(u) && state) {
+        const proposal = fromDocumentsProposal(state);
+        if (proposal) yield* emitWithProposal(req, system, 'Đề xuất tạo bản ghi từ tài liệu.', proposal);
+        else yield { type: 'text', delta: 'Tài liệu không có gì mới để đề xuất.' };
         return;
       }
 

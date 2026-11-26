@@ -1,6 +1,7 @@
 import type { Db } from '@/db/client';
 import type { MessageRow } from '@/db/schema';
 import { APP_TZ, todayIn } from '@/lib/dates';
+import { isFromDocumentsRequest } from '@/lib/from-documents';
 import { firstChars } from '@/lib/utils';
 import { buildContext, listAiExcludedAreas, type ContextRef, type ContextScope } from '../ai/context-builder';
 import { hiddenDocumentIds } from '../ai/document-visibility';
@@ -206,7 +207,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
     const actionMode = allowsProposal(current.content) ? deps.actionMode : 'off';
     const aliased = aliasWorkspaceState(ctx.state);
     const messages: ChatMessage[] = [
-      { role: 'system', content: buildSystemPrompt({ stateJson: aliased.json, actionMode }) },
+      { role: 'system', content: buildSystemPrompt({ stateJson: aliased.json, actionMode, fromDocuments: isFromDocumentsRequest(current.content) }) },
       ...history,
       { role: 'user', content: current.content },
     ];
