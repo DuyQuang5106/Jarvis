@@ -102,6 +102,8 @@ test('collectWeekActivity: log theo mục (bỏ migration/seed), check-in, tin n
     { ...log, action: 'progress', afterJson: { text: 'Đã học chương 5.' }, origin: 'manual', createdAt: IN_WEEK },
     { ...log, action: 'update', afterJson: { name: 'Algebra' }, origin: 'migration', createdAt: IN_WEEK },
     { ...log, action: 'create', afterJson: { name: 'Algebra' }, origin: 'seed', createdAt: IN_WEEK },
+    // The edit that makes the document count as work this week (an import alone does not).
+    { areaId, entityType: 'document', entityId: stateId, action: 'update', origin: 'manual', createdAt: IN_WEEK },
   ]);
   await db.insert(checkins).values({ day: '2025-03-12', slot: 'morning', status: 'recorded', summary: { summary: 'Ôn chương 5.', items: [], covers: [] } });
   await db.update(documents).set({ updatedAt: IN_WEEK }).where(eq(documents.id, stateId));

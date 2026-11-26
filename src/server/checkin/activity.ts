@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lt, notInArray, or } from 'drizzle-orm';
+import { and, desc, eq, exists, gte, inArray, isNull, lt, notInArray, or } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { CHECKIN_MESSAGE } from '@/lib/checkin-message';
 import { WEEKLY_REVIEW_MESSAGE } from '@/lib/weekly-review-message';
@@ -95,7 +95,27 @@ export async function slotActivity(
       .select({ at: documents.updatedAt, title: documents.title, area: areas.name })
       .from(documents)
       .innerJoin(areas, eq(areas.id, documents.areaId))
-      .where(and(gte(documents.updatedAt, start), lt(documents.updatedAt, end), ...docConditions))
+      .where(
+        and(
+          gte(documents.updatedAt, start),
+          lt(documents.updatedAt, end),
+          ...docConditions,
+          // Only documents someone edited in this window: an import or seed also bumps `updated_at`.
+          exists(
+            db
+              .select({ one: activityLogs.id })
+              .from(activityLogs)
+              .where(
+                and(
+                  eq(activityLogs.entityId, documents.id),
+                  gte(activityLogs.createdAt, start),
+                  lt(activityLogs.createdAt, end),
+                  notInArray(activityLogs.origin, ['migration', 'seed']),
+                ),
+              ),
+          ),
+        ),
+      )
       .orderBy(desc(documents.updatedAt))
       .limit(limit('document')),
     db

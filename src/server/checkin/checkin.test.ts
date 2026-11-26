@@ -74,7 +74,20 @@ test('slotActivity: tin nhắn, log tiến độ, tài liệu sửa và đề xu
     { ...log, action: 'update', afterJson: { name: 'Algebra' }, origin: 'migration', createdAt: at('2025-03-10T02:20:00Z') },
     { ...log, action: 'create', afterJson: { name: 'Algebra' }, origin: 'seed', createdAt: at('2025-03-10T02:30:00Z') },
   ]);
-  await db.insert(documents).values({ areaId: algebra.id, title: '04_STATE.md', updatedAt: at('2025-03-10T03:00:00Z') });
+  const [edited] = await db
+    .insert(documents)
+    .values({ areaId: algebra.id, title: '04_STATE.md', updatedAt: at('2025-03-10T03:00:00Z') })
+    .returning();
+  // Imported in the same slot: its `updated_at` moved, but only a migration log exists, so it is not work.
+  const [imported] = await db
+    .insert(documents)
+    .values({ areaId: algebra.id, title: '05_LOG.md', updatedAt: at('2025-03-10T03:05:00Z') })
+    .returning();
+  const docLog = { areaId: algebra.id, entityType: 'document' as const, action: 'update' as const };
+  await db.insert(activityLogs).values([
+    { ...docLog, entityId: edited.id, origin: 'manual', createdAt: at('2025-03-10T03:00:00Z') },
+    { ...docLog, entityId: imported.id, origin: 'migration', createdAt: at('2025-03-10T03:05:00Z') },
+  ]);
   await db.insert(pendingActions).values({
     source: 'chat', actionsJson: { summary: 'Cập nhật tiến độ Algebra', actions: [] }, status: 'applied', resolvedAt: at('2025-03-10T03:10:00Z'),
   });
