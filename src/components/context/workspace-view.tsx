@@ -2,7 +2,7 @@
 
 import { MenuIcon, SearchIcon, XIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition, type ComponentProps, type ReactNode } from 'react';
 import {
   createDocumentAction,
   softDeleteDocumentAction,
@@ -23,7 +23,10 @@ import type { DocumentRow, FolderRow } from '@/db/schema';
 import { templatesForKind } from '@/lib/doc-templates';
 import type { AreaDetails } from '@/server/queries/area-details';
 import type { AreaSummary } from '@/server/queries/snapshot';
+import { queueChatPreset } from '@/components/chat/chat-preset';
+import { fromDocumentsMessage } from '@/lib/from-documents';
 import { ActivityTimeline } from './activity-timeline';
+import { AreaProgressStrip } from './area-progress-strip';
 import { AreaStatusBadge } from './area-status-badge';
 import { AssessmentList } from './assessment-list';
 import { BlockerList } from './blocker-list';
@@ -65,29 +68,41 @@ const KIND_SECTIONS: Record<AreaKind, string[]> = {
   project: ['overview', 'tasks', 'milestones', 'blockers', 'activity'],
 };
 
+/**
+ * Runs an action that leaves the workspace (closing it, going to Chat), asking first while the operational
+ * form has unsaved edits. Outside a workspace shell the action just runs.
+ */
+const LeaveContext = createContext<(action: () => void) => void>((action) => action());
+
 function WorkspaceShell({
   title,
   status,
   onClose,
   headerActions,
+  subheader,
   children,
 }: {
   title: string;
   status?: AreaStatus;
   onClose: () => void;
   headerActions?: ReactNode;
+  /** Shown under the title on every pane. */
+  subheader?: ReactNode;
   children: ReactNode;
 }) {
   const dirty = useRef(false);
-  const [confirming, setConfirming] = useState(false);
+  // The action waiting for `Bỏ thay đổi` (closing, or leaving for Chat); null while nothing is asked.
+  const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
+  const confirming = pendingLeave !== null;
   const reportDirty = useCallback((d: boolean) => {
     dirty.current = d;
   }, []);
 
-  const requestClose = useCallback(() => {
-    if (dirty.current) setConfirming(true);
-    else onClose();
-  }, [onClose]);
+  const requestLeave = useCallback((action: () => void) => {
+    if (dirty.current) setPendingLeave(() => action);
+    else action();
+  }, []);
+  const requestClose = useCallback(() => requestLeave(onClose), [requestLeave, onClose]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -120,17 +135,18 @@ function WorkspaceShell({
             <span className="sr-only md:not-sr-only md:ml-1">Đóng</span>
           </Button>
         </header>
+        <LeaveContext.Provider value={requestLeave}>{subheader}</LeaveContext.Provider>
         {children}
       </div>
 
-      <Dialog open={confirming} onOpenChange={setConfirming}>
+      <Dialog open={confirming} onOpenChange={(open) => !open && setPendingLeave(null)}>
         <DialogContent role="alertdialog" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>Bỏ thay đổi chưa lưu?</DialogTitle>
             <DialogDescription>Các thay đổi ở thông tin vận hành chưa được lưu.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="outline" className="min-h-11 px-4" onClick={() => setConfirming(false)}>
+            <Button type="button" variant="outline" className="min-h-11 px-4" onClick={() => setPendingLeave(null)}>
               Hủy
             </Button>
             <Button
@@ -138,9 +154,10 @@ function WorkspaceShell({
               variant="destructive"
               className="min-h-11 px-4"
               onClick={() => {
-                setConfirming(false);
+                const action = pendingLeave;
+                setPendingLeave(null);
                 dirty.current = false;
-                onClose();
+                action?.();
               }}
             >
               Bỏ thay đổi
@@ -157,11 +174,14 @@ export function WorkspaceView({
   section,
   summary,
   today,
+  actionMode = 'off',
 }: {
   details: AreaDetails;
   section: string;
   summary: AreaSummary | null;
   today: string;
+  /** `off`: the AI cannot propose, so `Tạo từ tài liệu` is not offered. */
+  actionMode?: 'tools' | 'json' | 'off';
 }) {
   const router = useRouter();
   const { doc: urlDocId, folder: urlFolderId, setDoc, setFolder, setSection, closeItem, openItem } = useContextParams();
@@ -292,6 +312,12 @@ export function WorkspaceView({
     setDocs((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
   }
 
+  /** `Tạo từ tài liệu`: a new conversation scoped to this area, opened with the preset command. */
+  function startFromDocuments() {
+    queueChatPreset({ scope: { mode: 'item', areaId: details.area.id }, message: fromDocumentsMessage(details.area) });
+    router.push('/chat');
+  }
+
   function handleJumpToSection(target: 'tasks' | 'milestones') {
     setSection(target);
     setMobilePane('ops');
@@ -396,6 +422,15 @@ export function WorkspaceView({
       title={details.area.name}
       status={details.area.status}
       onClose={closeItem}
+      subheader={
+        <ProgressSubheader
+          details={details}
+          summary={summary}
+          documentCount={docs.length}
+          canPropose={actionMode !== 'off'}
+          onFromDocuments={startFromDocuments}
+        />
+      }
       headerActions={
         <div className="flex items-center gap-1">
           <Button
@@ -498,6 +533,12 @@ export function WorkspaceView({
       />
     </WorkspaceShell>
   );
+}
+
+/** The progress strip, with `Tạo từ tài liệu` guarded by the shell's unsaved-edits question. */
+function ProgressSubheader({ onFromDocuments, ...props }: ComponentProps<typeof AreaProgressStrip>) {
+  const leave = useContext(LeaveContext);
+  return <AreaProgressStrip {...props} onFromDocuments={() => leave(onFromDocuments)} />;
 }
 
 export function MissingAreaWorkspace() {

@@ -8,6 +8,7 @@ import { firstChars } from '@/lib/utils';
 import type { ContextScope } from '@/server/ai/context-builder';
 import type { DailyBrief } from '@/server/brief/daily-brief';
 import type { TurnEvent } from '@/server/chat/run-turn';
+import { takeChatPreset, type ChatPreset } from './chat-preset';
 import { Composer } from './composer';
 import { DailyBriefCard } from './daily-brief-card';
 import type { ChatMessageView } from './message-bubble';
@@ -204,6 +205,24 @@ export function ChatView({
     setInput('');
     void runTurn({ conversationId: conversationId ?? undefined, message: text, scope }, id);
   }
+
+  // A message queued by another screen (Context's `Tạo từ tài liệu`) opens this new conversation with its
+  // own scope. Taking it empties the queue, so a re-run of this effect (StrictMode, the page shown again)
+  // sends nothing twice. Declared after the generation effect: a turn of the conversation we left is
+  // aborted before this one starts.
+  function startPreset(preset: ChatPreset) {
+    const id = localId();
+    setScope(preset.scope);
+    setMessages([{ id, role: 'user', content: preset.message, contextRefs: [], summaryCount: 0 }]);
+    void runTurn({ message: preset.message, scope: preset.scope }, id);
+  }
+  useEffect(() => {
+    if (urlId !== null) return;
+    const preset = takeChatPreset();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a message handed over by another screen is an external event, taken once
+    if (preset) startPreset(preset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per time the new-conversation view is shown
+  }, [urlId]);
 
   function restoreReplaced() {
     const old = replaced.current;

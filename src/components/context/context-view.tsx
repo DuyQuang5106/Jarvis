@@ -59,7 +59,7 @@ export function ContextView({
         onOpenChange={setSearchOpen}
         onPick={(hit) => openItem(hit.areaId, KIND_TAB[hit.areaKind], hit.id, hit.folderId)}
       />
-      {item !== null && item === loadedItem && (details ? <WorkspaceView key={details.area.id} details={details} section={section} summary={areas.find((a) => a.id === details.area.id) ?? null} today={today} /> : <MissingAreaWorkspace />)}
+      {item !== null && item === loadedItem && (details ? <WorkspaceView key={details.area.id} details={details} section={section} summary={areas.find((a) => a.id === details.area.id) ?? null} today={today} actionMode={actionMode} /> : <MissingAreaWorkspace />)}
     </div>
   );
 }
