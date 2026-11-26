@@ -52,6 +52,17 @@ test('parseProposal: thuần, có khoảng trắng, có code fence, hỏng, sai 
     reason: 'schema',
     issues: [expect.stringMatching(/^actions\.0/)],
   });
+  // `id: null` cho bản ghi mới được coi như không có id.
+  expect(
+    parseProposal(JSON.stringify({ summary: 's', actions: [{ type: 'upsert_topic', areaId: '00000000-0000-4000-8000-000000000001', id: null, title: 'Chương 1' }] })),
+  ).toMatchObject({ ok: true, skipped: 0, value: { actions: [{ type: 'upsert_topic', title: 'Chương 1' }] } });
+  // Mã tự bịa trên upsert có title: tạo mới. Không có title: vẫn sai.
+  expect(
+    parseProposal(JSON.stringify({ summary: 's', actions: [{ type: 'upsert_topic', areaId: '00000000-0000-4000-8000-000000000001', id: 'alg-ch1', title: 'Chương 1' }] })),
+  ).toMatchObject({ ok: true, skipped: 0 });
+  expect(
+    parseProposal(JSON.stringify({ summary: 's', actions: [{ type: 'upsert_topic', areaId: '00000000-0000-4000-8000-000000000001', id: 'alg-ch1', status: 'familiar' }] })),
+  ).toMatchObject({ ok: false, reason: 'schema' });
   // Một hành động sai schema giữa các hành động hợp lệ: bỏ riêng nó.
   const mixed = parseProposal(
     JSON.stringify({

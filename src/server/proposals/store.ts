@@ -9,7 +9,7 @@ export type DroppedProposalReason = 'parse' | 'schema' | 'deadline_route' | 'inv
 
 export type CreatePendingResult =
   /** `skipped`: actions left out because their target does not exist (the rest were stored). */
-  | { ok: true; id: string; skipped: number }
+  | { ok: true; id: string; skipped: number; skippedWhy: string[] }
   /** `detail` names what failed (action indices), never values the user or the model wrote. */
   | { ok: false; reason: 'deadline_route' | 'invalid_target'; detail: string };
 
@@ -68,7 +68,7 @@ export async function createPendingAction(
       status: 'pending',
     })
     .returning({ id: pendingActions.id });
-  return { ok: true, id: row.id, skipped: stamped.errors.length };
+  return { ok: true, id: row.id, skipped: stamped.errors.length, skippedWhy: stamped.errors.map((e) => `actions[${e.index}]: ${e.message}`) };
 }
 
 export async function supersedeForMessage(db: DbOrTx, messageId: string): Promise<void> {

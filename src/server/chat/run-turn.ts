@@ -307,6 +307,8 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
             metadata: { ...metadata, pendingActionId: pending.id },
           });
           timing.proposal = skipped > 0 ? `stored:skipped_${skipped}` : 'stored';
+          // Field paths and fixed validation messages only: never what the user or the model wrote.
+          if (notice) console.warn('proposal actions skipped', { schema: parsed.issues ?? [], target: pending.skippedWhy });
           if (notice) yield { type: 'text', delta: notice };
           yield { type: 'proposal', pendingActionId: pending.id };
         } else {

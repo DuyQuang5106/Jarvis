@@ -71,8 +71,27 @@ export class ProposalBlockFilter {
  * Actions that fail the schema are left out when at least one other action is valid; `skipped` counts them.
  */
 export type ParseProposalResult =
-  | { ok: true; value: ProposeChanges; skipped: number }
+  | { ok: true; value: ProposeChanges; skipped: number; issues?: string[] }
   | { ok: false; reason: 'parse' | 'schema'; issues: string[] };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Models write `"id": null`, "" or an invented code ("alg-ch1") for a record to create; the schema expects the
+ * key to be absent. Known short ids were already resolved to UUIDs, so on an upsert that carries a title
+ * anything else is a new record. Without a title the action still fails: it names a record that does not exist.
+ */
+function dropEmptyIds(json: unknown): void {
+  const actions = (json as { actions?: unknown } | null)?.actions;
+  if (!Array.isArray(actions)) return;
+  for (const a of actions as Record<string, unknown>[]) {
+    if (!a || typeof a !== 'object' || !('id' in a)) continue;
+    const invented =
+      typeof a.id === 'string' && !UUID.test(a.id) && typeof a.type === 'string' && a.type.startsWith('upsert_') &&
+      typeof a.title === 'string' && a.title.trim() !== '';
+    if (a.id === null || a.id === '' || invented) delete a.id;
+  }
+}
 
 export function parseProposal(raw: string): ParseProposalResult {
   let cleaned = raw.trim();
@@ -85,6 +104,7 @@ export function parseProposal(raw: string): ParseProposalResult {
   } catch {
     return { ok: false, reason: 'parse', issues: [] };
   }
+  dropEmptyIds(json);
   const parsed = ProposeChangesSchema.safeParse(json);
   if (parsed.success) return { ok: true, value: parsed.data, skipped: 0 };
   const issues = parsed.error.issues.map((i) => i.path.map(String).join('.'));
@@ -94,7 +114,7 @@ export function parseProposal(raw: string): ParseProposalResult {
     const valid = actions.filter((a) => ProposedActionSchema.safeParse(a).success);
     if (valid.length > 0 && valid.length < actions.length) {
       const retry = ProposeChangesSchema.safeParse({ ...(json as object), actions: valid });
-      if (retry.success) return { ok: true, value: retry.data, skipped: actions.length - valid.length };
+      if (retry.success) return { ok: true, value: retry.data, skipped: actions.length - valid.length, issues };
     }
   }
   return { ok: false, reason: 'schema', issues };
