@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "jarvis-dev", "runtimeExecutable": "pnpm", "runtimeArgs": ["dev"], "port": 3000 }
+    { "name": "jarvis-dev", "runtimeExecutable": "pnpm", "runtimeArgs": ["dev"], "port": 3000 },
+    { "name": "jarvis-e2e", "runtimeExecutable": "pnpm", "runtimeArgs": ["dev:e2e"], "port": 3100 }
   ]
 }
