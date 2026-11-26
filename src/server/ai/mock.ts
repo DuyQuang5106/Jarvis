@@ -1,5 +1,6 @@
 import { AiProviderError } from '../errors';
 import { normalizeVi } from './match-areas';
+import { BRIEF_PROMPT_MARKER } from './prompt';
 import type { AiProvider, ProviderEvent, StreamRequest } from './provider';
 
 type MockState = {
@@ -90,6 +91,21 @@ export function createMockProvider(): AiProvider {
 
       const system = req.messages.find((m) => m.role === 'system')?.content ?? '';
       const state = parseState(system);
+
+      if (system.includes(BRIEF_PROMPT_MARKER)) {
+        // Daily brief: a deterministic brief over the first three areas of the state, wrapped in a code
+        // fence and split across chunks the way real models tend to answer.
+        const picked = (state?.areas ?? []).slice(0, 3);
+        const brief = {
+          focus: `MOCK_BRIEF ${state?.now.date ?? ''}: bắt đầu với ${picked[0]?.name ?? 'việc gần nhất'}.`,
+          tasks: picked.map((a, i) => ({ title: `Việc ${i + 1} cho ${a.name}`, area: a.name, why: `Trạng thái hiện tại: ${a.status}.` })),
+          upcoming: null,
+          stale: picked.map((a) => a.name).join(', '),
+        };
+        yield { type: 'text', delta: '```json\n' };
+        yield { type: 'text', delta: `${JSON.stringify(brief)}\n\`\`\`` };
+        return;
+      }
 
       if (u.includes('MOCK_BAD_PROPOSAL')) {
         yield* emitWithProposal(req, system, 'Đề xuất lỗi.', {

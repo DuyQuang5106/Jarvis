@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { AiProviderError } from '../errors';
 import { createMockProvider } from './mock';
+import { buildBriefSystemPrompt } from './prompt';
 import { collect } from './provider';
 
 const ask = (content: string) => createMockProvider().stream({ messages: [{ role: 'user', content }], maxOutputTokens: 100 });
@@ -102,4 +103,25 @@ test('MOCK_LENGTH phát "Phần đầu" rồi báo finish_reason length', async 
   }));
   expect(text).toBe('Phần đầu');
   expect(reasons).toEqual(['length']);
+});
+
+test('prompt định hướng hằng ngày: trả một object JSON trong code fence, nhắc tên các mục có trong state', async () => {
+  const state = {
+    now: { date: '2026-11-26' },
+    areas: ['Algebra', 'Database', 'StewieSAT', 'Physics'].map((name, i) => ({ id: `a${i + 1}`, name, status: 'active' })),
+    details: [],
+  };
+  const { text, toolCalls } = await collect(createMockProvider().stream({
+    messages: [
+      { role: 'system', content: buildBriefSystemPrompt({ stateJson: JSON.stringify(state) }) },
+      { role: 'user', content: 'Hôm nay nên làm gì?' },
+    ],
+    maxOutputTokens: 800,
+  }));
+  expect(toolCalls).toEqual([]);
+  expect(text.startsWith('```json\n')).toBe(true);
+  const brief = JSON.parse(text.replace(/^```json\n/, '').replace(/\n```$/, ''));
+  expect(brief.focus).toBe('MOCK_BRIEF 2026-11-26: bắt đầu với Algebra.');
+  expect(brief.tasks.map((t: { area: string }) => t.area)).toEqual(['Algebra', 'Database', 'StewieSAT']);
+  expect(brief.stale).toBe('Algebra, Database, StewieSAT');
 });
