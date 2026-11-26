@@ -27,12 +27,13 @@ test('thẻ định hướng: 3 việc ở đầu Chat, tải lại không sinh 
   await expect(page.getByPlaceholder('Nhắn gì đó…')).toBeInViewport();
 
   // Reload: the stored brief is rendered by the server, nothing is generated again.
-  const content = await card(page).innerText();
+  // textContent, not innerText: right after a reload innerText can run before styles apply and drop the line breaks.
+  const content = await card(page).textContent();
   let actionCalls = 0;
   page.on('request', (r) => { if (r.method() === 'POST' && r.headers()['next-action']) actionCalls++; });
   await page.reload();
   await expect(tasks(page)).toHaveCount(3);
-  expect(await card(page).innerText()).toBe(content);
+  await expect.poll(() => card(page).textContent()).toBe(content);
   await page.waitForLoadState('networkidle');
   expect(actionCalls).toBe(0);
 

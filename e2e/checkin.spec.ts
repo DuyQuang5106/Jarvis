@@ -16,6 +16,15 @@ async function openChat(page: Page) {
   await page.goto('/chat');
 }
 
+/** Under load the first tap can land before hydration and the menu never opens: retry until Settings opens. */
+async function openSettings(page: Page, isMobile: boolean) {
+  await expect(async () => {
+    const settings = page.getByRole('button', { name: 'Settings' });
+    if (isMobile && !(await settings.isVisible())) await page.getByRole('button', { name: 'Mở menu' }).click();
+    await settings.click({ timeout: 2000 });
+  }).toPass({ timeout: 15_000 });
+}
+
 const marked = (page: Page) => page.waitForResponse((r) => r.url().endsWith('/api/checkin') && r.request().method() === 'POST');
 
 test('buổi không có hoạt động: câu hỏi → trả lời → tin nhắn đi qua Chat → tải lại không còn thẻ', async ({ page, request }) => {
@@ -34,7 +43,7 @@ test('buổi không có hoạt động: câu hỏi → trả lời → tin nhắ
   expect((await card(page).boundingBox())!.y).toBeLessThan((await brief.boundingBox())!.y);
   await expect(page.getByPlaceholder('Nhắn gì đó…')).toBeInViewport();
   // The brief is generated after hydration: once it is there, typing reaches React's state.
-  await expect(brief.getByTestId('daily-brief-task')).toHaveCount(3);
+  await expect(brief.getByTestId('daily-brief-task')).toHaveCount(3, { timeout: 15_000 });
 
   await card(page).getByLabel(`Buổi ${LABEL.toLowerCase()} bạn đã làm gì?`).fill('Ôn chương 5 Algebra');
   const mark = marked(page);
@@ -61,7 +70,7 @@ test('buổi có hoạt động: tóm tắt → tải lại không sinh lại �
   page.on('request', (r) => { if (r.url().endsWith('/api/checkin') && r.method() === 'GET') gets++; });
   await openChat(page);
   await expect(card(page)).toContainText(`${LABEL} bạn đã:`);
-  await expect(card(page).getByTestId('checkin-item')).toHaveText(['Làm việc với Algebra · Algebra']);
+  await expect(card(page).getByTestId('checkin-item')).toHaveText(['Làm việc với Algebra · Algebra'], { timeout: 15_000 });
   await expect(card(page)).toContainText('MOCK_CHECKIN: tóm tắt buổi.');
   await expect(card(page)).toContainText('Ghi lại như vậy nhé?');
   await expect(card(page)).toHaveAttribute('aria-busy', 'false');
@@ -69,7 +78,7 @@ test('buổi có hoạt động: tóm tắt → tải lại không sinh lại �
 
   // Reload: the stored summary comes with the page, nothing is generated again.
   await page.reload();
-  await expect(card(page).getByTestId('checkin-item')).toHaveText(['Làm việc với Algebra · Algebra']);
+  await expect(card(page).getByTestId('checkin-item')).toHaveText(['Làm việc với Algebra · Algebra'], { timeout: 15_000 });
   await page.waitForLoadState('networkidle');
   expect(gets).toBe(1);
 
@@ -89,7 +98,7 @@ test('buổi có hoạt động: tóm tắt → tải lại không sinh lại �
 test('Bỏ qua thì không hỏi lại; tắt check-in trong Settings thì không có thẻ', async ({ page, request, isMobile }) => {
   await resetDb(request, { seed: true, checkins: true });
   await openChat(page);
-  await expect(page.getByTestId('daily-brief-task')).toHaveCount(3); // generated after hydration
+  await expect(page.getByTestId('daily-brief-task')).toHaveCount(3, { timeout: 15_000 }); // generated after hydration
   const mark = marked(page);
   await card(page).getByRole('button', { name: 'Bỏ qua' }).click();
   expect((await mark).status()).toBe(204);
@@ -105,15 +114,14 @@ test('Bỏ qua thì không hỏi lại; tắt check-in trong Settings thì khôn
   // Let the page hydrate before the menu opens over it (the brief is stored by now, so it is no signal).
   await page.waitForLoadState('networkidle');
 
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await openSettings(page, isMobile);
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   const toggle = dialog.getByLabel('Hỏi việc đã làm khi một buổi kết thúc');
   await expect(toggle).toBeChecked();
   await expect(dialog.getByLabel('Trưa kết thúc')).toHaveValue('13:00');
   await toggle.click();
   await dialog.getByRole('button', { name: 'Lưu', exact: true }).click();
-  await expect(dialog.getByText('Đã lưu')).toBeVisible();
+  await expect(dialog.getByText('Đã lưu')).toBeVisible({ timeout: 15_000 });
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await page.goto('/chat');
@@ -124,15 +132,14 @@ test('Bỏ qua thì không hỏi lại; tắt check-in trong Settings thì khôn
 test('Settings: giờ các buổi chồng lấn bị từ chối, giờ hợp lệ thì lưu', async ({ page, request, isMobile }) => {
   await resetDb(request, { seed: true, checkins: true });
   await page.goto('/context');
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await openSettings(page, isMobile);
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await dialog.getByLabel('Trưa bắt đầu').fill('10:30');
   await dialog.getByRole('button', { name: 'Lưu', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('chồng lên buổi trước');
   await dialog.getByLabel('Sáng kết thúc').fill('10:30');
   await dialog.getByRole('button', { name: 'Lưu', exact: true }).click();
-  await expect(dialog.getByText('Đã lưu')).toBeVisible();
+  await expect(dialog.getByText('Đã lưu')).toBeVisible({ timeout: 15_000 });
   const body = await (await request.get('/api/export')).json();
   expect(body.tables.settings[0].preferencesJson.daySlots.morning).toEqual({ start: '06:00', end: '10:30' });
 });
