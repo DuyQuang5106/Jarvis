@@ -105,7 +105,8 @@ async function validateOne(
   }
 }
 
-export async function stampActions(db: DbOrTx, actions: ProposedAction[]): Promise<StampResult> {
+/** Stamps every action; `stored` holds the ones whose target exists, `errors` the rest. */
+export async function stampEachAction(db: DbOrTx, actions: ProposedAction[]): Promise<{ stored: StoredAction[]; errors: StampError[] }> {
   const stored: StoredAction[] = [];
   const errors: StampError[] = [];
   for (let i = 0; i < actions.length; i += 1) {
@@ -120,5 +121,10 @@ export async function stampActions(db: DbOrTx, actions: ProposedAction[]): Promi
     if (!res.ok) errors.push({ index: i, message: res.message });
     else stored.push({ key: i, action: actions[i], baseUpdatedAt: res.baseUpdatedAt });
   }
+  return { stored, errors };
+}
+
+export async function stampActions(db: DbOrTx, actions: ProposedAction[]): Promise<StampResult> {
+  const { stored, errors } = await stampEachAction(db, actions);
   return errors.length > 0 ? { ok: false, errors } : { ok: true, stored };
 }

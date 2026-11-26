@@ -1,4 +1,4 @@
-import { ProposeChangesSchema, type ProposeChanges } from './schema';
+import { ProposedActionSchema, ProposeChangesSchema, type ProposeChanges } from './schema';
 
 export const PROPOSAL_OPEN = '<proposed_actions>';
 export const PROPOSAL_CLOSE = '</proposed_actions>';
@@ -66,9 +66,12 @@ export class ProposalBlockFilter {
   }
 }
 
-/** A failed parse says why (`parse`: not JSON, `schema`: wrong shape) and which fields, never their values. */
+/**
+ * A failed parse says why (`parse`: not JSON, `schema`: wrong shape) and which fields, never their values.
+ * Actions that fail the schema are left out when at least one other action is valid; `skipped` counts them.
+ */
 export type ParseProposalResult =
-  | { ok: true; value: ProposeChanges }
+  | { ok: true; value: ProposeChanges; skipped: number }
   | { ok: false; reason: 'parse' | 'schema'; issues: string[] };
 
 export function parseProposal(raw: string): ParseProposalResult {
@@ -83,6 +86,16 @@ export function parseProposal(raw: string): ParseProposalResult {
     return { ok: false, reason: 'parse', issues: [] };
   }
   const parsed = ProposeChangesSchema.safeParse(json);
-  if (parsed.success) return { ok: true, value: parsed.data };
-  return { ok: false, reason: 'schema', issues: parsed.error.issues.map((i) => i.path.map(String).join('.')) };
+  if (parsed.success) return { ok: true, value: parsed.data, skipped: 0 };
+  const issues = parsed.error.issues.map((i) => i.path.map(String).join('.'));
+  // One malformed action should not cost the owner the valid ones: retry with only the actions that parse.
+  const actions = (json as { actions?: unknown } | null)?.actions;
+  if (Array.isArray(actions)) {
+    const valid = actions.filter((a) => ProposedActionSchema.safeParse(a).success);
+    if (valid.length > 0 && valid.length < actions.length) {
+      const retry = ProposeChangesSchema.safeParse({ ...(json as object), actions: valid });
+      if (retry.success) return { ok: true, value: retry.data, skipped: actions.length - valid.length };
+    }
+  }
+  return { ok: false, reason: 'schema', issues };
 }

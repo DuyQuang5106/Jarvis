@@ -52,4 +52,15 @@ test('parseProposal: thuần, có khoảng trắng, có code fence, hỏng, sai 
     reason: 'schema',
     issues: [expect.stringMatching(/^actions\.0/)],
   });
+  // Một hành động sai schema giữa các hành động hợp lệ: bỏ riêng nó.
+  const mixed = parseProposal(
+    JSON.stringify({
+      summary: 's',
+      actions: [
+        { type: 'upsert_topic', areaId: '00000000-0000-4000-8000-000000000001', title: 'Chương 5', status: 'in_progress' },
+        { type: 'add_progress_log', areaId: '00000000-0000-4000-8000-000000000001', text: 'Đầu chương 5' },
+      ],
+    }),
+  );
+  expect(mixed).toMatchObject({ ok: true, skipped: 1, value: { actions: [{ type: 'add_progress_log' }] } });
 });

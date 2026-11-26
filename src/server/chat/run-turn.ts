@@ -11,7 +11,7 @@ import type { AiProvider, ChatMessage } from '../ai/provider';
 import { AiCapExceededError } from '../errors';
 import { ProposalBlockFilter, parseProposal } from '../proposals/extract';
 import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
-import { createPendingAction, ignoredProposalNotice, supersedeForMessage, type DroppedProposalReason } from '../proposals/store';
+import { createPendingAction, ignoredProposalNotice, skippedActionsNotice, supersedeForMessage, type DroppedProposalReason } from '../proposals/store';
 import { countAiRequest } from '../services/ai-usage';
 import {
   appendMessage,
@@ -299,8 +299,14 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
           requestText: current.content,
         });
         if (pending.ok) {
-          await updateMessageReply(db, saved.id, { metadata: { ...metadata, pendingActionId: pending.id } });
-          timing.proposal = 'stored';
+          const skipped = parsed.skipped + pending.skipped;
+          const notice = skipped > 0 ? skippedActionsNotice(skipped) : '';
+          await updateMessageReply(db, saved.id, {
+            ...(notice ? { content: reply + notice } : {}),
+            metadata: { ...metadata, pendingActionId: pending.id },
+          });
+          timing.proposal = skipped > 0 ? `stored:skipped_${skipped}` : 'stored';
+          if (notice) yield { type: 'text', delta: notice };
           yield { type: 'proposal', pendingActionId: pending.id };
         } else {
           dropped = { reason: pending.reason, issues: pending.reason === 'invalid_target' ? pending.detail.split(',') : [] };

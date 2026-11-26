@@ -47,7 +47,10 @@ async function main() {
 
   const cfg = getConfig();
   const model = cfg.aiProvider === 'mock' ? 'mock' : (cfg.aiModel ?? '');
-  const cases = parseEvalCases(readFileSync(CASES_FILE, 'utf8'));
+  // `pnpm ai:eval <id>…` runs only the named cases.
+  const only = process.argv.slice(2);
+  const cases = parseEvalCases(readFileSync(CASES_FILE, 'utf8')).filter((c) => only.length === 0 || only.includes(c.id));
+  if (cases.length === 0) fail(`Không có case nào khớp: ${only.join(', ')}`);
   console.log(`Đánh giá ${cases.length} case với model ${model} (chế độ ${cfg.aiActionMode}) trên ${evalDir}…`);
 
   const results = await runEval(

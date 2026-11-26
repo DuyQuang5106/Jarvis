@@ -10,7 +10,19 @@ test('createPendingAction: ok kèm id, hoặc lý do bị bỏ', async () => {
   const db = await createTestDb();
   const area = await createArea(db, { kind: 'academic', name: 'Algebra' }, manual);
   const ok = await createPendingAction(db, { source: 'chat', proposal: { summary: 's', actions: [{ type: 'create_task', areaId: area.id, title: 'Đọc' }] } });
-  expect(ok).toEqual({ ok: true, id: expect.any(String) });
+  expect(ok).toEqual({ ok: true, id: expect.any(String), skipped: 0 });
+  // Một hành động trỏ sai đích: giữ phần còn lại, đếm phần bị bỏ.
+  const partial = await createPendingAction(db, {
+    source: 'chat',
+    proposal: {
+      summary: 's',
+      actions: [
+        { type: 'update_task', id: GHOST, patch: { status: 'done' } },
+        { type: 'add_progress_log', areaId: area.id, text: 'Đầu chương 5' },
+      ],
+    },
+  });
+  expect(partial).toEqual({ ok: true, id: expect.any(String), skipped: 1 });
   const ghost = await createPendingAction(db, { source: 'chat', proposal: { summary: 's', actions: [{ type: 'update_task', id: GHOST, patch: { status: 'done' } }] } });
   expect(ghost).toEqual({ ok: false, reason: 'invalid_target', detail: 'actions[0]' });
   const deadline = await createPendingAction(db, {
