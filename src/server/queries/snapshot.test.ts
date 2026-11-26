@@ -151,3 +151,32 @@ test('dự án active thiếu next action và milestone được đánh dấu', 
   expect(by(bare.id).missing).toEqual(['no_next_action', 'no_milestones']);
   expect(by(full.id).missing).toEqual([]);
 });
+
+test('nearestDate: ngày gần nhất trong assessment sắp tới, task chưa xong, milestone chưa xong và hạn của mục', async () => {
+  const course = await createArea(db, { kind: 'academic', name: 'Database' }, manual);
+  await assessmentService.create(db, { areaId: course.id, title: 'Quiz cũ', dueDate: '2026-11-20' }, manual);
+  await assessmentService.create(db, { areaId: course.id, title: 'Giữa kỳ (dự kiến)', dueDate: '2026-12-04' }, manual);
+  await assessmentService.create(db, { areaId: course.id, title: 'Cuối kỳ' }, manual);
+  await taskService.create(db, { areaId: course.id, title: 'Đã nộp', dueDate: '2026-11-23', status: 'done' }, manual);
+
+  const sameDay = await createArea(db, { kind: 'academic', name: 'Algebra' }, manual);
+  await taskService.create(db, { areaId: sameDay.id, title: 'Bài tập', dueDate: '2026-11-30' }, manual);
+  await assessmentService.create(db, { areaId: sameDay.id, title: 'Quiz', dueDate: '2026-11-30' }, manual);
+
+  const proj = await createArea(db, { kind: 'project', name: 'Jarvis', deadlineDate: '2026-12-31' }, manual);
+  await milestoneService.create(db, { areaId: proj.id, title: 'Beta', targetDate: '2026-11-20' }, manual);
+  await milestoneService.create(db, { areaId: proj.id, title: 'Alpha', targetDate: '2026-11-10', status: 'done' }, manual);
+
+  const onlyDeadline = await createArea(db, { kind: 'project', name: 'Hôm nay', deadlineDate: '2026-11-22' }, manual);
+  const closed = await createArea(db, { kind: 'project', name: 'Xong', status: 'completed', deadlineDate: '2026-11-01' }, manual);
+  const bare = await createArea(db, { kind: 'academic', name: 'Trống' }, manual);
+
+  const snap = await getPortfolioSnapshot(db, NOW);
+  const nearest = (id: string) => snap.areas.find((a) => a.id === id)!.nearestDate;
+  expect(nearest(course.id)).toEqual({ kind: 'assessment', title: 'Giữa kỳ (dự kiến)', date: '2026-12-04', daysLeft: 12 });
+  expect(nearest(sameDay.id)).toEqual({ kind: 'assessment', title: 'Quiz', date: '2026-11-30', daysLeft: 8 });
+  expect(nearest(proj.id)).toEqual({ kind: 'deadline', title: 'Beta', date: '2026-11-20', daysLeft: -2 });
+  expect(nearest(onlyDeadline.id)).toEqual({ kind: 'deadline', title: null, date: '2026-11-22', daysLeft: 0 });
+  expect(nearest(closed.id)).toBeNull();
+  expect(nearest(bare.id)).toBeNull();
+});

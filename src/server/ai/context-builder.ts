@@ -40,7 +40,7 @@ export type AreaDetailForAi = {
 export type WorkspaceState = {
   now: { date: string; weekday: string; weekStart: string; weekEnd: string; timezone: string };
   termGoal: string | null;
-  areas: Omit<AreaSummary, 'aiExcluded'>[];
+  areas: Omit<AreaSummary, 'aiExcluded' | 'nearestDate'>[];
   dueTasks: PortfolioSnapshot['dueTasks'];
   upcomingAssessments: PortfolioSnapshot['upcomingAssessments'];
   staleAreaIds: string[];
@@ -230,8 +230,9 @@ export async function buildContext(
       timezone: snapshot.timezone,
     },
     termGoal: snapshot.termGoal,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip the privacy flag
-    areas: open.map(({ aiExcluded, ...rest }) => rest),
+    // `nearestDate` is for the Context list; the model already gets dueTasks, upcomingAssessments and details.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip the privacy flag and the UI-only field
+    areas: open.map(({ aiExcluded, nearestDate, ...rest }) => rest),
     dueTasks: snapshot.dueTasks.filter((t) => !excluded.has(t.areaId)),
     upcomingAssessments: snapshot.upcomingAssessments.filter((x) => !excluded.has(x.areaId)),
     staleAreaIds: pickStaleAreaIds(open),

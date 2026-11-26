@@ -17,6 +17,12 @@ import { getSettings } from '../services/settings';
 
 export type MissingFlag = 'status_unknown' | 'no_next_action' | 'no_topics' | 'no_assessment_date' | 'no_milestones';
 
+/**
+ * The date an area is counted down to. `assessment`: an exam or test from today on. `deadline`: an open
+ * task's due date, an unfinished milestone's target date or the area's own deadline; these may be overdue.
+ */
+export type NearestDate = { kind: 'assessment' | 'deadline'; title: string | null; date: string; daysLeft: number };
+
 export type AreaSummary = {
   id: string;
   kind: AreaKind;
@@ -27,6 +33,8 @@ export type AreaSummary = {
   nextAction: string | null;
   deadlineDate: string | null;
   deadlineDaysLeft: number | null;
+  /** Earliest of the area's dated items (see NearestDate); null when it has none or is completed. */
+  nearestDate: NearestDate | null;
   updatedAt: string; // ISO
   daysSinceUpdate: number;
   isStale: boolean;
@@ -100,6 +108,17 @@ function countBy<K extends string>(keys: readonly K[], values: K[]): Record<K, n
 
 const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title, 'vi');
 
+/** Earliest date first; on the same day an assessment comes before a deadline, then by title. */
+export function pickNearestDate(candidates: NearestDate[]): NearestDate | null {
+  const sorted = [...candidates].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      Number(a.kind !== 'assessment') - Number(b.kind !== 'assessment') ||
+      (a.title ?? '').localeCompare(b.title ?? '', 'vi'),
+  );
+  return sorted[0] ?? null;
+}
+
 /** Số truy vấn cố định (getSettings + 7 truy vấn song song), không phụ thuộc số area. */
 export async function getPortfolioSnapshot(db: DbOrTx, now: Date): Promise<PortfolioSnapshot> {
   const settings = await getSettings(db);
@@ -109,7 +128,9 @@ export async function getPortfolioSnapshot(db: DbOrTx, now: Date): Promise<Portf
   const [areaRows, topicRows, milestoneRows, blockerRows, taskRows, assessmentRows, logRows] = await Promise.all([
     db.select().from(areas).where(isNull(areas.archivedAt)),
     db.select({ areaId: topics.areaId, status: topics.status }).from(topics),
-    db.select({ areaId: milestones.areaId, status: milestones.status }).from(milestones),
+    db
+      .select({ areaId: milestones.areaId, status: milestones.status, title: milestones.title, targetDate: milestones.targetDate })
+      .from(milestones),
     db
       .select({ id: blockers.id, areaId: blockers.areaId, title: blockers.title })
       .from(blockers)
@@ -145,6 +166,18 @@ export async function getPortfolioSnapshot(db: DbOrTx, now: Date): Promise<Portf
     } else if (areaMilestones.length === 0) {
       missing.push('no_milestones');
     }
+    const dated: NearestDate[] = [];
+    if (a.status !== 'completed') {
+      const add = (kind: NearestDate['kind'], title: string | null, date: string | null, futureOnly = false) => {
+        if (!date) return;
+        const daysLeft = daysUntil(date, today);
+        if (!futureOnly || daysLeft >= 0) dated.push({ kind, title, date, daysLeft });
+      };
+      for (const x of areaAssessments) add('assessment', x.title, x.dueDate, true);
+      for (const t of tasksBy.get(a.id) ?? []) add('deadline', t.title, t.dueDate);
+      for (const m of areaMilestones) if (m.status !== 'done') add('deadline', m.title, m.targetDate);
+      add('deadline', null, a.deadlineDate);
+    }
     return {
       id: a.id,
       kind: a.kind,
@@ -155,6 +188,7 @@ export async function getPortfolioSnapshot(db: DbOrTx, now: Date): Promise<Portf
       nextAction: a.nextAction,
       deadlineDate: a.deadlineDate,
       deadlineDaysLeft: a.deadlineDate ? daysUntil(a.deadlineDate, today) : null,
+      nearestDate: pickNearestDate(dated),
       updatedAt: a.updatedAt.toISOString(),
       daysSinceUpdate,
       isStale: (a.status === 'active' || a.status === 'blocked') && daysSinceUpdate > settings.staleAfterDays,
