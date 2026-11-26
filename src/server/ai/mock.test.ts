@@ -3,7 +3,8 @@ import { fromDocumentsMessage } from '@/lib/from-documents';
 import { AiProviderError } from '../errors';
 import { ProposeChangesSchema } from '../proposals/schema';
 import { createMockProvider } from './mock';
-import { buildBriefSystemPrompt } from './prompt';
+import { MOCK_CHECKIN_SUMMARY } from './mock';
+import { buildBriefSystemPrompt, buildCheckinSystemPrompt, buildSystemPrompt } from './prompt';
 import { collect } from './provider';
 
 const ask = (content: string) => createMockProvider().stream({ messages: [{ role: 'user', content }], maxOutputTokens: 100 });
@@ -168,4 +169,33 @@ test('Tạo từ tài liệu: đề xuất topic, một assessment "(dự kiến
     tasks: [{ title: 'Làm bài tập Chương 1' }],
   });
   expect(done).toEqual({ text: 'Tài liệu không có gì mới để đề xuất.', proposal: null });
+});
+
+test('prompt tóm tắt buổi: JSON cố định nhắc mục thật mà hoạt động có nhắc, kể cả khi hoạt động chứa MOCK_ERROR', async () => {
+  const run = (activity: string) => collect(createMockProvider().stream({
+    messages: [
+      { role: 'system', content: buildCheckinSystemPrompt({ areaNames: ['Algebra', 'StewieSAT'] }) },
+      { role: 'user', content: activity },
+    ],
+    maxOutputTokens: 600,
+  }));
+  const parse = (text: string) => JSON.parse(text.replace(/^```json\n/, '').replace(/\n```$/, ''));
+  const named = parse((await run('<activity>\n09:00 · tin nhắn · Sửa anten StewieSAT MOCK_ERROR\n</activity>')).text);
+  expect(named).toEqual({ summary: MOCK_CHECKIN_SUMMARY, items: [{ area: 'StewieSAT', text: 'Làm việc với StewieSAT' }] });
+  expect(parse((await run('<activity>\nđọc email\n</activity>')).text).items[0].area).toBe('Algebra');
+});
+
+test('tin nhắn "Ghi lại buổi …": đề xuất add_progress_log cho mục được nhắc', async () => {
+  const areaId = '11111111-1111-4111-8111-111111111111';
+  const state = { now: { date: '2026-11-26' }, areas: [{ id: areaId, name: 'Algebra', status: 'active' }], details: [] };
+  const res = await collect(createMockProvider().stream({
+    messages: [
+      { role: 'system', content: buildSystemPrompt({ stateJson: JSON.stringify(state), actionMode: 'tools' }) },
+      { role: 'user', content: 'Ghi lại buổi sáng 26/11: Algebra: Ôn chương 5' },
+    ],
+    tools: [{ name: 'propose_changes', description: '', parameters: {} }],
+    maxOutputTokens: 100,
+  }));
+  const proposal = ProposeChangesSchema.parse(JSON.parse(res.toolCalls[0].argsJson));
+  expect(proposal.actions).toEqual([{ type: 'add_progress_log', areaId, text: 'Algebra: Ôn chương 5' }]);
 });

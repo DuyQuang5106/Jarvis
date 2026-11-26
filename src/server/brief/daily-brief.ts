@@ -4,6 +4,7 @@ import type { Db } from '@/db/client';
 import { dailyBriefs } from '@/db/schema';
 import { APP_TZ, todayIn } from '@/lib/dates';
 import { clip } from '../ai/clip';
+import { firstJsonObject } from '../ai/json-reply';
 import { buildContext } from '../ai/context-builder';
 import { aliasWorkspaceState } from '../ai/id-aliases';
 import { BRIEF_LIMITS, buildBriefSystemPrompt } from '../ai/prompt';
@@ -65,24 +66,6 @@ const contentSchema = z.object({
   upcoming: line(BRIEF_LIMITS.line),
   stale: line(BRIEF_LIMITS.line),
 });
-
-/** The first balanced `{…}` in `raw` (string-aware), or null. Text and code fences around it are ignored. */
-function firstJsonObject(raw: string): string | null {
-  const start = raw.indexOf('{');
-  if (start < 0) return null;
-  let depth = 0;
-  let inString = false;
-  for (let i = start; i < raw.length; i++) {
-    const ch = raw[i];
-    if (inString) {
-      if (ch === '\\') i++;
-      else if (ch === '"') inString = false;
-    } else if (ch === '"') inString = true;
-    else if (ch === '{') depth++;
-    else if (ch === '}' && --depth === 0) return raw.slice(start, i + 1);
-  }
-  return null;
-}
 
 /** Lenient parse of the model's reply (or of a stored row): null when it is not a usable brief. */
 export function parseBriefContent(raw: unknown): DailyBriefContent | null {

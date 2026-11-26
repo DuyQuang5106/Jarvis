@@ -1,7 +1,8 @@
 import { isFromDocumentsRequest } from '@/lib/from-documents';
 import { AiProviderError } from '../errors';
 import { normalizeVi } from './match-areas';
-import { BRIEF_PROMPT_MARKER } from './prompt';
+import { CHECKIN_MESSAGE } from '@/lib/checkin-message';
+import { BRIEF_PROMPT_MARKER, CHECKIN_PROMPT_MARKER } from './prompt';
 import type { AiProvider, ProviderEvent, StreamRequest } from './provider';
 
 type MockState = {
@@ -132,10 +133,32 @@ async function* emitWithProposal(
   }
 }
 
+/** Whether the turn carries the proposal machinery (a pure question does not). */
+const offersProposal = (req: StreamRequest, system: string) =>
+  !!req.tools?.some((t) => t.name === 'propose_changes') || system.includes('<proposed_actions>');
+
+export const MOCK_CHECKIN_SUMMARY = 'MOCK_CHECKIN: tóm tắt buổi.';
+
+async function* checkinSummary(system: string, activity: string): AsyncGenerator<ProviderEvent> {
+  const names = (/<areas>\n([\s\S]*?)\n?<\/areas>/.exec(system)?.[1] ?? '').split('\n').filter(Boolean);
+  const plain = normalizeVi(activity);
+  const area = names.find((n) => plain.includes(normalizeVi(n))) ?? names[0] ?? '';
+  const reply = { summary: MOCK_CHECKIN_SUMMARY, items: [{ area, text: `Làm việc với ${area || 'việc chung'}` }] };
+  yield { type: 'text', delta: '```json\n' };
+  yield { type: 'text', delta: `${JSON.stringify(reply)}\n\`\`\`` };
+}
+
 export function createMockProvider(): AiProvider {
   return {
     async *stream(req: StreamRequest): AsyncGenerator<ProviderEvent> {
       const u = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+      const checkinSystem = req.messages.find((m) => m.role === 'system')?.content ?? '';
+      if (checkinSystem.includes(CHECKIN_PROMPT_MARKER)) {
+        // Check-in summary (keyed on the system prompt: the activity in `u` may hold any MOCK_ word): one
+        // fixed line naming the first real area the activity mentions, or the first area.
+        yield* checkinSummary(checkinSystem, u);
+        return;
+      }
       if (u.includes('MOCK_ERROR')) throw new AiProviderError('mock failure');
       if (u.includes('MOCK_PARTIAL_ERROR')) {
         yield { type: 'text', delta: 'Đang trả lời' };
@@ -180,6 +203,18 @@ export function createMockProvider(): AiProvider {
         return;
       }
 
+      if (CHECKIN_MESSAGE.test(u) && state && offersProposal(req, system)) {
+        // `Ghi lại` / an answer to the check-in question: a progress log for the area the message names.
+        const area = state.areas.find((a) => normalizeVi(u).includes(normalizeVi(a.name)));
+        if (area) {
+          yield* emitWithProposal(req, system, 'Đề xuất ghi lại buổi.', {
+            summary: 'Ghi lại buổi',
+            actions: [{ type: 'add_progress_log', areaId: area.id, text: u.slice(u.indexOf(':') + 1).trim() }],
+          });
+          return;
+        }
+      }
+
       if (u.includes('MOCK_BAD_PROPOSAL')) {
         yield* emitWithProposal(req, system, 'Đề xuất lỗi.', {
           summary: 'Hỏng',
@@ -189,8 +224,7 @@ export function createMockProvider(): AiProvider {
       }
 
       // A turn without the proposal machinery (a pure question) falls through to the plain state reply.
-      const offersProposal = !!req.tools?.some((t) => t.name === 'propose_changes') || system.includes('<proposed_actions>');
-      if (u.includes('MOCK_DECISION') && state && offersProposal) {
+      if (u.includes('MOCK_DECISION') && state && offersProposal(req, system)) {
         const proposal = decisionProposal(state, u);
         if (proposal) yield* emitWithProposal(req, system, 'Đề xuất ghi quyết định vào tài liệu.', proposal);
         else yield { type: 'text', delta: 'Không rõ ghi vào môn hay dự án nào.' };
