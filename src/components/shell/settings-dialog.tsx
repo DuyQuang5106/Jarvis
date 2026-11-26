@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { SLOT_KEYS, SLOT_NAME, readCheckinPrefs, type DaySlots, type SlotKey } from '@/lib/day-slots';
+import { readWeeklyReviewsEnabled } from '@/lib/weeks';
 import { ThemeToggle } from './theme-toggle';
 
 type Form = {
@@ -17,6 +18,7 @@ type Form = {
   defaultFocusMinutes: string;
   timezone: string;
   checkinsEnabled: boolean;
+  weeklyReviewsEnabled: boolean;
   daySlots: DaySlots;
 };
 
@@ -53,6 +55,7 @@ export function SettingsDialog() {
       defaultFocusMinutes: s.defaultFocusMinutes === null ? '' : String(s.defaultFocusMinutes),
       timezone: s.timezone,
       ...readCheckinPrefs(s.preferencesJson),
+      weeklyReviewsEnabled: readWeeklyReviewsEnabled(s.preferencesJson),
     });
   }
 
@@ -88,6 +91,7 @@ export function SettingsDialog() {
         staleAfterDays: stale === '' ? Number.NaN : Number(stale),
         defaultFocusMinutes: focus === '' ? null : Number(focus),
         checkinsEnabled: form.checkinsEnabled,
+        weeklyReviewsEnabled: form.weeklyReviewsEnabled,
         daySlots: form.daySlots,
       });
       if (res.ok) setSaved(true);
@@ -162,6 +166,17 @@ export function SettingsDialog() {
               </div>
             ))}
           </fieldset>
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor={`${uid}-weekly`} className="text-sm font-medium">
+              Mời tổng kết tuần từ tối Chủ nhật
+            </label>
+            <Switch
+              id={`${uid}-weekly`}
+              checked={form?.weeklyReviewsEnabled ?? true}
+              onCheckedChange={(v) => set('weeklyReviewsEnabled', v)}
+              disabled={!ready || pending}
+            />
+          </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium">Giao diện</span>
             <ThemeToggle />
