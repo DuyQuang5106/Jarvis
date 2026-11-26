@@ -79,6 +79,26 @@ Mục tiêu: Jarvis tự hỏi và tự tổng kết theo nhịp sống, để d
 
 ---
 
+### Đợt 4 — Trí nhớ dài hạn: nhớ lại việc đã làm từ lâu (P2, xa, ý tưởng 26/11/2026)
+
+**Mục tiêu:** hỏi "hồi tháng 9 mình xử lý lỗi UART của StewieSAT thế nào?" hay "lần trước ôn Database mình yếu phần nào?" thì Jarvis nhớ lại được, kể cả khi tài liệu trạng thái đã được nén từ lâu.
+
+**Ý tưởng cốt lõi:** tách hai thứ hiện đang lẫn vào nhau.
+- *Bản tóm tắt sống* (`04_STATE`, được tổng kết tuần nén lại): gọn, dùng để trả lời câu hỏi hằng ngày.
+- *Nhật ký gốc không bao giờ bị nén*: tin nhắn, log tiến độ, check-in, bản tổng kết tuần, mọi phiên bản tài liệu, có ngày và nguồn.
+
+Khi gặp câu hỏi về quá khứ, AI chủ động truy vấn nhật ký gốc (tìm theo nghĩa và theo khoảng thời gian), đọc lại các mảnh liên quan, rồi **tái dựng** câu trả lời kèm ngày và nguồn, thay vì chỉ dựa vào bản tóm tắt.
+
+| Mục | Nội dung | Phụ thuộc | Tiêu chí chấp nhận | Trạng thái |
+|---|---|---|---|---|
+| L0 | **Không làm mất nguồn gốc** (nên làm sớm hơn phần còn lại, vì mất rồi không lấy lại được): hiện mỗi tài liệu chỉ giữ 50 phiên bản (`MAX_VERSIONS_PER_DOC`). Phiên bản trước một lần nén (`replace_section` do tổng kết tuần) phải được giữ vĩnh viễn, hoặc chuyển nội dung bị nén vào kho lưu trữ | N2 | Sau một năm nén hằng tuần vẫn đọc lại được mọi dòng tiến độ gốc kèm ngày | Not Started |
+| L1 | **Kho ký ức có chỉ mục**: gom các nguồn trên thành "mảnh ký ức" có ngày, mục, loại, đoạn văn gốc; tìm toàn văn tiếng Việt không dấu cộng tìm theo nghĩa (embedding, ví dụ `pgvector` trên Postgres) | L0 | Truy vấn theo nghĩa và khoảng thời gian trả về đúng mảnh trên bộ câu hỏi mẫu | Not Started |
+| L2 | **AI tự truy vấn để nhớ lại**: công cụ chỉ đọc `recall(query, from?, to?, area?)` và `read_source(id)`, dùng chung vòng lặp công cụ của R1; AI tự quyết khi nào cần nhớ lại (câu hỏi có mốc thời gian quá khứ, "lần trước", "hồi đó"…) | R1, L1 | Case `ai:eval`: hỏi về việc đã bị nén khỏi `04_STATE` từ nhiều tuần trước vẫn trả lời đúng, kèm ngày | Not Started |
+| L3 | **Tái dựng và trích nguồn**: câu trả lời về quá khứ ghi rõ "theo ghi chép ngày …", phân biệt điều nhớ chắc (có nguồn) với điều suy ra; mâu thuẫn giữa các thời điểm thì nói ra | L2 | Mọi khẳng định về quá khứ truy được về một mảnh ký ức; không bịa ngày | Not Started |
+| L4 | **Trí nhớ về bản thân người dùng**: thói quen học, điểm mạnh/yếu lặp lại, cách thích được giúp; rút ra từ tổng kết tuần, lưu thành tài liệu riêng, người dùng duyệt và sửa được | N2, L1 | Thẻ định hướng và tổng kết tuần dùng được các điều này, và chỉ ra nguồn | Not Started |
+
+**Ghi chú:** việc tìm theo nghĩa cần Postgres có `pgvector` (Supabase có sẵn; máy chủ ở nhà thì cài thêm) và một model embedding. Quyết định nơi deploy (Vercel + Supabase hay máy chủ ở nhà) nên chốt trước L1.
+
 ## Mục cũ (giữ nguyên)
 
 ### 1. Trạng thái `Active` hiện màu xanh — **Done** (commit `86c9253`)
