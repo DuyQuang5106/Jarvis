@@ -69,6 +69,23 @@ Mục tiêu: Jarvis tự hỏi và tự tổng kết theo nhịp sống, để d
 
 **Thứ tự khuyến nghị:** M4 → N1 → N2, rồi deploy (R4) → N3. M2 làm xen kẽ bất kỳ lúc nào.
 
+### Đợt 2c — Mỗi môn/đầu việc một ô chat (P1, quyết định 27/11/2026, chưa làm)
+
+Lý do: lịch sử hiện là danh sách cuộc chat đặt tên theo câu đầu tiên ("alo", "hôm nay thứ 3 được ng…"), mở lại gần như không dùng được. Trí nhớ thật của Jarvis nằm ở tài liệu và log (đã có thẻ duyệt), nên cuộc chat chỉ cần là **nơi làm việc theo chủ đề**, không cần là kho lưu trữ. Mỗi lượt AI chỉ đọc 10 tin gần nhất, nên một ô chat dài mãi không làm tăng chi phí.
+
+Đánh giá: nên làm. Ngữ cảnh tự đúng môn (không cần đoán môn từ câu hỏi), báo tiến độ ở ô Algebra thì đề xuất rơi vào Algebra, mở app là thấy ngay cuộc trao đổi gần nhất của từng môn. Rủi ro và cách xử lý:
+- Câu hỏi chung ("hôm nay nên làm gì", thẻ định hướng, check-in, tổng kết tuần) không thuộc môn nào → có thêm một ô **Chung**, giữ cách chọn ngữ cảnh tự động như hiện nay.
+- Báo tiến độ nhầm ô, hoặc một câu nhắc hai môn → ô môn chỉ là ưu tiên ngữ cảnh, đề xuất vẫn được ghi sang môn khác nếu tin nhắn nói rõ.
+- Tin cũ trong ô (từ hôm trước) làm AI hiểu sai "hôm nay" → lịch sử gửi AI chỉ lấy tin trong một khoảng gần (ví dụ 24 giờ hoặc từ dấu "Bắt đầu chủ đề mới"), giao diện vẫn cuộn xem được tất cả.
+- Ô chat rất dài tải chậm trên iPhone → tải 50 tin cuối, cuộn lên tải thêm.
+- Cần nhiều hơn một ô cho một môn → bước sau: nút "Chủ đề mới" tạo dấu phân cách trong cùng ô; tách thành nhiều ô chỉ khi thực sự cần.
+
+| Mục | Nội dung | Phụ thuộc | Tiêu chí chấp nhận | Trạng thái |
+|---|---|---|---|---|
+| H1 | **Ô chat theo mục**: cột `area_id` (nullable) và `kind` (`area` / `general` / `system`) cho `conversations` (migration chỉ thêm cột); mỗi mục đang mở có đúng một ô, tạo khi gửi tin đầu tiên; ô **Chung** cho câu hỏi tổng thể. Danh sách bên trái thay bằng: Chung, rồi các môn/dự án (xếp theo tin mới nhất, kèm dòng cuối và thời gian). Ô môn khóa ngữ cảnh vào môn đó (scope `item`) nhưng đề xuất vẫn được nhắm mục khác. Cuộc chat cũ chuyển vào mục **Lưu trữ** (không xóa); thẻ định hướng, check-in và tổng kết tuần chạy trong ô Chung | Đợt 2 | Gửi tin ở ô Algebra → tài liệu Algebra trong ngữ cảnh mà không cần nhắc tên môn; mở lại app thấy đúng ô và tin cũ; không mất cuộc chat cũ nào; e2e desktop và iPhone | Not Started |
+| H2 | **Lịch sử gửi AI theo thời gian và dấu chủ đề**: chỉ tin trong 24 giờ gần nhất (tối đa 10) hoặc sau dấu "Chủ đề mới"; tải tin theo trang khi cuộn | H1 | Hỏi "hôm nay là ngày mấy" trong ô có tin của hôm trước vẫn đúng; ô 1.000 tin mở dưới 1 giây | Not Started |
+| H3 | **Nhiều chủ đề trong một ô** (khi cần): nút "Chủ đề mới", tiêu đề chủ đề do AI đặt, nhảy nhanh giữa các chủ đề | H2 | Chỉ làm nếu dùng H1–H2 thấy một ô/môn không đủ | Not Started |
+
 ### Đợt 3 — Trợ lý tự đào sâu và có kỹ năng (P1)
 
 | Mục | Nội dung | Phụ thuộc | Trạng thái |
