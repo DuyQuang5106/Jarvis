@@ -53,7 +53,23 @@ if (process.env.SKIP_BUILD_CHECKS === '1') {
   run('Unit test', 'pnpm test', checkEnv);
 }
 
+/** Port of a connection string, without printing the string itself (it carries the password). */
+function portOf(url: string | undefined): string | null {
+  try {
+    return url ? new URL(url).port || '5432' : null;
+  } catch {
+    return null;
+  }
+}
+
 if (process.env.VERCEL_ENV === 'production') {
+  if (portOf(process.env.DATABASE_URL) === '6543') {
+    console.error(
+      '✖ DATABASE_URL đang trỏ tới Transaction pooler (cổng 6543): app treo ở đó. ' +
+        'Đổi DATABASE_URL trên Vercel sang Session pooler (cổng 5432, giống MIGRATION_DATABASE_URL) rồi Redeploy.',
+    );
+    process.exit(1);
+  }
   if (!process.env.MIGRATION_DATABASE_URL && !process.env.DATABASE_URL) {
     console.error('✖ Thiếu MIGRATION_DATABASE_URL trên Vercel: không migrate được. Dừng build.');
     process.exit(1);

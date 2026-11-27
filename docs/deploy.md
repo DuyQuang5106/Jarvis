@@ -16,8 +16,8 @@ Thời gian ước tính: 45–60 phút cho lần đầu.
    - **Project URL** (trang Home);
    - Settings → **API Keys**: dùng key mới **Publishable key** (`sb_publishable_…`) cho biến `NEXT_PUBLIC_SUPABASE_ANON_KEY` và **Secret key** (`sb_secret_…`, bấm Reveal) cho `SUPABASE_SERVICE_ROLE_KEY`. Key cũ `anon` / `service_role` (mục Legacy API Keys) vẫn dùng được, nhưng Supabase sẽ ngừng hỗ trợ chúng. Secret key là bí mật, chỉ đặt ở server;
    - **Connection string** (nút Connect):
-     - *Transaction pooler* (cổng 6543) cho app chạy trên Vercel;
-     - *Session pooler* (cổng 5432) cho migrate và chuyển dữ liệu từ máy bạn.
+     - *Session pooler* (cổng 5432): dùng cho cả app trên Vercel lẫn migrate và chuyển dữ liệu từ máy bạn.
+     - **Không dùng** *Transaction pooler* (cổng 6543): thư viện `postgres` của app gửi nhiều truy vấn dồn trên một kết nối, và pooler này bị treo với cách gửi đó (đo ngày 27/11/2026: 147/150 truy vấn treo, trong khi Session pooler 0/150). Build production tự dừng nếu `DATABASE_URL` dùng cổng 6543.
 
 ## 2. Tạo `.env.production.local` trên máy **[bạn]**
 File này nằm ở thư mục gốc repo, đã bị `.gitignore` chặn nên không lên GitHub. Nội dung:
@@ -61,7 +61,7 @@ Chạy từng lệnh trong PowerShell ở thư mục repo:
 
 | Biến | Giá trị |
 |---|---|
-| `DATABASE_URL` | Transaction pooler (cổng **6543**) |
+| `DATABASE_URL` | Session pooler (cổng **5432**), cùng giá trị với `MIGRATION_DATABASE_URL` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role key |

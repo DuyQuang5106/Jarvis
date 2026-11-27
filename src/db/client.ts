@@ -18,7 +18,11 @@ async function createDb(): Promise<Db> {
   const cfg = getConfig();
   if (cfg.dbDriver === 'postgres') {
     if (!cfg.databaseUrl) throw new Error('DATABASE_URL is required when DB_DRIVER=postgres');
-    return drizzlePostgres(postgres(cfg.databaseUrl, { prepare: false }), { schema });
+    // Supabase's *session* pooler (port 5432). postgres-js pipelines queries on a connection, and the
+    // transaction pooler (6543) stalls on pipelined queries: measured 147 of 150 parallel reads hung there,
+    // 0 on the session pooler. Few connections per instance, closed when idle, so instances that come and go
+    // do not use up the session pool.
+    return drizzlePostgres(postgres(cfg.databaseUrl, { prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10 }), { schema });
   }
   const client = new PGlite(cfg.pgliteDir === 'memory' ? undefined : cfg.pgliteDir);
   const db = drizzlePglite(client, { schema });
