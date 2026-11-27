@@ -86,13 +86,13 @@ Lý do: lịch sử hiện là danh sách cuộc chat đặt tên theo câu đ�
 | H2 | **Lịch sử gửi AI theo thời gian và dấu chủ đề**: chỉ tin trong 24 giờ gần nhất (tối đa 10) hoặc sau dấu "Chủ đề mới"; tải tin theo trang khi cuộn | H1 | Hỏi "hôm nay là ngày mấy" trong ô có tin của hôm trước vẫn đúng; ô 1.000 tin mở dưới 1 giây | Not Started |
 | H3 | **Nhiều chủ đề trong một ô** (khi cần): nút "Chủ đề mới", tiêu đề chủ đề do AI đặt, nhảy nhanh giữa các chủ đề | H2 | Chỉ làm nếu dùng H1–H2 thấy một ô/môn không đủ | Not Started |
 
-### Đợt 2d — Giao diện riêng cho điện thoại và tiến độ có công thức (P1, yêu cầu 27/11/2026, chưa làm)
+### Đợt 2d — Giao diện riêng cho điện thoại (P1) và tiến độ có công thức (P0, bắt buộc phải có), yêu cầu 27/11/2026, chưa làm
 
 **Vì sao:** app chủ yếu dùng trên iPhone, nhưng giao diện hiện là bản laptop thu nhỏ: chật, nhiều thứ phải cuộn ngang hoặc bấm nhiều lớp. Tiến độ hiện chỉ có một kiểu (M6: số topic vững trên tổng, dự án đếm milestone), không phản ánh được cách bạn thực sự đo từng môn (ví dụ "10 buổi luyện bài tập", "hết chương 4", điểm bài kiểm tra).
 
 **Đánh giá:**
 - **Giao diện riêng cho điện thoại:** nên làm, và nên làm trước hoặc cùng lúc với H1 (mỗi môn một ô chat), vì H1 cũng thay cấu trúc điều hướng. Làm hai lần sẽ phí. Không cần viết app native: vẫn là PWA, chỉ đổi bố cục theo kích thước màn hình (cùng dữ liệu, cùng server).
-- **Tiến độ có công thức:** nên làm, nhưng công thức phải là **dữ liệu có cấu trúc** (các thành phần có trọng số), không phải công thức tự do. App tính được, kiểm tra được, và AI chỉ đề xuất công thức hay cập nhật số liệu qua thẻ duyệt. Rủi ro là phức tạp hóa: bắt đầu với vài kiểu thành phần là đủ, thêm kiểu khi thực sự cần.
+- **Tiến độ có công thức:** tính năng cốt lõi, bắt buộc phải có (owner, 27/11/2026). Công thức phải là **dữ liệu có cấu trúc** (các thành phần có trọng số), không phải công thức tự do. App tính được, kiểm tra được, và AI chỉ đề xuất công thức hay cập nhật số liệu qua thẻ duyệt. Rủi ro là phức tạp hóa: bắt đầu với vài kiểu thành phần là đủ, thêm kiểu khi thực sự cần.
 
 | Mục | Nội dung | Phụ thuộc | Tiêu chí chấp nhận | Trạng thái |
 |---|---|---|---|---|
