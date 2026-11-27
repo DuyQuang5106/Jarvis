@@ -9,7 +9,7 @@ Thời gian ước tính: 45–60 phút cho lần đầu.
 - Tài khoản Supabase và Vercel; đăng nhập bằng GitHub là nhanh nhất.
 
 ## 1. Tạo project Supabase **[bạn]**
-1. supabase.com → New project. Đặt tên `jarvis`, region **Southeast Asia (Singapore)**, đặt mật khẩu database mạnh và lưu vào trình quản lý mật khẩu.
+1. supabase.com → New project. Đặt tên `jarvis`, region **Northeast Asia (Tokyo)** (vùng phải khớp `vercel.json`, hiện là `hnd1` = Tokyo), đặt mật khẩu database mạnh và lưu vào trình quản lý mật khẩu.
 2. Authentication → Sign In / Providers → Email: bật Email, **tắt "Allow new users to sign up"**. App chỉ có một chủ; không ai tự đăng ký được.
 3. Authentication → Users → Add user → Create new user: dùng email của bạn, đặt mật khẩu và tick "Auto Confirm User". Email này sẽ là `APP_OWNER_EMAIL`.
 4. Lấy các giá trị sau (Project Settings):
@@ -56,7 +56,7 @@ Chạy từng lệnh trong PowerShell ở thư mục repo:
    ```
 
 ## 4. Tạo project Vercel **[bạn]**
-1. vercel.com → Add New → Project → import repo `Jarvis`. Framework: Next.js. Giữ build mặc định. Region đã được đặt là Singapore trong `vercel.json`.
+1. vercel.com → Add New → Project → import repo `Jarvis`. Framework: Next.js. Giữ build mặc định. Region đã được đặt là Tokyo (`hnd1`) trong `vercel.json`, cạnh database.
 2. Environment Variables (Production):
 
 | Biến | Giá trị |
