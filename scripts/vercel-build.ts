@@ -45,6 +45,9 @@ for (const name of SECRETS) delete checkEnv[name];
 if (process.env.SKIP_BUILD_CHECKS === '1') {
   console.warn('⚠ SKIP_BUILD_CHECKS=1: bỏ qua tsc, lint và test.');
 } else {
+  // tsc needs the route types (`LayoutProps`, `PageProps`) that Next generates into .next/types; a fresh
+  // checkout has none, so generate them first.
+  run('Sinh kiểu route', 'pnpm exec next typegen', checkEnv);
   run('Kiểm tra kiểu', 'pnpm exec tsc --noEmit', checkEnv);
   run('Lint', 'pnpm lint', checkEnv);
   run('Unit test', 'pnpm test', checkEnv);
