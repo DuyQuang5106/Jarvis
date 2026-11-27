@@ -15,6 +15,7 @@
     "ai:probe": "tsx scripts/ai-probe.ts",
     "ai:eval": "tsx scripts/ai-eval.ts",
     "verify:rls": "tsx scripts/verify-rls.ts",
+    "transfer:supabase": "tsx scripts/transfer-to-supabase.ts",
     "dev:e2e": "cross-env NEXT_DIST_DIR=.next/e2e-main E2E=1 PGLITE_DIR=memory AUTH_MODE=dev DB_DRIVER=pglite AI_PROVIDER=mock AI_ACTION_MODE=tools AI_API_KEY=e2e-secret-ai-key DATABASE_URL=postgres://e2e-secret-db-url next dev -p 3100",
     "dev:e2e:supabase": "cross-env E2E=1 PGLITE_DIR=memory AUTH_MODE=supabase DB_DRIVER=pglite AI_PROVIDER=mock NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:9 NEXT_PUBLIC_SUPABASE_ANON_KEY=e2e-anon APP_OWNER_EMAIL=owner@example.com NEXT_DIST_DIR=.next/e2e-supabase next dev -p 3101",
     "test:e2e": "playwright test"
