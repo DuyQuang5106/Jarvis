@@ -244,6 +244,7 @@ export async function buildContext(
   const selectedAreaIds = loaded.map((detail) => detail.area.id);
   const docContext = await selectDocumentContext(db, {
     areaIds: selectedAreaIds.length || input.scope.mode !== 'auto' ? selectedAreaIds : undefined,
+    focusAreaIds: input.scope.mode === 'auto' ? matchAreas([input.message], open) : undefined,
     query: texts.join(' '), today: snapshot.today, timezone: snapshot.timezone, staleAfterDays: settings.staleAfterDays,
     // 14 = `,"documents":` plus the array brackets' slack.
     budget: Math.floor((maxChars - tierOneSize - 14) * DOCUMENT_SHARE),

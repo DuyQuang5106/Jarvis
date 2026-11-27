@@ -304,6 +304,8 @@ async function portfolioAreaIds(db: DbOrTx): Promise<string[]> {
  */
 export async function selectDocumentContext(db: DbOrTx, options: {
   areaIds?: string[]; query: string; today: string; timezone: string; staleAfterDays: number; budget: number;
+  /** Areas the current message names: their documents are taken before those of areas only earlier messages named. */
+  focusAreaIds?: string[];
 }): Promise<{ documents: DocumentContext[]; refs: DocumentRef[]; truncated: boolean }> {
   if (options.budget <= 0 || options.areaIds?.length === 0) return { documents: [], refs: [], truncated: false };
   const selection = new Selection();
@@ -340,8 +342,13 @@ export async function selectDocumentContext(db: DbOrTx, options: {
   if (options.areaIds) {
     const areaIds = options.areaIds;
     const core = await loadCoreSources(db, { areaIds });
-    const groups = areaIds.map((areaId) => core.filter((doc) => doc.areaId === areaId).sort(compareCore));
-    for (const source of roundRobin(groups)) addCore(source, options.budget);
+    const groupOf = (areaId: string) => core.filter((doc) => doc.areaId === areaId).sort(compareCore);
+    // Areas named in this message come first, whole; areas carried over from earlier messages fill what is left,
+    // so a follow-up about one course never loses its own documents to the previous course's.
+    const focus = new Set(options.focusAreaIds ?? []);
+    const first = areaIds.filter((id) => focus.has(id));
+    const rest = areaIds.filter((id) => !focus.has(id));
+    for (const source of [...roundRobin(first.map(groupOf)), ...roundRobin(rest.map(groupOf))]) addCore(source, options.budget);
     excerptLimit = FOCUSED_EXCERPTS;
     excerptSources = await loadSources(db, { areaIds, query: options.query, rawOnly: true });
   } else {

@@ -125,3 +125,24 @@ test('câu hỏi tổng thể: tài liệu trạng thái bị ẩn không đư�
   expect(ctx.json).toContain('CÔNG_KHAI');
   expect(ctx.json).not.toMatch(/RIENG_/);
 });
+
+test('môn được nhắc trong tin hiện tại đọc đủ trước môn chỉ có trong tin cũ', async () => {
+  const db = await createTestDb();
+  const networks = await makeArea(db, { name: 'Computer Networks' });
+  const comm = await makeArea(db, { name: 'Introduction to Communications Engineering' });
+  const big = (label: string) => `# ${label}\n\n${'Nội dung dài. '.repeat(1500)}`;
+  for (const title of ['04_STATE.md', '05_LOG.md', '07_MISSING_INFO.md']) {
+    await documentService.create(db, { areaId: networks.id, title, bodyMd: big(`CN ${title}`), docRole: 'context' }, manual);
+    await documentService.create(db, { areaId: comm.id, title, bodyMd: big(`COMM ${title}`), docRole: 'context' }, manual);
+  }
+  const ctx = await buildContext(db, {
+    message: 'tiếp tục với môn introduction to communications engineering, nói cho tôi bạn biết gì',
+    recentUserMessages: ['Computer Networks: đã học xong chương 4'],
+    scope: { mode: 'auto' },
+    now,
+    maxChars: 120_000,
+  });
+  const commDocs = (ctx.state.documents ?? []).filter((d) => d.areaId === comm.id);
+  expect(commDocs.map((d) => d.title).sort()).toEqual(['04_STATE.md', '05_LOG.md', '07_MISSING_INFO.md']);
+  expect(commDocs.every((d) => d.content !== undefined && !d.omitted && !d.content.endsWith('…'))).toBe(true);
+});
