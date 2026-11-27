@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  Alias,
   CreateAssessmentInput,
   CreateBlockerInput,
   CreateMilestoneInput,
@@ -38,7 +39,10 @@ const AreaPatchSchema = UpdateAreaInput.pick({
   goal: true,
   startDate: true,
   deadlineDate: true,
-}).refine(nonEmptyPatch, { error: 'Cần ít nhất một trường để cập nhật mục.' });
+})
+  // Added to the area's aliases (never replaces them), so a proposal cannot drop a name the user relies on.
+  .extend({ addAliases: z.array(Alias).min(1).max(5).optional() })
+  .refine(nonEmptyPatch, { error: 'Cần ít nhất một trường để cập nhật mục.' });
 
 function hasUpsertFields(val: { id?: string; title?: string }, keys: string[], record: Record<string, unknown>): boolean {
   if (!val.id) return typeof val.title === 'string' && val.title.trim().length > 0;

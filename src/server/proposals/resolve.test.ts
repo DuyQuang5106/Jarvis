@@ -1,11 +1,13 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, expect, test } from 'vitest';
 import type { Db } from '@/db/client';
-import { activityLogs, notes, pendingActions, tasks, topics } from '@/db/schema';
+import { activityLogs, areas, notes, pendingActions, tasks, topics } from '@/db/schema';
 import { createTestDb } from '@/db/testing';
 import { createArea } from '../services/areas';
 import { noteService, topicService } from '../services/entities';
 import { approvePendingAction, rebasePendingAction, rejectPendingAction } from './resolve';
+import { describeStored } from './describe';
+import type { StoredProposal } from './schema';
 import { createPendingAction } from './store';
 
 /** The id of a proposal that must have been stored. */
@@ -180,4 +182,19 @@ test('đề xuất từ capture: duyệt xong note chuyển processed', async ()
   const id = await propose([], { source: 'capture', noteId: note.id });
   await approvePendingAction(db, id, { selectedKeys: [0, 1] });
   expect((await db.select().from(notes).where(eq(notes.id, note.id)))[0].inboxStatus).toBe('processed');
+});
+
+test('update_area thêm tên gọi khác: giữ tên cũ, bỏ trùng, thẻ duyệt hiện trước/sau', async () => {
+  const id = (await createArea(db, { kind: 'academic', name: 'Tư tưởng Hồ Chí Minh', aliases: ['TTHCM'] }, manual)).id;
+  const pa = storedId(
+    await createPendingAction(db, {
+      source: 'chat',
+      proposal: { summary: 'Thêm tên gọi', actions: [{ type: 'update_area', id, patch: { addAliases: ['môn Tư tưởng', 'tthcm', 'Tư tưởng Hồ Chí Minh'] } }] },
+    }),
+  );
+  const [preview] = await describeStored(db, ((await pending(pa)).actionsJson as StoredProposal).actions);
+  expect(preview.changes).toEqual([{ field: 'Tên gọi khác', before: 'TTHCM', after: 'TTHCM, Tư tưởng' }]);
+  expect(await approvePendingAction(db, pa, { selectedKeys: [0] })).toMatchObject({ status: 'applied' });
+  const [row] = await db.select().from(areas).where(eq(areas.id, id));
+  expect(row.aliases).toEqual(['TTHCM', 'Tư tưởng']);
 });

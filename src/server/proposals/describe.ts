@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { areas, assessments, blockers, milestones, tasks, topics, type AreaRow } from '@/db/schema';
 import { FIELD_LABEL, formatFieldValue } from '../queries/describe-log';
+import { mergeAliases } from './aliases';
 import { describeDocumentAction, isDocumentAction } from './document-actions';
 import type { ActionPreview, ProposedAction, StoredAction } from './schema';
 
@@ -127,6 +128,12 @@ async function describeOne(db: DbOrTx, item: StoredAction): Promise<ActionPrevie
         a.patch,
         false,
       );
+      if (a.patch.addAliases && area) {
+        const after = mergeAliases(area.aliases, a.patch.addAliases, area.name);
+        if (after.length > area.aliases.length) {
+          changes.push({ field: FIELD_LABEL.aliases, before: formatFieldValue('aliases', area.aliases), after: formatFieldValue('aliases', after) });
+        }
+      }
       return {
         key: item.key,
         type: a.type,

@@ -25,6 +25,7 @@ import {
 } from '../services/entities';
 import { editDocument, loadDocumentArea, loadEditableDocument, sectionHash, stampDocumentAction, isDocumentAction } from './document-actions';
 import { DEADLINE_ROUTE_ERROR, hasDeadlineRoute } from './routing';
+import { mergeAliases } from './aliases';
 import { describeStored } from './describe';
 import {
   ProposedActionSchema,
@@ -151,9 +152,13 @@ export async function applyAction(tx: DbOrTx, action: ProposedAction, meta: Writ
     case 'update_task':
       await taskService.update(tx, action.id, action.patch, meta);
       return;
-    case 'update_area':
-      await updateArea(tx, action.id, action.patch, meta);
+    case 'update_area': {
+      const { addAliases, ...patch } = action.patch;
+      const [row] = addAliases ? await tx.select({ name: areas.name, aliases: areas.aliases }).from(areas).where(eq(areas.id, action.id)) : [];
+      const aliases = addAliases && row ? mergeAliases(row.aliases, addAliases, row.name) : undefined;
+      await updateArea(tx, action.id, { ...patch, ...(aliases ? { aliases } : {}) }, meta);
       return;
+    }
     case 'upsert_topic': {
       const { type: _, id, areaId, ...rest } = action;
       void _;
