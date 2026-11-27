@@ -94,7 +94,7 @@ export async function transferDatabase(source: Queryable, target: Queryable, log
       for (let i = 0; i < rows.length; i += ROWS_PER_BATCH) {
         const batch = rows.slice(i, i + ROWS_PER_BATCH);
         await target.query(
-          `insert into ${quote(table)} (${list}) select ${list} from json_populate_recordset(null::${quote(table)}, $1::json)`,
+          `insert into ${quote(table)} (${list}) select ${list} from json_populate_recordset(null::${quote(table)}, $1::text::json)`,
           [JSON.stringify(batch)],
         );
       }
