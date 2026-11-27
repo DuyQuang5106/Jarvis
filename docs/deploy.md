@@ -13,8 +13,8 @@ Thời gian ước tính: 45–60 phút cho lần đầu.
 2. Authentication → Sign In / Providers → Email: bật Email, **tắt "Allow new users to sign up"**. App chỉ có một chủ; không ai tự đăng ký được.
 3. Authentication → Users → Add user → Create new user: dùng email của bạn, đặt mật khẩu và tick "Auto Confirm User". Email này sẽ là `APP_OWNER_EMAIL`.
 4. Lấy các giá trị sau (Project Settings):
-   - **Project URL** và **anon key** (Data API / API Keys);
-   - **service_role key**: bí mật, chỉ đặt ở server;
+   - **Project URL** (trang Home);
+   - Settings → **API Keys**: dùng key mới **Publishable key** (`sb_publishable_…`) cho biến `NEXT_PUBLIC_SUPABASE_ANON_KEY` và **Secret key** (`sb_secret_…`, bấm Reveal) cho `SUPABASE_SERVICE_ROLE_KEY`. Key cũ `anon` / `service_role` (mục Legacy API Keys) vẫn dùng được, nhưng Supabase sẽ ngừng hỗ trợ chúng. Secret key là bí mật, chỉ đặt ở server;
    - **Connection string** (nút Connect):
      - *Transaction pooler* (cổng 6543) cho app chạy trên Vercel;
      - *Session pooler* (cổng 5432) cho migrate và chuyển dữ liệu từ máy bạn.

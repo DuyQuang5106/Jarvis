@@ -31,7 +31,7 @@ test('gửi đúng URL và header, không lộ anon key trong detail', async () 
     fetch: (async (url: RequestInfo | URL, init?: RequestInit) => { calls.push({ url: String(url), init }); return new Response('[]'); }) as typeof fetch,
   });
   expect(calls[0].url).toBe('https://x.supabase.co/rest/v1/areas?select=*&limit=1');
-  expect(calls[0].init?.headers).toMatchObject({ apikey: 'secret-anon', Authorization: 'Bearer secret-anon' });
+  expect(calls[0].init?.headers).toEqual({ apikey: 'secret-anon' });
   expect(JSON.stringify(out)).not.toContain('secret-anon');
 });
 

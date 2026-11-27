@@ -14,7 +14,8 @@ export async function checkRls(opts: {
   for (const table of opts.tables) {
     try {
       const res = await doFetch(`${base}/rest/v1/${table}?select=*&limit=1`, {
-        headers: { apikey: opts.anonKey, Authorization: `Bearer ${opts.anonKey}` },
+        // `apikey` alone: works for legacy anon keys and new `sb_publishable_` keys (which are not JWTs).
+        headers: { apikey: opts.anonKey },
       });
       const text = await res.text();
       let body: unknown;
