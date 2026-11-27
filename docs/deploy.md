@@ -73,6 +73,8 @@ Chạy từng lệnh trong PowerShell ở thư mục repo:
 | `AI_MODEL` | `claude-sonnet-5` |
 | `AI_ACTION_MODE` | `tools` |
 
+   Thêm `MIGRATION_DATABASE_URL` = Session pooler (cổng **5432**, giống trong `.env.production.local`), chỉ tick môi trường **Production**. Mỗi lần deploy production, Vercel tự chạy migrate bằng biến này.
+
    **Không** đặt `E2E`, `AUTH_MODE=dev` hay `DB_DRIVER=pglite`. App tự từ chối khởi động ở production nếu thấy chúng.
 3. Deploy. Nếu Vercel báo route `api/weekly-review` vượt giới hạn thời gian của gói Hobby, báo agent để hạ `maxDuration` từ 300 xuống 60.
 
@@ -85,3 +87,11 @@ Chạy từng lệnh trong PowerShell ở thư mục repo:
 ## 6. Sau khi chạy ổn
 - Laptop không cần bật nữa. `.pglite` trên máy là bản cũ; đừng dùng song song, vì hai nơi sẽ lệch nhau. Muốn thử tính năng mới ở local thì dùng bản sao.
 - Bước tiếp theo là thông báo trên iPhone (N3a), theo `docs/superpowers/plans/2026-11-27-deploy-and-push.md`.
+
+## 7. Pipeline tự động khi push
+Push lên `main` thì Vercel chạy `pnpm vercel-build` (`scripts/vercel-build.ts`):
+1. tsc, lint, toàn bộ unit test (đã gỡ các biến bí mật, nên test không chạm database hay AI thật);
+2. `db:migrate` lên Supabase, chỉ với bản production;
+3. `next build`.
+
+Bước nào đỏ thì build dừng và bản đang chạy giữ nguyên. Lên bản lỗi thì vào Deployments, chọn bản trước, rồi bấm **Instant Rollback**. Khi bộ kiểm tra hỏng mà cần sửa gấp, đặt `SKIP_BUILD_CHECKS=1` trên Vercel rồi Redeploy, và gỡ biến đó ngay sau khi sửa xong.
