@@ -86,6 +86,23 @@ Lý do: lịch sử hiện là danh sách cuộc chat đặt tên theo câu đ�
 | H2 | **Lịch sử gửi AI theo thời gian và dấu chủ đề**: chỉ tin trong 24 giờ gần nhất (tối đa 10) hoặc sau dấu "Chủ đề mới"; tải tin theo trang khi cuộn | H1 | Hỏi "hôm nay là ngày mấy" trong ô có tin của hôm trước vẫn đúng; ô 1.000 tin mở dưới 1 giây | Not Started |
 | H3 | **Nhiều chủ đề trong một ô** (khi cần): nút "Chủ đề mới", tiêu đề chủ đề do AI đặt, nhảy nhanh giữa các chủ đề | H2 | Chỉ làm nếu dùng H1–H2 thấy một ô/môn không đủ | Not Started |
 
+### Đợt 2d — Giao diện riêng cho điện thoại và tiến độ có công thức (P1, yêu cầu 27/11/2026, chưa làm)
+
+**Vì sao:** app chủ yếu dùng trên iPhone, nhưng giao diện hiện là bản laptop thu nhỏ: chật, nhiều thứ phải cuộn ngang hoặc bấm nhiều lớp. Tiến độ hiện chỉ có một kiểu (M6: số topic vững trên tổng, dự án đếm milestone), không phản ánh được cách bạn thực sự đo từng môn (ví dụ "10 buổi luyện bài tập", "hết chương 4", điểm bài kiểm tra).
+
+**Đánh giá:**
+- **Giao diện riêng cho điện thoại:** nên làm, và nên làm trước hoặc cùng lúc với H1 (mỗi môn một ô chat), vì H1 cũng thay cấu trúc điều hướng. Làm hai lần sẽ phí. Không cần viết app native: vẫn là PWA, chỉ đổi bố cục theo kích thước màn hình (cùng dữ liệu, cùng server).
+- **Tiến độ có công thức:** nên làm, nhưng công thức phải là **dữ liệu có cấu trúc** (các thành phần có trọng số), không phải công thức tự do. App tính được, kiểm tra được, và AI chỉ đề xuất công thức hay cập nhật số liệu qua thẻ duyệt. Rủi ro là phức tạp hóa: bắt đầu với vài kiểu thành phần là đủ, thêm kiểu khi thực sự cần.
+
+| Mục | Nội dung | Phụ thuộc | Tiêu chí chấp nhận | Trạng thái |
+|---|---|---|---|---|
+| U1 | **Khảo sát và thiết kế giao diện điện thoại**: liệt kê chỗ vướng trên iPhone (chụp màn hình từng trang), rồi chốt cấu trúc mobile: thanh tab dưới cùng (Hôm nay · Chat · Môn & dự án · Cài đặt), màn hình theo tầng (danh sách → chi tiết môn → tài liệu) thay vì nhiều cột, nút bấm ≥ 44 pt, ô nhập chat không bị bàn phím che, an toàn với notch/thanh home. Laptop giữ bố cục nhiều cột | H1 (thiết kế chung điều hướng) | Bản thiết kế (ảnh mẫu) được bạn duyệt trước khi code | Not Started |
+| U2 | **Làm giao diện điện thoại theo U1** | U1 | Mọi việc thường ngày (chat, báo tiến độ, duyệt thẻ, xem môn, đọc tài liệu) làm được bằng một tay, không cuộn ngang; e2e iPhone cho từng trang; checklist `docs/acceptance-checklist.md` đạt trên iPhone thật | Not Started |
+| P1 | **Quy tắc tiến độ riêng cho từng môn/đầu việc**: mỗi mục có một quy tắc gồm các thành phần có trọng số, mỗi thành phần thuộc một kiểu: đếm (đã xong x/y, ví dụ 3/10 buổi luyện, 4/7 chương), tỉ lệ topic theo trạng thái (như M6 hiện nay), điểm (bài kiểm tra so với điểm mục tiêu), checklist (milestone/task). App tính phần trăm từ quy tắc, luôn hiện kèm mẫu số. Sửa quy tắc trong màn chi tiết môn; AI đề xuất quy tắc từ tài liệu và cập nhật số "đã xong" khi bạn báo tiến độ, đều qua thẻ duyệt. Mục chưa có quy tắc dùng cách tính M6 | M3 | Môn Computer Networks đặt quy tắc "Lý thuyết 7 chương (40%) + 10 buổi luyện bài (40%) + điểm kiểm tra so với mục tiêu A (20%)" → báo "xong buổi 3" thì thẻ duyệt tăng 2/10 → 3/10 và thanh đổi đúng; unit test cho từng kiểu thành phần và trọng số | Not Started |
+| P2 | **Thanh tiến độ ở ba tầng**: (1) mỗi môn/dự án: thanh tổng theo quy tắc P1 kèm đếm ngược tới mốc gần nhất; (2) tổng quan: thanh tổng của học kỳ (các môn) và của các dự án; (3) thanh nhỏ cho các việc đang làm trong 7 ngày tới, mỗi việc kèm hạn và màu theo mức gấp (quá hạn, ≤ 2 ngày, còn xa). Đặt ở màn Hôm nay trên điện thoại | P1, U2 | Nhìn màn Hôm nay trong 5 giây biết môn nào chậm và việc nào sắp tới hạn; mọi con số truy được về quy tắc và dữ liệu | Not Started |
+
+**Thứ tự khuyến nghị:** U1 (thiết kế cùng H1) → P1 → U2 + H1 → P2. P1 không phụ thuộc giao diện nên làm song song được.
+
 ### Đợt 3 — Trợ lý tự đào sâu và có kỹ năng (P1)
 
 | Mục | Nội dung | Phụ thuộc | Trạng thái |
