@@ -93,7 +93,7 @@ export function Sidebar({ recentChats }: { recentChats: ReactNode }) {
     <>
       <aside
         className={cn(
-          'hidden w-64 shrink-0 flex-col gap-4 border-r bg-sidebar p-3 text-sidebar-foreground',
+          'app-sidebar hidden w-64 shrink-0 flex-col gap-4 border-r bg-sidebar p-3 text-sidebar-foreground',
           !collapsed && 'md:flex',
         )}
       >
@@ -106,7 +106,7 @@ export function Sidebar({ recentChats }: { recentChats: ReactNode }) {
         <div className="min-h-0 flex-1">{desktop && <SidebarBody recentChats={recentChats} />}</div>
       </aside>
       {collapsed && (
-        <div className="hidden border-r p-2 md:block">
+        <div className="app-sidebar hidden border-r p-2 md:block">
           <Button variant="ghost" size="icon" className="size-11" onClick={() => setCollapsed(false)} aria-label="Mở rộng thanh bên">
             <PanelLeftOpen />
           </Button>

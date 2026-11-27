@@ -137,6 +137,12 @@
   padding-left: env(safe-area-inset-left);
 }
 
+/* Context shown beside the chat (ChatWithContext) runs in a frame: no app navigation inside it. */
+html[data-embedded] .app-sidebar,
+html[data-embedded] .app-mobile-header {
+  display: none !important;
+}
+
 /* iOS Safari zooms the page when a focused field is under 16px. */
 input,
 textarea,

@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { ChatView, type ChatMessageView } from '@/components/chat/chat-view';
+import { ChatWithContext } from '@/components/chat/context-side-panel';
 import { getDb } from '@/db/client';
 import type { MessageRow } from '@/db/schema';
 import type { ReplyStats } from '@/server/chat/run-turn';
@@ -64,15 +65,17 @@ async function ChatContent({ searchParams }: { searchParams: SearchParams }) {
     clock ? getWeeklyReviewCard(db, clock, APP_TZ) : null,
   ]);
   return (
-    <ChatView
-      conversation={found ? { id: found.conversation.id, title: found.conversation.title } : null}
-      messages={(found?.messages ?? []).map(toView).filter((m) => m !== null)}
-      areas={snapshot.areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind, aiExcluded: a.aiExcluded }))}
-      requestedId={typeof c === 'string' ? c : null}
-      brief={brief}
-      checkin={checkin}
-      weeklyReview={weeklyReview}
-      today={today}
-    />
+    <ChatWithContext>
+      <ChatView
+        conversation={found ? { id: found.conversation.id, title: found.conversation.title } : null}
+        messages={(found?.messages ?? []).map(toView).filter((m) => m !== null)}
+        areas={snapshot.areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind, aiExcluded: a.aiExcluded }))}
+        requestedId={typeof c === 'string' ? c : null}
+        brief={brief}
+        checkin={checkin}
+        weeklyReview={weeklyReview}
+        today={today}
+      />
+    </ChatWithContext>
   );
 }

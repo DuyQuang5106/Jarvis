@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyDataChanged } from '@/lib/data-changed';
 import Link from 'next/link';
 import { CheckIcon } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
@@ -112,6 +113,7 @@ export function ProposalCard({
         const reloaded = await getProposalAction(proposalId);
         if (reloaded.ok) setView(reloaded.data);
         setConflicts(new Map());
+        notifyDataChanged();
         onResolved?.();
         return;
       }
@@ -155,7 +157,10 @@ export function ProposalCard({
       } else {
         const reloaded = await getProposalAction(proposalId);
         if (reloaded.ok) setView(reloaded.data);
-        if (result.data.status === 'undone') onResolved?.();
+        if (result.data.status === 'undone') {
+          notifyDataChanged();
+          onResolved?.();
+        }
       }
     });
   }

@@ -32,7 +32,7 @@ export const viewport: Viewport = {
 };
 
 // Runs before first paint so a stored or system dark preference never flashes light.
-const THEME_INIT = `try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}`;
+const THEME_INIT = `try{if(window.self!==window.top)document.documentElement.dataset.embedded='1'}catch(e){}try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (

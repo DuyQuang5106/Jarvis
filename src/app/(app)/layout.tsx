@@ -4,6 +4,7 @@ import { MobileNav } from '@/components/shell/mobile-nav';
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { RecentChats } from '@/components/shell/recent-chats';
 import { Sidebar } from '@/components/shell/sidebar';
+import { SwipeNav } from '@/components/shell/swipe-nav';
 import { Toaster } from '@/components/ui/sonner';
 import { getDb } from '@/db/client';
 import { requireOwner } from '@/server/auth';
@@ -20,9 +21,10 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
   return (
     <div className="app-frame flex h-dvh overflow-hidden">
       <Toaster position="top-center" />
+      <SwipeNav />
       <Sidebar recentChats={recentChats} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b px-3 py-2 md:hidden">
+        <header className="app-mobile-header flex items-center gap-2 border-b px-3 py-2 md:hidden">
           <MobileNav recentChats={recentChats} />
           <span className="font-semibold">Personal AI</span>
         </header>
