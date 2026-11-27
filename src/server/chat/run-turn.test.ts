@@ -232,6 +232,34 @@ test('lịch sử không gửi lại nội dung của mục vừa bị loại kh
   ]);
 });
 
+test('tin nhắn nhắc mục không gửi cho AI: không gọi AI, giải thích cách bật lại', async () => {
+  const area = await createArea(db, { kind: 'academic', name: 'Computer Networks', aliases: ['Mạng máy tính'], status: 'active' }, manual);
+  await updateArea(db, area.id, { aiExcluded: true }, manual);
+  const seen: StreamRequest[] = [];
+  const spy: AiProvider = { stream: (req) => { seen.push(req); return createMockProvider().stream(req); } };
+  const events = await turn({ message: 'cập nhật tiến độ: buổi tối tôi học computer networks, xong Parity' }, spy);
+  expect(seen).toHaveLength(0);
+  expect(events.map((e) => e.type)).toEqual(['meta', 'text', 'done']);
+  expect(textOf(events)).toContain('**Computer Networks** đang bật "Không gửi cho AI"');
+  expect(textOf(events)).toContain('Tạo lại');
+  const saved = await rows();
+  expect(saved.map((m) => m.role)).toEqual(['user', 'assistant']);
+  expect(saved[1].metadata).toMatchObject({ stats: { inputTokens: 0, outputTokens: 0 } });
+
+  // Turned back on, "Tạo lại" answers the same message with the AI and replaces the notice.
+  await updateArea(db, area.id, { aiExcluded: false }, manual);
+  const again = await turn({ conversationId: cid(events), regenerate: true }, spy);
+  expect(seen).toHaveLength(1);
+  expect(textOf(again)).not.toContain('Không gửi cho AI');
+  expect((await rows()).map((m) => m.role)).toEqual(['user', 'assistant']);
+
+  // By alias, too; a message about another area is not blocked.
+  await updateArea(db, area.id, { aiExcluded: true }, manual);
+  expect(textOf(await turn({ message: 'Mạng máy tính thi khi nào?' }, spy))).toContain('Không gửi cho AI');
+  await turn({ message: 'hôm nay nên làm gì?' }, spy);
+  expect(seen).toHaveLength(2);
+});
+
 test('regenerate thiếu cuộc chat hoặc không có tin nhắn người dùng', async () => {
   expect(await turn({ regenerate: true })).toEqual([{ type: 'error', message: 'Không có tin nhắn để thử lại.' }]);
   const [conv] = await db.insert(conversations).values({ title: 'trống' }).returning();

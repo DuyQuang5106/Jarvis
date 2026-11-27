@@ -74,7 +74,15 @@ const NOTHING_TO_RETRY = 'Không có tin nhắn để thử lại.';
 const BUSY = 'Đang có một câu trả lời khác trong cuộc chat này, đợi xong rồi thử lại.';
 const PROVIDER_FAILED = 'Không gọi được AI. Dữ liệu của bạn không bị ảnh hưởng, có thể thử lại.';
 /** Stands in for a history message that touches an area now excluded from AI. */
-export const HIDDEN_HISTORY = '[Tin nhắn cũ đã ẩn vì liên quan mục không gửi cho AI]';
+/** Reply to a message that names areas marked "Không gửi cho AI"; the message itself never reaches the model. */
+export function excludedAreaNotice(names: string[]): string {
+  const list = names.map((n) => `**${n}**`).join(', ');
+  const one = names.length === 1;
+  return `${one ? 'Mục' : 'Các mục'} ${list} đang bật "Không gửi cho AI", nên tin nhắn này chưa được gửi cho AI và mình không đọc hay cập nhật được ${one ? 'mục này' : 'các mục này'}.\n\n` +
+    `Muốn mình ghi lại: vào **Context**, mở ${one ? 'mục' : 'từng mục'} ${list}, tắt "Không gửi cho AI", rồi quay lại đây bấm **Tạo lại**.`;
+}
+
+export const HIDDEN_HISTORY ='[Tin nhắn cũ đã ẩn vì liên quan mục không gửi cho AI]';
 
 /** Appended to a reply the provider cut at the output cap (`finish_reason = length`). */
 export const TRUNCATED_NOTICE = '\n\n_(Câu trả lời bị cắt vì quá dài. Nhắn "tiếp tục" để xem phần còn lại.)_';
@@ -267,6 +275,24 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
 
     // 3. Meta.
     yield { type: 'meta', conversationId, userMessageId: current.id };
+
+    // 3b. A message about an area kept from AI is not sent at all: the model would not see the area and would
+    // answer as if it did not exist. Say why and how to turn it back on (no AI call, no cap used).
+    if (!weekly) {
+      const blocked = (await listAiExcludedAreas(db)).filter((a) => matchAreas([current.content], [a]).length > 0);
+      if (blocked.length > 0) {
+        const reply = excludedAreaNotice(blocked.map((a) => a.name));
+        yield { type: 'text', delta: reply };
+        if (input.regenerate) for (const old of oldReplies) await supersedeForMessage(db, old.id);
+        const stats: ReplyStats = { inputTokens: 0, outputTokens: 0, firstTokenMs: elapsed(), totalMs: elapsed() };
+        const metadata = { contextRefs: [], summaryCount: 0, truncated: false, stats };
+        const saved = input.regenerate
+          ? await replaceReplies(db, conversationId, current.id, reply, metadata)
+          : await appendMessage(db, conversationId, 'assistant', reply, metadata);
+        timing.proposal = 'none';
+        return yield { type: 'done', assistantMessageId: saved.id, contextRefs: [], summaryCount: 0, stats };
+      }
+    }
 
     // 4. Daily cap.
     try {
