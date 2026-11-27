@@ -39,7 +39,7 @@ test('luật đề xuất: thông tin mới được ghi vào đúng tài liệu
       'kể thông tin mới', 'quyết định, kết quả thử nghiệm, thông báo của giảng viên hay nhóm',
       '05_LOG.md', '04_STATE.md', 'create_blocker, kèm một dòng trong tài liệu',
       'heading chép đúng y một heading có thật', 'MỖI THÔNG TIN GHI VÀO ĐÚNG MỘT TÀI LIỆU', '06_TIMELINE.md', 'upsert_assessment có dueDate',
-      'trả lời đủ từng câu hỏi đó', 'create_document với areaId của mục', 'title "STATE.md"',
+      'trả lời đủ từng câu hỏi đó', 'KHÔNG ghi vào deadlineDate của mục', 'patch.status', 'create_document với areaId của mục', 'title "STATE.md"',
       '"## Trạng thái hiện tại", "## Quyết định", "## Vướng mắc", "## Nhật ký"',
       '"- YYYY-MM-DD: …"', 'now.date', 'không suy diễn thêm', 'không đề xuất lại',
     ])

@@ -23,6 +23,10 @@ export type EvalCase = {
   expectProposal?: boolean;
   /** Action types the stored proposal must contain (e.g. `append_to_document`). */
   proposalMustInclude?: string[];
+  /** Action types the stored proposal must not contain. */
+  proposalMustNotInclude?: string[];
+  /** `update_area` patch values the proposal must set, e.g. `{ "status": "active" }`. */
+  areaPatchMustInclude?: Record<string, string>;
   /** Approve every action of the stored proposal, so a later case can check that the workspace remembers it. */
   approveProposal?: boolean;
   /** At most this many document edits (append/replace) in the stored proposal: one report is written once. */
@@ -69,6 +73,8 @@ const EvalCaseSchema = z
     answerMustNotMatch: strings,
     expectProposal: z.boolean().optional(),
     proposalMustInclude: strings,
+    proposalMustNotInclude: strings,
+    areaPatchMustInclude: z.record(z.string(), z.string()).optional(),
     approveProposal: z.boolean().optional(),
     maxDocumentWrites: z.number().int().nonnegative().optional(),
     proposalHeadingMustNotMatch: strings,
@@ -170,11 +176,16 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
   for (const re of c.answerMustNotMatch ?? []) if (new RegExp(re, 'i').test(reply)) failures.push(`câu trả lời không được khớp /${re}/i`);
   if (c.expectProposal === true && !proposed) failures.push('cần có đề xuất');
   if (c.expectProposal === false && proposed) failures.push('không được có đề xuất');
-  if (pendingActionId && (c.proposalMustInclude?.length || c.approveProposal || c.maxDocumentWrites !== undefined || c.proposalHeadingMustNotMatch?.length)) {
+  if (pendingActionId && (c.proposalMustInclude?.length || c.proposalMustNotInclude?.length || c.areaPatchMustInclude || c.approveProposal || c.maxDocumentWrites !== undefined || c.proposalHeadingMustNotMatch?.length)) {
     const [row] = await deps.db.select().from(pendingActions).where(eq(pendingActions.id, pendingActionId));
     const stored = row.actionsJson as StoredProposal;
     const types = stored.actions.map((a) => a.action.type as string);
     for (const type of c.proposalMustInclude ?? []) if (!types.includes(type)) failures.push(`đề xuất thiếu hành động ${type}`);
+    for (const type of c.proposalMustNotInclude ?? []) if (types.includes(type)) failures.push(`đề xuất không được có hành động ${type}`);
+    for (const [field, value] of Object.entries(c.areaPatchMustInclude ?? {})) {
+      const set = stored.actions.some((a) => a.action.type === 'update_area' && (a.action.patch as Record<string, unknown>)[field] === value);
+      if (!set) failures.push(`đề xuất không đặt ${field} = ${value} cho mục`);
+    }
     const writes = stored.actions.flatMap((a) => (a.action.type === 'append_to_document' || a.action.type === 'replace_section' ? [a.action] : []));
     if (c.maxDocumentWrites !== undefined && writes.length > c.maxDocumentWrites) {
       failures.push(`đề xuất ghi ${writes.length} chỗ trong tài liệu (tối đa ${c.maxDocumentWrites})`);
