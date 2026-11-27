@@ -31,7 +31,7 @@ export function ContextView({
   inbox: InboxNote[];
   actionMode?: 'tools' | 'json' | 'off';
 }) {
-  const { tab, setTab, openItem, item, section } = useContextParams();
+  const { tab, setTab, openItem, item, section, pending } = useContextParams();
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const kind = TAB_KIND[tab];
@@ -44,6 +44,11 @@ export function ContextView({
 
   return (
     <div className="space-y-4">
+      {pending && (
+        <div role="status" className="fixed inset-x-0 top-[calc(0.5rem+env(safe-area-inset-top))] z-50 mx-auto w-fit rounded-full border bg-card px-3 py-1 text-sm shadow">
+          Đang mở…
+        </div>
+      )}
       <ContextHeader tab={tab} onTab={setTab} query={query} onQuery={setQuery} onSearchDocs={() => setSearchOpen(true)} />
       <InboxList notes={inbox} areas={areas} actionMode={actionMode} />
       <StaleStrip areas={stale} onOpen={(a) => openItem(a.id, KIND_TAB[a.kind])} />

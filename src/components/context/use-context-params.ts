@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useTransition } from 'react';
 import type { AreaKind } from '@/db/enums';
 
 export type TabId = 'academic' | 'projects';
@@ -19,6 +19,8 @@ export function useContextParams() {
   const folder = params.get('folder');
   const doc = params.get('doc');
   const section = params.get('section') ?? 'overview';
+  // The server renders the opened item: `pending` lets the view say so while it loads.
+  const [pending, startTransition] = useTransition();
 
   const update = useCallback(
     (changes: Record<string, string | null>, mode: 'push' | 'replace') => {
@@ -27,12 +29,13 @@ export function useContextParams() {
         if (v === null) q.delete(k);
         else q.set(k, v);
       }
-      router[mode](`${pathname}?${q.toString()}`, { scroll: false });
+      startTransition(() => router[mode](`${pathname}?${q.toString()}`, { scroll: false }));
     },
     [params, pathname, router],
   );
 
   return {
+    pending,
     tab,
     item,
     folder,
