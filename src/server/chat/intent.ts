@@ -25,6 +25,11 @@ const REPORT_OR_COMMAND = [
   'da lam',
   'vua hoc',
   'vua lam',
+  'chua luyen',
+  'chua hoc',
+  'chua lam',
+  'muc tieu',
+  'nhac toi',
 ];
 
 /** The user only asks (accent-free, whole words). */
@@ -106,7 +111,17 @@ function reportsScore(text: string): boolean {
 }
 
 /** A question: ends with `?` or holds a question phrase. `plain` is the accent-free form of `message`. */
-const isQuestion = (message: string, plain: string) => message.trim().endsWith('?') || QUESTION.some((p) => hasPhrase(plain, p));
+/**
+ * `kiểm tra`, `phân tích`, `tóm tắt`… ask only as a request (`kiểm tra lịch thi`, `hãy tóm tắt…`); inside a
+ * report they name things (`Kiểm tra trên lớp 20%`, `bài kiểm tra Lab`).
+ */
+const REQUEST_VERBS = ['kiem tra', 'phan tich', 'tom tat', 'liet ke', 'tinh hinh'];
+const REQUEST_LEADS = ['', 'hay ', 'giup toi ', 'ban hay ', 'ban giup toi ', 'cho toi '];
+const asksAsRequest = (plain: string, verb: string) => REQUEST_LEADS.some((lead) => plain.startsWith(`${lead}${verb}`));
+
+const isQuestion = (message: string, plain: string) =>
+  message.trim().endsWith('?') ||
+  QUESTION.some((p) => (REQUEST_VERBS.includes(p) ? asksAsRequest(plain, p) : hasPhrase(plain, p)));
 
 /** Extra question phrases that only matter when looking for a question anywhere in a longer message. */
 const ASIDE_QUESTION = ['ngay gi', 'ngay bao nhieu', 'hom nay la', 'may gio', 'o dau', 'tai sao', 'vi sao', 'lam sao', 'nhu the nao', 'biet khong', 'duoc khong'];
@@ -118,7 +133,7 @@ const ASIDE_QUESTION = ['ngay gi', 'ngay bao nhieu', 'hom nay la', 'may gio', 'o
 export function asksSomething(message: string): boolean {
   const plain = normalizeVi(message);
   // `kiểm tra`, `tóm tắt`… also name things (`bài kiểm tra Lab`): only the asking phrases count here.
-  const asking = QUESTION.filter((p) => !['kiem tra', 'phan tich', 'tom tat', 'liet ke', 'tinh hinh'].includes(p));
+  const asking = QUESTION.filter((p) => !REQUEST_VERBS.includes(p));
   return message.includes('?') || [...asking, ...ASIDE_QUESTION].some((p) => hasPhrase(plain, p));
 }
 

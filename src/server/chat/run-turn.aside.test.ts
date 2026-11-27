@@ -78,3 +78,21 @@ test('asksSomething: câu hỏi ở giữa hay cuối tin, không nhầm tên b�
   expect(asksSomething('buổi 4 và 5 sẽ làm bài kiểm tra Lab')).toBe(false);
   expect(asksSomething('tôi đã học xong chương 4')).toBe(false);
 });
+
+test('allowsProposal: báo cáo nhắc tới "Kiểm tra trên lớp" vẫn được đề xuất; "kiểm tra lịch thi" vẫn là câu hỏi', async () => {
+  const { allowsProposal } = await import('./intent');
+  const report = [
+    '1. tôi chưa luyện dạng bài nào',
+    '2. giữa kỳ thi trắc nghiệm, cuối kỳ nửa trắc nghiệm nửa tự luận, hệ số như thế này:',
+    'Kiểm tra trên lớp(Class Test)',
+    '20.0%',
+    'Thực hành(Practical Work)',
+    '30.0%',
+    'Mục tiêu của tôi trong tuần này là luyện bài tập chương 1-2-3, nhưng tôi chưa chốt nguồn tài liệu để ôn tập. Nhắc tôi phần này khi đến tối',
+  ].join('\n');
+  expect(allowsProposal(report)).toBe(true);
+  expect(allowsProposal('kiểm tra lịch thi các môn')).toBe(false);
+  expect(allowsProposal('hãy tóm tắt tiến độ Algebra')).toBe(false);
+  expect(allowsProposal('phân tích tiến độ môn algebra cho tôi')).toBe(false);
+  expect(allowsProposal('Mobile Programming đang ở tình trạng nào?')).toBe(false);
+});
