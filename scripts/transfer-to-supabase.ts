@@ -134,9 +134,11 @@ async function main() {
     if (missing.length > 0) console.warn(`Thiếu ${missing.length} tệp trong ${storageDir}: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''}`);
     console.log(dryRun ? `Chạy thử: ${files.length - missing.length} tệp sẽ được tải lên.` : `Tệp: tải ${copied}, bỏ qua ${skipped} (đã có).`);
   }
+  // Close PGlite and let Node exit on its own. `process.exit` right after the Supabase uploads aborts Node on
+  // Windows (`Assertion failed … async.c`) while their sockets are still closing. A late timer is the backstop.
   await pg.close();
-  // PGlite keeps the event loop alive: exit explicitly.
-  process.exit(0);
+  process.exitCode = 0;
+  setTimeout(() => process.exit(0), 10_000).unref();
 }
 
 main().catch((err) => fail(`Lỗi: ${err instanceof Error ? err.message : String(err)}`));
