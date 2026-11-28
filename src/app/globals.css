@@ -144,6 +144,14 @@ html[data-embedded] .app-embedded-hide {
   display: none !important;
 }
 
+/* The Context half scrolls with the wheel or trackpad; its scrollbar only takes room next to the chat. */
+html[data-embedded] * {
+  scrollbar-width: none;
+}
+html[data-embedded] *::-webkit-scrollbar {
+  display: none;
+}
+
 /* iOS Safari zooms the page when a focused field is under 16px. */
 input,
 textarea,
