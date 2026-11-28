@@ -12,7 +12,11 @@ const nextConfig: NextConfig = {
   ...(process.env.E2E === "1" ? { devIndicators: false as const } : {}),
   serverExternalPackages: ["@electric-sql/pglite"],
   async headers() {
-    return [{ source: "/:path*", headers: [{ key: "Content-Security-Policy", value: CSP }] }];
+    return [
+      { source: "/:path*", headers: [{ key: "Content-Security-Policy", value: CSP }] },
+      // The service worker must never be served stale: a new deploy's notification code takes effect at once.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }] },
+    ];
   },
   partialPrefetching: true,
   turbopack: {

@@ -95,3 +95,12 @@ Push lên `main` thì Vercel chạy `pnpm vercel-build` (`scripts/vercel-build.t
 3. `next build`.
 
 Bước nào đỏ thì build dừng và bản đang chạy giữ nguyên. Lên bản lỗi thì vào Deployments, chọn bản trước, rồi bấm **Instant Rollback**. Khi bộ kiểm tra hỏng mà cần sửa gấp, đặt `SKIP_BUILD_CHECKS=1` trên Vercel rồi Redeploy, và gỡ biến đó ngay sau khi sửa xong.
+
+## 8. Thông báo trên iPhone (N3a)
+1. Tạo khóa trên máy bạn (lệnh in ra 3 dòng; không dán vào chat, không commit):
+   ```powershell
+   pnpm push:keys
+   ```
+2. **[bạn]** Vercel → Settings → Environment Variables (Production): thêm `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` + email của bạn). Thêm cả vào `.env.local` nếu muốn thử ở máy. Redeploy (hoặc push bản mới).
+3. Trên iPhone: mở Jarvis **từ biểu tượng ở Màn hình chính** (iOS 16.4 trở lên) → Settings → Thông báo → **Bật thông báo trên thiết bị này** → Cho phép → **Gửi thử**.
+4. Đổi khóa thì mọi thiết bị phải bật lại thông báo.

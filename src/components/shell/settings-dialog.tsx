@@ -1,5 +1,6 @@
 'use client';
 
+import { NotificationSettings } from './notification-settings';
 import { Download, LogOut, Settings } from 'lucide-react';
 import { useId, useRef, useState, useTransition } from 'react';
 import { getSettingsAction, updateSettingsAction } from '@/app/(app)/_actions/settings';
@@ -193,6 +194,7 @@ export function SettingsDialog() {
             {pending ? 'Đang lưu…' : 'Lưu'}
           </Button>
         </form>
+        <NotificationSettings />
         <div className="flex flex-col gap-2 border-t pt-4">
           <Button asChild variant="outline" className="min-h-11 justify-start gap-2">
             <a href="/api/export" download>

@@ -24,6 +24,10 @@ export type AppConfig = {
   supabaseStorageBucket?: string;
   supabaseServiceRoleKey?: string;
   e2e: boolean;
+  /** Web Push (VAPID). All three or none: without them the app has no notifications and says so in Settings. */
+  vapidPublicKey?: string;
+  vapidPrivateKey?: string;
+  vapidSubject?: string;
 };
 
 type Env = Record<string, string | undefined>;
@@ -102,6 +106,9 @@ export function loadConfig(env: Env): AppConfig {
     supabaseStorageBucket,
     supabaseServiceRoleKey,
     e2e: env.E2E === '1',
+    vapidPublicKey: blank(env.VAPID_PUBLIC_KEY),
+    vapidPrivateKey: blank(env.VAPID_PRIVATE_KEY),
+    vapidSubject: blank(env.VAPID_SUBJECT),
   };
 }
 

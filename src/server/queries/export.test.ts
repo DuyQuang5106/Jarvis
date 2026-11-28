@@ -12,7 +12,8 @@ test('export đủ mọi bảng và có schema_version (criterion 17)', async ()
   const out = await buildExport(db, now);
   expect(out.schema_version).toBe(3);
   expect(out.exported_at).toBe('2026-11-22T03:00:00.000Z');
-  expect(Object.keys(out.tables).sort()).toEqual([...TABLE_NAMES].sort());
+  // Every table except device push endpoints and keys (secrets tied to one browser).
+  expect(Object.keys(out.tables).sort()).toEqual(TABLE_NAMES.filter((t) => t !== 'push_subscriptions').sort());
   expect(out.tables.areas).toHaveLength(14);
   expect(out.tables.activity_logs).toHaveLength(14);
   expect(() => JSON.stringify(out)).not.toThrow();

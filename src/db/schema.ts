@@ -342,6 +342,19 @@ export const weeklyReviews = pgTable('weekly_reviews', {
   createdAt: createdAt(),
 }).enableRLS();
 
+/** Browsers (one per installed device) that receive Web Push notifications. */
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: id(),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  userAgent: text('user_agent'),
+  createdAt: createdAt(),
+  lastSuccessAt: tz('last_success_at'),
+  failedCount: integer('failed_count').notNull().default(0),
+}).enableRLS();
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+
 /** Every table by its SQL name: the single source for TABLE_NAMES, export and RLS checks. */
 export const TABLES = {
   areas,
@@ -366,6 +379,7 @@ export const TABLES = {
   daily_briefs: dailyBriefs,
   checkins,
   weekly_reviews: weeklyReviews,
+  push_subscriptions: pushSubscriptions,
 } as const;
 
 export const TABLE_NAMES: readonly string[] = Object.keys(TABLES);

@@ -61,3 +61,21 @@ test('tải cài đặt lỗi: báo lỗi và Thử lại hoạt động', async
   await expect(dialog.getByLabel('Coi là cũ sau (ngày)')).toHaveValue('7');
   await expect(dialog.getByRole('alert')).toHaveCount(0);
 });
+
+test('mục Thông báo: nói rõ khi máy chủ chưa có khóa, nút gửi thử tắt khi chưa có thiết bị', async ({ page, request, isMobile }) => {
+  await resetDb(request, { seed: true });
+  const dialog = await openSettings(page, isMobile);
+  const section = dialog.getByRole('region', { name: 'Thông báo' });
+  await expect(section).toBeVisible();
+  // The E2E server runs without VAPID keys.
+  await expect(section).toContainText('Máy chủ chưa có khóa thông báo');
+  await expect(section.getByRole('button', { name: 'Bật thông báo trên thiết bị này' })).toBeDisabled();
+  await expect(section.getByRole('button', { name: 'Gửi thử' })).toBeDisabled();
+});
+
+test('service worker được phục vụ, không cache', async ({ request }) => {
+  const res = await request.get('/sw.js');
+  expect(res.ok()).toBe(true);
+  expect(res.headers()['cache-control']).toContain('no-store');
+  expect(await res.text()).toContain("addEventListener('push'");
+});
