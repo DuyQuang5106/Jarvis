@@ -28,6 +28,8 @@ export type AppConfig = {
   vapidPublicKey?: string;
   vapidPrivateKey?: string;
   vapidSubject?: string;
+  /** Bearer token the scheduler (Supabase pg_cron) sends to /api/cron/tick. Without it the route refuses. */
+  cronSecret?: string;
 };
 
 type Env = Record<string, string | undefined>;
@@ -109,6 +111,7 @@ export function loadConfig(env: Env): AppConfig {
     vapidPublicKey: blank(env.VAPID_PUBLIC_KEY),
     vapidPrivateKey: blank(env.VAPID_PRIVATE_KEY),
     vapidSubject: blank(env.VAPID_SUBJECT),
+    cronSecret: blank(env.CRON_SECRET),
   };
 }
 

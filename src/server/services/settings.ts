@@ -3,6 +3,7 @@ import type { DbOrTx } from '@/db/client';
 import { settings, type SettingsRow } from '@/db/schema';
 import { ValidationError } from '../errors';
 import { UpdateSettingsInput } from '../schemas';
+import { readNotifyPrefs } from '@/lib/notify-prefs';
 
 /** Returns the single settings row, creating it with defaults on first use. */
 export async function getSettings(db: DbOrTx): Promise<SettingsRow> {
@@ -15,9 +16,9 @@ export async function updateSettings(db: DbOrTx, rawPatch: UpdateSettingsInput):
   const parsed = UpdateSettingsInput.safeParse(rawPatch);
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message ?? 'Dữ liệu không hợp lệ.');
   const current = await getSettings(db);
-  const { checkinsEnabled, daySlots, weeklyReviewsEnabled, ...columns } = parsed.data;
+  const { checkinsEnabled, daySlots, weeklyReviewsEnabled, notify, ...columns } = parsed.data;
   const patch: Record<string, unknown> = Object.fromEntries(Object.entries(columns).filter(([, v]) => v !== undefined));
-  if (checkinsEnabled !== undefined || daySlots !== undefined || weeklyReviewsEnabled !== undefined) {
+  if (checkinsEnabled !== undefined || daySlots !== undefined || weeklyReviewsEnabled !== undefined || notify !== undefined) {
     // Merged into the stored preferences: other keys there stay as they are.
     const prefs = current.preferencesJson && typeof current.preferencesJson === 'object' ? current.preferencesJson : {};
     patch.preferencesJson = {
@@ -25,6 +26,7 @@ export async function updateSettings(db: DbOrTx, rawPatch: UpdateSettingsInput):
       ...(checkinsEnabled !== undefined ? { checkinsEnabled } : {}),
       ...(daySlots !== undefined ? { daySlots } : {}),
       ...(weeklyReviewsEnabled !== undefined ? { weeklyReviewsEnabled } : {}),
+      ...(notify !== undefined ? { notify: { ...readNotifyPrefs(prefs), ...notify } } : {}),
     };
   }
   if (Object.keys(patch).length === 0) return current;

@@ -372,6 +372,13 @@ export const reminders = pgTable(
 ).enableRLS();
 export type ReminderRow = typeof reminders.$inferSelect;
 
+/** One row per scheduled notification sent (`checkin:2026-11-28:afternoon`): a repeated tick never sends twice. */
+export const notificationLog = pgTable('notification_log', {
+  key: text('key').primaryKey(),
+  kind: text('kind').notNull(),
+  sentAt: createdAt(),
+}).enableRLS();
+
 /** Every table by its SQL name: the single source for TABLE_NAMES, export and RLS checks. */
 export const TABLES = {
   areas,
@@ -398,6 +405,7 @@ export const TABLES = {
   weekly_reviews: weeklyReviews,
   push_subscriptions: pushSubscriptions,
   reminders,
+  notification_log: notificationLog,
 } as const;
 
 export const TABLE_NAMES: readonly string[] = Object.keys(TABLES);

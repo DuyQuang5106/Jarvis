@@ -3,7 +3,11 @@
 import { BellRing, Trash2 } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import { getPushStatusAction, removePushDeviceAction, savePushSubscriptionAction, sendTestPushAction, type PushStatus } from '@/app/(app)/_actions/push';
+import { getSettingsAction, updateSettingsAction } from '@/app/(app)/_actions/settings';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { readNotifyPrefs, type NotifyPrefs } from '@/lib/notify-prefs';
 import { formatDateTimeVi } from '@/lib/dates';
 
 /** VAPID public keys travel as URL-safe base64; `pushManager.subscribe` wants the raw bytes. */
@@ -35,6 +39,21 @@ export function NotificationSettings() {
   const [support, setSupport] = useState<Support | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
+  const [prefs, setPrefs] = useState<NotifyPrefs | null>(null);
+
+  /** Each change is saved at once (merged into the stored preferences). */
+  function savePrefs(patch: Partial<NotifyPrefs>) {
+    if (!prefs) return;
+    const next = { ...prefs, ...patch };
+    setPrefs(next);
+    startTransition(async () => {
+      const res = await updateSettingsAction({ notify: patch });
+      if (!res.ok) {
+        setPrefs(prefs);
+        setMessage({ kind: 'error', text: res.error });
+      }
+    });
+  }
 
   async function refresh() {
     const res = await getPushStatusAction();
@@ -47,6 +66,9 @@ export function NotificationSettings() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSupport(detectSupport());
     void refresh();
+    void getSettingsAction().then((res) => {
+      if (res.ok) setPrefs(readNotifyPrefs(res.data.preferencesJson));
+    });
   }, []);
 
   function enable() {
@@ -120,6 +142,29 @@ export function NotificationSettings() {
         <p role={message.kind === 'error' ? 'alert' : 'status'} className={message.kind === 'error' ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
           {message.text}
         </p>
+      )}
+      {prefs && (
+        <fieldset className="space-y-2" disabled={pending}>
+          <legend className="text-xs text-muted-foreground">Tự gửi (lời nhắc bạn đặt luôn được gửi đúng giờ)</legend>
+          {(
+            [
+              ['checkin', 'Check-in khi hết mỗi buổi'],
+              ['weekly', 'Tổng kết tuần từ tối Chủ nhật'],
+              ['brief', 'Việc nên làm, buổi sáng (từ 07:30)'],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key} className="flex items-center justify-between gap-2">
+              <label htmlFor={`notify-${key}`} className="text-sm">{label}</label>
+              <Switch id={`notify-${key}`} checked={prefs[key]} onCheckedChange={(v) => savePrefs({ [key]: v })} />
+            </div>
+          ))}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <Input type="time" aria-label="Giờ yên lặng bắt đầu" value={prefs.quietStart} onChange={(e) => e.target.value && savePrefs({ quietStart: e.target.value })} className="h-11 min-w-0 md:text-base" />
+            <span aria-hidden className="text-muted-foreground">–</span>
+            <Input type="time" aria-label="Giờ yên lặng kết thúc" value={prefs.quietEnd} onChange={(e) => e.target.value && savePrefs({ quietEnd: e.target.value })} className="h-11 min-w-0 md:text-base" />
+          </div>
+          <p className="text-xs text-muted-foreground">Giờ yên lặng: không tự gửi check-in, tổng kết hay việc nên làm.</p>
+        </fieldset>
       )}
       {status && status.devices.length > 0 && (
         <ul aria-label="Thiết bị nhận thông báo" className="space-y-1.5">

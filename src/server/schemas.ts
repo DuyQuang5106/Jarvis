@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NotifyPrefsSchema } from '@/lib/notify-prefs';
 import { DaySlotsSchema } from '@/lib/day-slots';
 import {
   AREA_KINDS,
@@ -215,6 +216,8 @@ export const UpdateSettingsInput = z.object({
   checkinsEnabled: z.boolean({ error: 'Bật check-in phải là đúng/sai.' }).optional(),
   daySlots: DaySlotsSchema.optional(),
   weeklyReviewsEnabled: z.boolean({ error: 'Bật tổng kết tuần phải là đúng/sai.' }).optional(),
+  /** Scheduled notifications: merged into `preferences_json.notify`. */
+  notify: NotifyPrefsSchema.optional(),
 });
 
 // ---- conversations

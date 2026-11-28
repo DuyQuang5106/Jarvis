@@ -104,3 +104,31 @@ Bước nào đỏ thì build dừng và bản đang chạy giữ nguyên. Lên 
 2. **[bạn]** Vercel → Settings → Environment Variables (Production): thêm `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` + email của bạn). Thêm cả vào `.env.local` nếu muốn thử ở máy. Redeploy (hoặc push bản mới).
 3. Trên iPhone: mở Jarvis **từ biểu tượng ở Màn hình chính** (iOS 16.4 trở lên) → Settings → Thông báo → **Bật thông báo trên thiết bị này** → Cho phép → **Gửi thử**.
 4. Đổi khóa thì mọi thiết bị phải bật lại thông báo.
+
+## 9. Gửi thông báo theo giờ (N3b)
+Jarvis tự gửi khi: tới giờ một lời nhắc bạn đặt; hết một buổi (check-in); từ tối Chủ nhật (tổng kết tuần); buổi sáng từ 07:30 (việc nên làm). Ngoài lời nhắc, không gửi gì trong giờ yên lặng (mặc định 23:00–07:00); bật/tắt từng loại và đổi giờ yên lặng ở Settings → Thông báo.
+
+Cần một bộ hẹn giờ gọi `POST /api/cron/tick` mỗi 5 phút. Gói Hobby của Vercel chỉ cho cron mỗi ngày một lần, nên dùng `pg_cron` của Supabase:
+
+1. **[bạn]** Tạo một chuỗi bí mật dài (PowerShell):
+   ```powershell
+   -join ((1..48) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
+   ```
+   Đặt nó làm `CRON_SECRET` trên Vercel (Production) rồi Redeploy.
+2. **[bạn]** Supabase → Database → Extensions: bật `pg_cron` và `pg_net`.
+3. **[bạn]** Supabase → SQL Editor, chạy (thay hai chỗ trong `<…>`):
+   ```sql
+   select cron.schedule(
+     'jarvis-tick',
+     '*/5 * * * *',
+     $$ select net.http_post(
+          url := 'https://<tên-miền-của-app>/api/cron/tick',
+          headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET>', 'Content-Type', 'application/json'),
+          body := '{}'::jsonb
+        ) $$
+   );
+   ```
+4. Kiểm tra: Supabase → SQL Editor `select * from cron.job_run_details order by start_time desc limit 5;` (trạng thái `succeeded`), và Vercel → Logs có request `POST /api/cron/tick` trả 200.
+5. Gỡ: `select cron.unschedule('jarvis-tick');`
+
+Route từ chối mọi request không mang đúng `Authorization: Bearer <CRON_SECRET>`; thiếu `CRON_SECRET` trên Vercel thì route luôn từ chối.

@@ -79,3 +79,21 @@ test('service worker được phục vụ, không cache', async ({ request }) =>
   expect(res.headers()['cache-control']).toContain('no-store');
   expect(await res.text()).toContain("addEventListener('push'");
 });
+
+test('Thông báo: tắt một loại và đổi giờ yên lặng, còn sau khi mở lại', async ({ page, request, isMobile }) => {
+  await resetDb(request, { seed: true });
+  let dialog = await openSettings(page, isMobile);
+  let section = dialog.getByRole('region', { name: 'Thông báo' });
+  const brief = section.getByRole('switch', { name: 'Việc nên làm, buổi sáng (từ 07:30)' });
+  await expect(brief).toBeChecked();
+  await brief.click();
+  await expect(brief).not.toBeChecked();
+  await section.getByLabel('Giờ yên lặng bắt đầu').fill('22:30');
+  // Saved on change: reopen the page and the dialog.
+  await expect(async () => {
+    dialog = await openSettings(page, isMobile);
+    section = dialog.getByRole('region', { name: 'Thông báo' });
+    await expect(section.getByRole('switch', { name: 'Việc nên làm, buổi sáng (từ 07:30)' })).not.toBeChecked({ timeout: 2000 });
+    await expect(section.getByLabel('Giờ yên lặng bắt đầu')).toHaveValue('22:30', { timeout: 2000 });
+  }).toPass();
+});
