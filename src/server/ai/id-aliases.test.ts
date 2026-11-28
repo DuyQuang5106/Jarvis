@@ -42,7 +42,7 @@ test('aliasWorkspaceState thay mọi UUID nhất quán và không còn chuỗi U
         tasks: [
           {
             id: taskId, title: 'Làm bài tập', status: 'todo', dueDate: '2026-11-25', daysLeft: 1,
-            deadlineType: 'committed', estimateMinutes: null, blockedReason: null, milestoneId: msId,
+            deadlineType: 'committed', estimateMinutes: null, blockedReason: null, milestoneId: msId, progressDone: null, progressTotal: null,
           },
         ],
         notes: [],

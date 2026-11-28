@@ -53,6 +53,14 @@ export const Alias = z
 const areaId = uuid('Mục');
 
 // ---- tasks
+/** A small whole number (a countable task's parts). */
+const count = (label: string, min: number) =>
+  z
+    .number({ error: `${label} phải là một số.` })
+    .int({ error: `${label} phải là số nguyên.` })
+    .min(min, { error: `${label} tối thiểu ${min}.` })
+    .max(1000, { error: `${label} tối đa 1000.` });
+
 export const CreateTaskInput = z.object({
   areaId,
   title: Name,
@@ -73,6 +81,8 @@ export const CreateTaskInput = z.object({
     .optional(),
   milestoneId: uuid('Milestone').nullable().optional(),
   blockedReason: text('Lý do bị chặn').nullable().optional(),
+  progressDone: count('Số phần đã làm', 0).nullable().optional(),
+  progressTotal: count('Tổng số phần', 1).nullable().optional(),
   sortOrder,
 });
 export const UpdateTaskInput = CreateTaskInput.omit({ areaId: true }).partial();

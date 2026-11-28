@@ -134,6 +134,9 @@ export const tasks = pgTable(
     deadlineType: text('deadline_type', { enum: DEADLINE_TYPES }).notNull().default('flexible'),
     estimateMinutes: integer('estimate_minutes'),
     blockedReason: text('blocked_reason'),
+    /** A countable task (10 practice sessions, 9 exercises): how many are done out of how many. Both or neither. */
+    progressDone: integer('progress_done'),
+    progressTotal: integer('progress_total'),
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

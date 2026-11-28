@@ -82,7 +82,7 @@ async function describeOne(db: DbOrTx, item: StoredAction): Promise<ActionPrevie
       const area = await loadArea(db, a.areaId);
       const changes = await diffFields(
         db,
-        ['title', 'status', 'dueDate', 'deadlineType', 'estimateMinutes', 'milestoneId'],
+        ['title', 'status', 'dueDate', 'deadlineType', 'estimateMinutes', 'milestoneId', 'progressDone', 'progressTotal'],
         null,
         a,
         true,
@@ -103,7 +103,7 @@ async function describeOne(db: DbOrTx, item: StoredAction): Promise<ActionPrevie
       const area = await loadArea(db, row?.areaId ?? null);
       const changes = await diffFields(
         db,
-        ['title', 'status', 'dueDate', 'deadlineType', 'estimateMinutes', 'blockedReason'],
+        ['title', 'status', 'dueDate', 'deadlineType', 'estimateMinutes', 'blockedReason', 'progressDone', 'progressTotal'],
         row ?? null,
         a.patch,
         false,

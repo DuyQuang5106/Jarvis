@@ -30,6 +30,8 @@ export type EvalCase = {
   areaPatchMustInclude?: Record<string, string>;
   /** Aliases an `update_area` must add (`patch.addAliases`), compared case-insensitively. */
   areaAliasesMustInclude?: string[];
+  /** Some action of `type` must carry these values, at its top level or in its `patch`. */
+  actionFieldsMustInclude?: { type: string; fields: Record<string, string | number | boolean> }[];
   /** Approve every action of the stored proposal, so a later case can check that the workspace remembers it. */
   approveProposal?: boolean;
   /** At most this many document edits (append/replace) in the stored proposal: one report is written once. */
@@ -79,6 +81,9 @@ const EvalCaseSchema = z
     proposalMustNotInclude: strings,
     areaPatchMustInclude: z.record(z.string(), z.string()).optional(),
     areaAliasesMustInclude: strings,
+    actionFieldsMustInclude: z
+      .array(z.object({ type: z.string(), fields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])) }).strict())
+      .optional(),
     approveProposal: z.boolean().optional(),
     maxDocumentWrites: z.number().int().nonnegative().optional(),
     proposalHeadingMustNotMatch: strings,
@@ -180,7 +185,7 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
   for (const re of c.answerMustNotMatch ?? []) if (new RegExp(re, 'i').test(reply)) failures.push(`câu trả lời không được khớp /${re}/i`);
   if (c.expectProposal === true && !proposed) failures.push('cần có đề xuất');
   if (c.expectProposal === false && proposed) failures.push('không được có đề xuất');
-  if (pendingActionId && (c.proposalMustInclude?.length || c.proposalMustNotInclude?.length || c.areaPatchMustInclude || c.areaAliasesMustInclude?.length || c.approveProposal || c.maxDocumentWrites !== undefined || c.proposalHeadingMustNotMatch?.length)) {
+  if (pendingActionId && (c.proposalMustInclude?.length || c.proposalMustNotInclude?.length || c.areaPatchMustInclude || c.areaAliasesMustInclude?.length || c.actionFieldsMustInclude?.length || c.approveProposal || c.maxDocumentWrites !== undefined || c.proposalHeadingMustNotMatch?.length)) {
     const [row] = await deps.db.select().from(pendingActions).where(eq(pendingActions.id, pendingActionId));
     const stored = row.actionsJson as StoredProposal;
     const types = stored.actions.map((a) => a.action.type as string);
@@ -194,6 +199,14 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
       a.action.type === 'update_area' ? ((a.action.patch as { addAliases?: string[] }).addAliases ?? []).map((x) => lower(cleanAlias(x))) : [],
     );
     for (const alias of c.areaAliasesMustInclude ?? []) if (!added.includes(lower(alias))) failures.push(`đề xuất không thêm tên gọi khác "${alias}"`);
+    for (const want of c.actionFieldsMustInclude ?? []) {
+      const hit = stored.actions.some(({ action }) => {
+        if (action.type !== want.type) return false;
+        const flat = { ...(action as Record<string, unknown>), ...((action as { patch?: Record<string, unknown> }).patch ?? {}) };
+        return Object.entries(want.fields).every(([k, v]) => flat[k] === v);
+      });
+      if (!hit) failures.push(`đề xuất thiếu ${want.type} với ${JSON.stringify(want.fields)}`);
+    }
     const writes = stored.actions.flatMap((a) => (a.action.type === 'append_to_document' || a.action.type === 'replace_section' ? [a.action] : []));
     if (c.maxDocumentWrites !== undefined && writes.length > c.maxDocumentWrites) {
       failures.push(`đề xuất ghi ${writes.length} chỗ trong tài liệu (tối đa ${c.maxDocumentWrites})`);

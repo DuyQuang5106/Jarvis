@@ -33,7 +33,7 @@ export type AreaDetailForAi = {
   assessments: { id: string; title: string; dueDate: string | null; daysLeft: number | null; weight: number | null; score: number | null; maxScore: number | null }[];
   milestones: { id: string; title: string; status: MilestoneStatus; targetDate: string | null; acceptanceCriteria: string | null }[];
   blockers: { id: string; title: string; status: BlockerStatus; lastAttempt: string | null; nextAction: string | null; externalDependency: string | null }[];
-  tasks: { id: string; title: string; status: TaskStatus; dueDate: string | null; daysLeft: number | null; deadlineType: DeadlineType; estimateMinutes: number | null; blockedReason: string | null; milestoneId: string | null }[];
+  tasks: { id: string; title: string; status: TaskStatus; dueDate: string | null; daysLeft: number | null; deadlineType: DeadlineType; estimateMinutes: number | null; blockedReason: string | null; milestoneId: string | null; progressDone: number | null; progressTotal: number | null }[];
   notes: { id: string; text: string; updatedAt: string }[];
   recentLogs: { at: string; origin: Origin; title: string; changes: { field: string; before: string | null; after: string | null; summary?: string }[] }[];
 };
@@ -179,6 +179,7 @@ function toDetail(d: AreaDetails, today: string, hidden: Set<string>, excludedFo
       .map((t) => ({
         id: t.id, title: t.title, status: t.status, dueDate: t.dueDate, daysLeft: left(t.dueDate), deadlineType: t.deadlineType,
         estimateMinutes: t.estimateMinutes, blockedReason: t.blockedReason, milestoneId: t.milestoneId,
+        progressDone: t.progressDone, progressTotal: t.progressTotal,
       })),
     notes: d.notes
       .filter((n) => !n.aiExcluded && !hidden.has(n.id))

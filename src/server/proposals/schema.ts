@@ -29,6 +29,8 @@ const TaskPatchSchema = UpdateTaskInput.pick({
   deadlineType: true,
   estimateMinutes: true,
   blockedReason: true,
+  progressDone: true,
+  progressTotal: true,
 }).refine(nonEmptyPatch, { error: 'Cần ít nhất một trường để cập nhật task.' });
 
 const AreaPatchSchema = UpdateAreaInput.pick({
@@ -57,6 +59,8 @@ const CreateTaskActionSchema = CreateTaskInput.pick({
   deadlineType: true,
   estimateMinutes: true,
   milestoneId: true,
+  progressDone: true,
+  progressTotal: true,
 }).extend({ type: z.literal('create_task') });
 
 const UpdateTaskActionSchema = z.object({
