@@ -12,6 +12,7 @@ import type {
 } from '@/db/enums';
 import { MILESTONE_STATUSES, TOPIC_STATUSES } from '@/db/enums';
 import { activityLogs, areas, assessments, blockers, milestones, tasks, topics } from '@/db/schema';
+import { assessmentLabel } from '@/lib/assessments';
 import { daysSince, daysUntil, todayIn, weekdayVi, weekRange } from '@/lib/dates';
 import { getSettings } from '../services/settings';
 
@@ -72,6 +73,8 @@ export type PortfolioSnapshot = {
     dueDate: string;
     daysLeft: number;
     weight: number | null;
+    /** The date is not official yet; `title` already ends with "(dự kiến)". */
+    tentative: boolean;
   }[];
   staleAreaIds: string[];
 };
@@ -173,7 +176,7 @@ export async function getPortfolioSnapshot(db: DbOrTx, now: Date): Promise<Portf
         const daysLeft = daysUntil(date, today);
         if (!futureOnly || daysLeft >= 0) dated.push({ kind, title, date, daysLeft });
       };
-      for (const x of areaAssessments) add('assessment', x.title, x.dueDate, true);
+      for (const x of areaAssessments) add('assessment', assessmentLabel(x.title, x.tentative), x.dueDate, true);
       for (const t of tasksBy.get(a.id) ?? []) add('deadline', t.title, t.dueDate);
       for (const m of areaMilestones) if (m.status !== 'done') add('deadline', m.title, m.targetDate);
       add('deadline', null, a.deadlineDate);
@@ -229,10 +232,11 @@ export async function getPortfolioSnapshot(db: DbOrTx, now: Date): Promise<Portf
     .map((x) => ({
       id: x.id,
       areaId: x.areaId,
-      title: x.title,
+      title: assessmentLabel(x.title, x.tentative),
       dueDate: x.dueDate as string,
       daysLeft: daysUntil(x.dueDate as string, today),
       weight: x.weight,
+      tentative: x.tentative,
     }))
     .filter((x) => x.daysLeft >= 0 && x.daysLeft <= ASSESSMENT_WINDOW_DAYS)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || byTitle(a, b));

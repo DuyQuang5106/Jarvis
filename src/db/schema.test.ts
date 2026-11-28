@@ -74,3 +74,20 @@ test('tạo, sửa, xóa mềm documents và tìm theo search_tsv, tạo documen
     .returning();
   expect(softDeleted.deletedAt).not.toBeNull();
 });
+
+test('migration 0011 chuyển "(dự kiến)" trong tên lịch thi thành cờ tentative', async () => {
+  const { readFileSync } = await import('node:fs');
+  const path = await import('node:path');
+  const db = await createTestDb();
+  const [area] = await db.insert(areas).values({ kind: 'academic', name: 'A' }).returning();
+  await db.execute(sql`insert into assessments (area_id, title) values (${area.id}, 'Giữa kỳ (dự kiến)'), (${area.id}, 'Thi cuối kỳ (Dự kiến) lần 2'), (${area.id}, 'Cuối kỳ')`);
+  const file = readFileSync(path.join(process.cwd(), 'drizzle', '0011_broken_wild_pack.sql'), 'utf8');
+  const update = file.split('--> statement-breakpoint')[1];
+  await db.execute(sql.raw(update));
+  const rows = rowsOf(await db.execute(sql`select title, tentative from assessments order by title`));
+  expect(rows).toEqual([
+    { title: 'Cuối kỳ', tentative: false },
+    { title: 'Giữa kỳ', tentative: true },
+    { title: 'Thi cuối kỳ lần 2', tentative: true },
+  ]);
+});

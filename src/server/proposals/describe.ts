@@ -2,6 +2,9 @@ import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { areas, assessments, blockers, milestones, tasks, topics, type AreaRow } from '@/db/schema';
 import { formatDateTimeVi } from '@/lib/dates';
+import { assessmentLabel } from '@/lib/assessments';
+
+const assessmentLabelOf = (title: string | undefined, tentative: boolean) => (title === undefined ? undefined : assessmentLabel(title, tentative));
 import { FIELD_LABEL, formatFieldValue } from '../queries/describe-log';
 import { mergeAliases } from './aliases';
 import { describeDocumentAction, isDocumentAction } from './document-actions';
@@ -182,13 +185,13 @@ async function describeOne(db: DbOrTx, item: StoredAction): Promise<ActionPrevie
       const area = await loadArea(db, a.areaId);
       const isCreate = !a.id;
       const [row] = a.id ? await db.select().from(assessments).where(eq(assessments.id, a.id)) : [undefined];
-      const changes = await diffFields(db, ['title', 'dueDate', 'weight', 'score', 'maxScore'], row ?? null, a, isCreate);
+      const changes = await diffFields(db, ['title', 'dueDate', 'weight', 'score', 'maxScore', 'tentative'], row ?? null, a, isCreate);
       return {
         key: item.key,
         type: a.type,
         areaId: a.areaId,
         areaName: area?.name ?? null,
-        label: `${isCreate ? 'Tạo' : 'Sửa'} assessment${quote(row?.title ?? a.title)}`,
+        label: `${isCreate ? 'Tạo' : 'Sửa'} assessment${quote(assessmentLabelOf(row?.title ?? a.title, a.tentative ?? row?.tentative ?? false))}`,
         changes,
         isCreate,
         conflict: conflictFor(row ?? null, area, item.baseUpdatedAt, isCreate, true),

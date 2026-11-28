@@ -49,8 +49,8 @@ function fromDocumentsProposal(state: MockState): { summary: string; actions: Re
     ] as const;
     for (const [title, status, evidence] of topics)
       if (!has(detail.topics, title)) actions.push({ type: 'upsert_topic', areaId, title, status, ...(evidence ? { evidence } : {}) });
-    if (!has(detail.assessments, 'Giữa kỳ (dự kiến)'))
-      actions.push({ type: 'upsert_assessment', areaId, title: 'Giữa kỳ (dự kiến)', dueDate: addDays(state.now.date, MOCK_EXAM_IN_DAYS) });
+    if (!has(detail.assessments, 'Giữa kỳ'))
+      actions.push({ type: 'upsert_assessment', areaId, title: 'Giữa kỳ', tentative: true, dueDate: addDays(state.now.date, MOCK_EXAM_IN_DAYS) });
   }
   if (!has(detail.tasks, 'Làm bài tập Chương 1')) actions.push({ type: 'create_task', areaId, title: 'Làm bài tập Chương 1' });
   return actions.length ? { summary: `Tạo bản ghi từ tài liệu của ${detail.name}`, actions } : null;

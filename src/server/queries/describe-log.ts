@@ -67,6 +67,7 @@ export const FIELD_LABEL: Record<string, string> = {
   deadlineType: 'Loại hạn',
   estimateMinutes: 'Ước tính (phút)',
   progressDone: 'Đã làm',
+  tentative: 'Dự kiến',
   progressTotal: 'Tổng số phần',
   blockedReason: 'Lý do bị chặn',
   weight: 'Trọng số',

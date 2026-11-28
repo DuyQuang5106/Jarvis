@@ -30,7 +30,7 @@ export type AreaDetailForAi = {
   academic: { term: string | null; credits: number | null; targetGrade: string | null; gradingScheme: string | null; examFormat: string | null; courseOutline: string | null } | null;
   project: { role: string | null; collaborators: string | null; scope: string | null; cadence: string | null } | null;
   topics: { id: string; title: string; status: TopicStatus; evidence: string | null }[];
-  assessments: { id: string; title: string; dueDate: string | null; daysLeft: number | null; weight: number | null; score: number | null; maxScore: number | null }[];
+  assessments: { id: string; title: string; tentative: boolean; dueDate: string | null; daysLeft: number | null; weight: number | null; score: number | null; maxScore: number | null }[];
   milestones: { id: string; title: string; status: MilestoneStatus; targetDate: string | null; acceptanceCriteria: string | null }[];
   blockers: { id: string; title: string; status: BlockerStatus; lastAttempt: string | null; nextAction: string | null; externalDependency: string | null }[];
   tasks: { id: string; title: string; status: TaskStatus; dueDate: string | null; daysLeft: number | null; deadlineType: DeadlineType; estimateMinutes: number | null; blockedReason: string | null; milestoneId: string | null; progressDone: number | null; progressTotal: number | null }[];
@@ -166,7 +166,7 @@ function toDetail(d: AreaDetails, today: string, hidden: Set<string>, excludedFo
         : null,
     topics: d.topics.map((t) => ({ id: t.id, title: t.title, status: t.status, evidence: t.evidence })),
     assessments: d.assessments.map((x) => ({
-      id: x.id, title: x.title, dueDate: x.dueDate, daysLeft: left(x.dueDate), weight: x.weight, score: x.score, maxScore: x.maxScore,
+      id: x.id, title: x.title, tentative: x.tentative, dueDate: x.dueDate, daysLeft: left(x.dueDate), weight: x.weight, score: x.score, maxScore: x.maxScore,
     })),
     milestones: d.milestones.map((m) => ({
       id: m.id, title: m.title, status: m.status, targetDate: m.targetDate, acceptanceCriteria: m.acceptanceCriteria,

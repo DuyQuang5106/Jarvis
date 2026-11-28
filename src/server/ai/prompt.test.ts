@@ -87,7 +87,7 @@ test('luật tạo bản ghi từ tài liệu chỉ có khi lượt đó yêu c�
     expect(withRules).toContain(FROM_DOCUMENTS_MARKER);
     for (const phrase of [
       'upsert_topic cho mỗi chương', 'mặc định là not_started', 'không bao giờ cao hơn mức tài liệu cho thấy', 'evidence',
-      'upsert_assessment cho mỗi kỳ thi', '"(dự kiến)"', 'Chỉ điền dueDate khi tài liệu ghi một ngày cụ thể',
+      'upsert_assessment cho mỗi kỳ thi', 'tentative: true', 'Chỉ điền dueDate khi tài liệu ghi một ngày cụ thể',
       'upsert_milestone', 'Tối đa 3 create_task', 'Không tạo lại bản ghi đã có', 'Không quá 20 hành động',
     ])
       expect(withRules).toContain(phrase);

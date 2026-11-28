@@ -155,7 +155,7 @@ test('dự án active thiếu next action và milestone được đánh dấu', 
 test('nearestDate: ngày gần nhất trong assessment sắp tới, task chưa xong, milestone chưa xong và hạn của mục', async () => {
   const course = await createArea(db, { kind: 'academic', name: 'Database' }, manual);
   await assessmentService.create(db, { areaId: course.id, title: 'Quiz cũ', dueDate: '2026-11-20' }, manual);
-  await assessmentService.create(db, { areaId: course.id, title: 'Giữa kỳ (dự kiến)', dueDate: '2026-12-04' }, manual);
+  await assessmentService.create(db, { areaId: course.id, title: 'Giữa kỳ', dueDate: '2026-12-04', tentative: true }, manual);
   await assessmentService.create(db, { areaId: course.id, title: 'Cuối kỳ' }, manual);
   await taskService.create(db, { areaId: course.id, title: 'Đã nộp', dueDate: '2026-11-23', status: 'done' }, manual);
 

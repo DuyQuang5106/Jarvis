@@ -153,6 +153,8 @@ export const assessments = pgTable('assessments', {
   weight: real('weight'),
   score: real('score'),
   maxScore: real('max_score'),
+  /** The date is not official yet (M2): shown as "(dự kiến)" next to the title. */
+  tentative: boolean('tentative').notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }).enableRLS();

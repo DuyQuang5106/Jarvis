@@ -110,6 +110,7 @@ export const CreateAssessmentInput = z.object({
     .optional(),
   score: num('Điểm').min(0, { error: 'Điểm không được âm.' }).nullable().optional(),
   maxScore: num('Điểm tối đa').gt(0, { error: 'Điểm tối đa phải lớn hơn 0.' }).nullable().optional(),
+  tentative: z.boolean({ error: 'Dự kiến phải là đúng/sai.' }).optional(),
 });
 export const UpdateAssessmentInput = CreateAssessmentInput.omit({ areaId: true }).partial();
 

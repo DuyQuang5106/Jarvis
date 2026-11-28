@@ -78,6 +78,13 @@
       "when": 1795855509902,
       "tag": "0010_yellow_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795856174465,
+      "tag": "0011_broken_wild_pack",
+      "breakpoints": true
     }
   ]
 }

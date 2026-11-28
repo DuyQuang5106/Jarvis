@@ -79,5 +79,8 @@ test('môn chưa có topic: lời mời → Tạo từ tài liệu → duyệt �
   await ws.getByRole('listitem').filter({ hasText: 'Chương 2' }).getByLabel('Trạng thái').selectOption('practiced');
   await expect(bar).toHaveAttribute('aria-valuetext', '1/3 topic vững');
   await ws.getByRole('tab', { name: 'Assessments' }).click();
-  await expect(ws.getByRole('listitem').filter({ hasText: 'Giữa kỳ (dự kiến)' })).toBeVisible();
+  // The exam is flagged as tentative (M2), not renamed.
+  const exam = ws.getByRole('listitem').filter({ hasText: 'Giữa kỳ' });
+  await expect(exam).toBeVisible();
+  await expect(exam.getByRole('switch', { name: 'Ngày dự kiến (chưa chính thức)' })).toBeChecked();
 });

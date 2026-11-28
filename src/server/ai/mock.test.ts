@@ -129,7 +129,7 @@ test('prompt định hướng hằng ngày: trả một object JSON trong code f
   expect(brief.stale).toBe('Algebra, Database, StewieSAT');
 });
 
-test('Tạo từ tài liệu: đề xuất topic, một assessment "(dự kiến)" và một việc cho đúng mục đang xem, không lặp bản ghi đã có', async () => {
+test('Tạo từ tài liệu: đề xuất topic, một assessment dự kiến và một việc cho đúng mục đang xem, không lặp bản ghi đã có', async () => {
   const areaId = '11111111-1111-4111-8111-111111111111';
   const ask = async (detail: Record<string, unknown>) => {
     const state = { now: { date: '2026-11-26' }, areas: [{ id: areaId, name: 'Algebra', status: 'active' }], details: [{ areaId, name: 'Algebra', topics: [], ...detail }] };
@@ -148,15 +148,15 @@ test('Tạo từ tài liệu: đề xuất topic, một assessment "(dự kiến
   expect(fresh.text).toBe('Đề xuất tạo bản ghi từ tài liệu.');
   expect(fresh.proposal!.actions.map((a) => [a.type, 'title' in a ? a.title : null])).toEqual([
     ['upsert_topic', 'Chương 1'], ['upsert_topic', 'Chương 2'], ['upsert_topic', 'Chương 3'],
-    ['upsert_assessment', 'Giữa kỳ (dự kiến)'], ['create_task', 'Làm bài tập Chương 1'],
+    ['upsert_assessment', 'Giữa kỳ'], ['create_task', 'Làm bài tập Chương 1'],
   ]);
   expect(fresh.proposal!.actions[0]).toMatchObject({ areaId, status: 'familiar', evidence: expect.stringContaining('Tài liệu') });
-  expect(fresh.proposal!.actions[3]).toMatchObject({ areaId, dueDate: '2026-12-10' });
+  expect(fresh.proposal!.actions[3]).toMatchObject({ areaId, dueDate: '2026-12-10', tentative: true });
 
   const again = await ask({
     kind: 'academic',
     topics: [{ id: 'x', title: 'Chương 1', status: 'familiar' }, { id: 'y', title: 'Chương 2', status: 'not_started' }],
-    assessments: [{ title: 'Giữa kỳ (dự kiến)' }],
+    assessments: [{ title: 'Giữa kỳ' }],
   });
   expect(again.proposal!.actions.map((a) => a.type)).toEqual(['upsert_topic', 'create_task']);
 

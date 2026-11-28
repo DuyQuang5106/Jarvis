@@ -112,8 +112,9 @@ const UpsertAssessmentActionSchema = z
     weight: UpdateAssessmentInput.shape.weight,
     score: UpdateAssessmentInput.shape.score,
     maxScore: UpdateAssessmentInput.shape.maxScore,
+    tentative: UpdateAssessmentInput.shape.tentative,
   })
-  .refine((v) => hasUpsertFields(v, ['title', 'dueDate', 'weight', 'score', 'maxScore'], v), {
+  .refine((v) => hasUpsertFields(v, ['title', 'dueDate', 'weight', 'score', 'maxScore', 'tentative'], v), {
     error: 'Tạo assessment cần title; sửa assessment cần ít nhất một trường.',
   });
 

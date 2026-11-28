@@ -3,6 +3,7 @@
 import { useId } from 'react';
 import { createEntityAction, deleteEntityAction, updateEntityAction } from '@/app/(app)/_actions/entities';
 import type { AssessmentRow } from '@/db/schema';
+import { Switch } from '@/components/ui/switch';
 import { AddForm } from './add-form';
 import { shouldSaveDateOnChange } from './date-input';
 import { DeleteButton, Field, InlineTitle, numberOrNull, RowStatus, useRowAction } from './row-controls';
@@ -58,6 +59,12 @@ function AssessmentItem({ assessment: a }: { assessment: AssessmentRow }) {
         <DeleteButton onDelete={() => run(() => deleteEntityAction('assessment', a.id))} />
       </div>
       <RowStatus pending={pending} error={error} />
+      <div className="flex items-center gap-2">
+        <Switch id={`${uid}-t`} checked={a.tentative} onCheckedChange={(v) => update({ tentative: v })} />
+        <label htmlFor={`${uid}-t`} className="min-h-11 flex-1 content-center text-sm">
+          Ngày dự kiến (chưa chính thức)
+        </label>
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <Field id={`${uid}-d`} label="Ngày">
           <SyncedInput
