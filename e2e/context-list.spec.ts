@@ -23,7 +23,8 @@ test('thêm môn, thấy trong danh sách với trạng thái Unknown và nhãn 
   await expect(row).toContainText('Unknown');
   await expect(row).toContainText('Chưa có topic');
   await page.getByRole('tab', { name: 'Projects' }).click();
-  await expect(page.getByText('Mobile Programming')).toHaveCount(0);
+  // Scoped to the page: the sidebar's thread list names every subject.
+  await expect(page.getByRole('main').getByText('Mobile Programming')).toHaveCount(0);
 });
 
 test('tên toàn khoảng trắng bị từ chối ngay trong hộp thoại', async ({ page }) => {

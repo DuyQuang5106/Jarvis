@@ -16,12 +16,13 @@ test('cuộc chat mới có đúng năm prompt gợi ý', async ({ page }) => {
   await expect(page.getByTestId('suggested-prompts').getByRole('button')).toHaveText(['Hôm nay nên làm gì?', 'Đánh giá tuần này', 'Môn nào cần chú ý?', 'Dự án nào đang bị giãn?', 'Cập nhật nhanh']);
 });
 
-test('hỏi về một môn: trả lời từ DB, hiện thời gian thay cho nguồn, cuộc chat vào sidebar (criterion 5)', async ({ page, isMobile }) => {
+test('hỏi về một môn: trả lời từ DB, hiện thời gian thay cho nguồn, ô Chung lên sidebar (criterion 5)', async ({ page, isMobile }) => {
   await page.goto('/chat');
   await send(page, 'Mobile Programming đang ở tình trạng nào?');
   await expect(lastAssistant(page)).toContainText('Mobile Programming=not_started');
   await expect(lastAssistant(page)).toContainText('detail:Mobile Programming');
-  await expect(page).toHaveURL(/\/chat\?c=[0-9a-f-]{36}/);
+  // "Chung" is a thread: its URL stays /chat.
+  await expect(page).toHaveURL(/\/chat$/);
   await expect(lastAssistant(page).getByTestId('reply-stats')).toContainText(/tổng \d+,\d giây/);
   await expect(lastAssistant(page)).not.toContainText('Dựa trên');
   const chatUrl = page.url();
@@ -38,9 +39,11 @@ test('hỏi về một môn: trả lời từ DB, hiện thời gian thay cho ng
   await expect(page).toHaveURL(chatUrl);
   await expect(page.locator('[data-role="user"]')).toHaveText(['Mobile Programming đang ở tình trạng nào?', 'còn Database thì sao?']);
   if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  const recent = page.getByTestId('recent-chats').getByRole('link');
-  await expect(recent).toHaveCount(1);
-  await expect(recent).toHaveText('Mobile Programming đang ở tình trạng nào?');
+  const general = page.getByTestId('threads').getByRole('link').first();
+  await expect(general).toContainText('Chung');
+  // The thread's last line: here the reply to the last question.
+  await expect(general).toContainText('detail:Database');
+  await expect(general).toHaveAttribute('aria-current', 'page');
 });
 
 test('sửa bằng UI rồi mở chat mới vẫn đọc state mới (criterion 6)', async ({ page, isMobile }) => {
@@ -84,7 +87,8 @@ test('provider lỗi: báo rõ, không mất tin nhắn, app vẫn dùng đượ
   await expect(page.getByRole('listitem').first()).toBeVisible();
 });
 
-test('tải lại giữ nguyên hội thoại; đổi tên và xóa cuộc chat', async ({ page, isMobile }) => {
+test('tải lại giữ nguyên hội thoại; xóa cuộc chat cũ trong Lưu trữ', async ({ page, request, isMobile }) => {
+  await resetDb(request, { seed: true, conversations: 1 });
   await page.goto('/chat');
   await send(page, 'xin chào');
   await expect(lastAssistant(page)).toContainText('MOCK_STATE');
@@ -92,12 +96,14 @@ test('tải lại giữ nguyên hội thoại; đổi tên và xóa cuộc chat'
   await expect(page.locator('[data-role="user"]')).toHaveText(['xin chào']);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
   if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  const item = page.getByTestId('recent-chats').getByRole('link', { name: 'xin chào' });
+  await page.getByRole('button', { name: /Lưu trữ · 1 cuộc chat/ }).click();
+  const item = page.getByTestId('recent-chats').getByRole('link', { name: 'Cuộc chat 1' });
   await item.hover();
   await page.getByRole('button', { name: 'Tùy chọn cuộc chat' }).first().click();
   await page.getByRole('menuitem', { name: 'Xóa' }).click();
   await page.getByRole('button', { name: 'Xác nhận xóa' }).click();
-  await expect(page.getByTestId('recent-chats')).not.toContainText('xin chào');
+  // Deleting refreshes the sidebar from the server: slower than a plain click on a dev server.
+  await expect(page.getByTestId('recent-chats')).not.toContainText('Cuộc chat 1', { timeout: 15_000 });
 });
 
 test('composer nằm trong vùng nhìn thấy và không gây zoom', async ({ page }) => {
@@ -117,7 +123,7 @@ test('lỗi giữa chừng: hiện lỗi, bỏ phần trả lời dở, tải l�
   await expect(chatAlert(page)).toContainText('Không gọi được AI');
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(0);
   await expect(page.getByText('Đang trả lời')).toHaveCount(0);
-  await expect(page).toHaveURL(/\/chat\?c=[0-9a-f-]{36}/);
+  await expect(page).toHaveURL(/\/chat$/);
   await page.reload();
   await expect(page.locator('[data-role="user"]')).toHaveText(['MOCK_PARTIAL_ERROR']);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(0);
@@ -173,13 +179,13 @@ test('câu trả lời chạm trần độ dài: báo bị cắt, còn sau khi t
   await expect(lastAssistant(page)).toContainText('bị cắt vì quá dài');
 });
 
-test('đổi tên cuộc chat qua menu, còn sau khi tải lại', async ({ page, isMobile }) => {
+test('đổi tên cuộc chat cũ qua menu trong Lưu trữ, còn sau khi tải lại', async ({ page, request, isMobile }) => {
+  await resetDb(request, { seed: true, conversations: 1 });
   await page.goto('/chat');
-  await send(page, 'xin chào');
-  await expect(lastAssistant(page)).toContainText('MOCK_STATE');
   if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
+  await page.getByRole('button', { name: /Lưu trữ · 1 cuộc chat/ }).click();
   const list = page.getByTestId('recent-chats');
-  await expect(list.getByRole('link', { name: 'xin chào' })).toBeVisible();
+  await expect(list.getByRole('link', { name: 'Cuộc chat 1' })).toBeVisible();
   await list.getByRole('button', { name: 'Tùy chọn cuộc chat' }).first().click();
   await page.getByRole('menuitem', { name: 'Đổi tên' }).click();
   const input = list.getByRole('textbox', { name: 'Tên cuộc chat' });
@@ -188,6 +194,7 @@ test('đổi tên cuộc chat qua menu, còn sau khi tải lại', async ({ page
   await expect(list.getByRole('link', { name: 'Lời chào' })).toBeVisible();
   await page.reload();
   if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
+  await page.getByRole('button', { name: /Lưu trữ · 1 cuộc chat/ }).click();
   await expect(page.getByTestId('recent-chats').getByRole('link', { name: 'Lời chào' })).toBeVisible();
 });
 
@@ -245,4 +252,30 @@ test('scope được giữ trong cuộc chat và gửi kèm mỗi lượt', asyn
   await send(page, 'hai');
   expect((await second).postDataJSON()).toMatchObject({ scope: { mode: 'projects' } });
   await expect(page.locator('[data-role="user"]')).toHaveText(['một', 'hai']);
+});
+
+test('mỗi môn một ô chat: ngữ cảnh khóa vào môn, tin sau vào đúng ô, sidebar đưa ô lên đầu', async ({ page, isMobile }) => {
+  await page.goto('/chat');
+  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
+  await page.getByTestId('threads').getByRole('link', { name: /Database/ }).click();
+  await expect(page).toHaveURL(/\/chat\?area=[0-9a-f-]{36}/);
+  await expect(page.getByTestId('thread-header')).toContainText('Database');
+  await expect(page.getByTestId('thread-scope')).toHaveText('Ngữ cảnh: Database');
+  const sent = page.waitForRequest((r) => r.url().endsWith('/api/chat') && r.method() === 'POST');
+  await send(page, 'tình hình thế nào');
+  const body = (await sent).postDataJSON();
+  expect(body).toMatchObject({ scope: { mode: 'item' }, thread: { areaId: expect.any(String) } });
+  await expect(lastAssistant(page)).toContainText('detail:Database');
+  const url = page.url();
+  await page.reload();
+  await expect(page.locator('[data-role="user"]')).toHaveText(['tình hình thế nào']);
+  await expect(page).toHaveURL(url);
+  // Back in "Chung", the subject's messages are not there.
+  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
+  const links = page.getByTestId('threads').getByRole('link');
+  await expect(links.nth(1)).toContainText('Database');
+  await expect(links.nth(1)).toContainText('detail:Database');
+  await links.first().click();
+  await expect(page).toHaveURL(/\/chat$/);
+  await expect(page.locator('[data-role="user"]')).toHaveCount(0);
 });

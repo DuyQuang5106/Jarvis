@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { CONTEXT_ITEM_MESSAGE } from '@/lib/split-view';
 import type { AreaRow } from '@/db/schema';
 import type { AreaSummary } from '@/server/queries/snapshot';
 import type { AreaDetails, InboxNote } from '@/server/queries/area-details';
@@ -41,6 +42,11 @@ export function ContextView({
   actionMode?: 'tools' | 'json' | 'off';
 }) {
   const { tab, setTab, openItem, item, section, pending } = useContextParams();
+  // Inside "Context + Chat": tell the chat half which subject is open, so it shows that subject's thread.
+  useEffect(() => {
+    if (!item || window.self === window.top) return;
+    window.parent.postMessage({ type: CONTEXT_ITEM_MESSAGE, areaId: item }, window.location.origin);
+  }, [item]);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const kind = TAB_KIND[tab];

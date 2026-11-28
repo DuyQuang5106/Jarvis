@@ -1,5 +1,7 @@
 import type { Db } from '@/db/client';
-import type { MessageRow } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import type { ConversationKind } from '@/db/enums';
+import { conversations, type MessageRow } from '@/db/schema';
 import { APP_TZ, todayIn } from '@/lib/dates';
 import { isFromDocumentsRequest } from '@/lib/from-documents';
 import { firstChars } from '@/lib/utils';
@@ -9,7 +11,7 @@ import { aliasWorkspaceState, resolveProposalAliases } from '../ai/id-aliases';
 import { matchAreas } from '../ai/match-areas';
 import { WEEKLY_REVIEW_MAX_ACTIONS, buildSystemPrompt } from '../ai/prompt';
 import type { AiProvider, ChatMessage, TokenUsage } from '../ai/provider';
-import { AiCapExceededError } from '../errors';
+import { AiCapExceededError, NotFoundError } from '../errors';
 import { ProposalBlockFilter, parseProposal, type ParseProposalResult } from '../proposals/extract';
 import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
 import { createPendingAction, ignoredProposalNotice, skippedActionsNotice, supersedeForMessage, type DroppedProposalReason } from '../proposals/store';
@@ -17,6 +19,8 @@ import { countAiRequest } from '../services/ai-usage';
 import {
   appendMessage,
   createConversation,
+  getOrCreateThread,
+  type ThreadTarget,
   getConversation,
   listMessagesBefore,
   replaceReplies,
@@ -58,7 +62,12 @@ export type TurnInput = {
    * Everything else (aliases, proposal parsing and storing, notices, saving, timing) is the normal turn.
    */
   weeklyReview?: { title: string; weekActivity: string };
+  /** No conversation open yet: the thread ("Chung" or a subject's) the message goes to, created on first use. */
+  thread?: ThreadTarget;
 };
+
+/** Threads live for months: the model gets back only the recent part (the screen still shows everything). */
+export const THREAD_HISTORY_MS = 24 * 60 * 60 * 1000;
 
 /** `maxOutputTokens` of the weekly review turn: the review plus up to 8 rewritten sections. */
 export const WEEKLY_REVIEW_MAX_OUTPUT_TOKENS = 6000;
@@ -110,6 +119,11 @@ export type TurnTimingReport = TurnTiming & { totalMs: number; model?: string };
 
 /** Conversations with a turn in progress in this server process: a second concurrent turn is refused. */
 const inFlight = new Set<string>();
+
+async function conversationKind(db: Db, conversationId: string): Promise<ConversationKind | null> {
+  const [row] = await db.select({ kind: conversations.kind }).from(conversations).where(eq(conversations.id, conversationId));
+  return row?.kind ?? null;
+}
 
 async function loadMessages(db: Db, conversationId: string): Promise<MessageRow[] | null> {
   if (!UUID.test(conversationId)) return null;
@@ -227,6 +241,15 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
   let text = '';
   const weekly = input.weeklyReview ?? null;
   if (weekly && (input.regenerate || input.conversationId)) return yield err(NOT_FOUND);
+  if (!weekly && !input.regenerate && !input.conversationId && input.thread) {
+    // The thread exists from now on; the rest of the turn treats it as the open conversation.
+    try {
+      input = { ...input, conversationId: (await getOrCreateThread(db, input.thread)).id };
+    } catch (e) {
+      if (e instanceof NotFoundError) return yield err(NOT_FOUND);
+      throw e;
+    }
+  }
   if (input.regenerate) {
     if (!input.conversationId) return yield err(NOTHING_TO_RETRY);
     existing = await loadMessages(db, input.conversationId);
@@ -266,7 +289,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
         conversationId = input.conversationId;
         lock(conversationId);
       } else {
-        conversationId = (await createConversation(db, weekly ? weekly.title : firstChars(text, TITLE_LEN))).id;
+        conversationId = (await createConversation(db, weekly ? weekly.title : firstChars(text, TITLE_LEN), weekly ? 'system' : 'legacy')).id;
         lock(conversationId);
       }
       current = await appendMessage(db, conversationId, 'user', text);
@@ -304,7 +327,10 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
 
     // 5. Context.
     const contextStarted = performance.now();
-    const history = await historyForModel(db, before.slice(-HISTORY));
+    // A thread ("Chung", a subject's) keeps only the last day; a one-off conversation keeps its last messages.
+    const kind = await conversationKind(db, conversationId);
+    const recent = kind === 'general' || kind === 'area' ? before.filter((m) => deps.now.getTime() - m.createdAt.getTime() <= THREAD_HISTORY_MS) : before;
+    const history = await historyForModel(db, recent.slice(-HISTORY));
     const ctx = await buildContext(db, {
       message: current.content,
       recentUserMessages: history.filter((m) => m.role === 'user' && m.content !== HIDDEN_HISTORY).map((m) => m.content),

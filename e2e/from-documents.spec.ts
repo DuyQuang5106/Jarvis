@@ -34,11 +34,12 @@ test('môn chưa có topic: lời mời → Tạo từ tài liệu → duyệt �
 
   // The button opens a new conversation scoped to the area and sends the preset command.
   await ws.getByRole('button', { name: 'Tạo từ tài liệu' }).click();
-  await expect(page).toHaveURL(/\/chat\?c=[0-9a-f-]{36}/);
+  // Sent in the subject's own thread.
+  await expect(page).toHaveURL(/\/chat\?area=[0-9a-f-]{36}/);
   await expect(page.locator('[data-role="user"]')).toHaveText([
     'Đọc tài liệu của Algebra và tạo đề xuất: các topic kèm trạng thái, mốc đánh giá, và việc tiếp theo.',
   ]);
-  await expect(page.getByRole('button', { name: 'Algebra' })).toBeVisible(); // the scope selector
+  await expect(page.getByTestId('thread-scope')).toHaveText('Ngữ cảnh: Algebra');
   const card = page.getByTestId('proposal-card');
   for (const label of ['Tạo topic “Chương 1”', 'Tạo topic “Chương 2”', 'Tạo topic “Chương 3”', 'Tạo assessment “Giữa kỳ (dự kiến)”', 'Tạo task “Làm bài tập Chương 1”'])
     await expect(card).toContainText(label);

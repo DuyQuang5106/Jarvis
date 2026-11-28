@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { Db } from '@/db/client';
 import { conversations, messages } from '@/db/schema';
@@ -355,4 +356,41 @@ test('log thời gian vẫn ghi đúng một dòng khi provider lỗi', async ()
   expect(info.mock.calls[0][1]).toMatchObject({ firstTokenMs: null, proposal: 'none' });
   info.mockRestore();
   log.mockRestore();
+});
+
+test('ô chat: "Chung" và mỗi môn một ô, tin nhắn sau vào đúng ô cũ', async () => {
+  const area = await createArea(db, { kind: 'academic', name: 'Algebra', status: 'active' }, manual);
+  const g1 = cid(await turn({ message: 'chào', thread: { general: true } }));
+  const g2 = cid(await turn({ message: 'chào lần nữa', thread: { general: true } }));
+  expect(g2).toBe(g1);
+  const a1 = cid(await turn({ message: 'Algebra học gì', thread: { areaId: area.id }, scope: { mode: 'item', areaId: area.id } }));
+  const a2 = cid(await turn({ message: 'tiếp', thread: { areaId: area.id }, scope: { mode: 'item', areaId: area.id } }));
+  expect(a2).toBe(a1);
+  expect(a1).not.toBe(g1);
+  const convs = await db.select().from(conversations);
+  expect(convs.map((c) => [c.kind, c.title]).sort()).toEqual([['area', 'Algebra'], ['general', 'Chung']]);
+  expect(await turn({ message: 'x', thread: { areaId: '00000000-0000-4000-8000-000000000000' } })).toEqual([{ type: 'error', message: 'Không tìm thấy cuộc trò chuyện.' }]);
+});
+
+/** Moves a conversation's messages two days before NOW, one second apart, keeping their order. */
+async function ageMessages(conversationId: string) {
+  const rows = await db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt, messages.id);
+  for (const [i, m] of rows.entries()) {
+    await db.update(messages).set({ createdAt: new Date(NOW.getTime() - 2 * 86_400_000 + i * 1000) }).where(eq(messages.id, m.id));
+  }
+}
+
+test('H2: ô chat chỉ gửi lại cho AI tin trong 24 giờ; cuộc chat cũ giữ cách cũ', async () => {
+  const seen: StreamRequest[] = [];
+  const spy: AiProvider = { stream: (req) => { seen.push(req); return createMockProvider().stream(req); } };
+  const general = cid(await turn({ message: 'hôm qua tôi học CRC', thread: { general: true } }, spy));
+  // Make the first exchange two days old.
+  await ageMessages(general);
+  await turn({ message: 'hôm nay thì sao', thread: { general: true } }, spy);
+  expect(seen.at(-1)!.messages.map((m) => m.role)).toEqual(['system', 'user']);
+
+  const old = cid(await turn({ message: 'cuộc chat cũ' }, spy));
+  await ageMessages(old);
+  await turn({ conversationId: old, message: 'tiếp' }, spy);
+  expect(seen.at(-1)!.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
 });

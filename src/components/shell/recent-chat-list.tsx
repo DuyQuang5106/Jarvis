@@ -25,18 +25,20 @@ export function RecentChatList({ items: rows, limit }: { items: (RecentChatItem 
   const c = useSearchParams().get('c');
   const openId = pathname === '/chat' ? c : null;
   const touches = useConversationTouches();
-  const items = mergeRecent(rows, touches, limit);
+  // Gone at once on delete; the server list catches up on its next render.
+  const [deleted, setDeleted] = useState<Set<string>>(() => new Set());
+  const items = mergeRecent(rows, touches, limit).filter((i) => !deleted.has(i.id));
   if (items.length === 0) return <p className="px-3 text-sm text-muted-foreground">Chưa có cuộc chat nào.</p>;
   return (
     <ul className="flex flex-col gap-0.5">
       {items.map((item) => (
-        <RecentChatRow key={item.id} item={item} active={item.id === openId} />
+        <RecentChatRow key={item.id} item={item} active={item.id === openId} onDeleted={() => setDeleted((d) => new Set(d).add(item.id))} />
       ))}
     </ul>
   );
 }
 
-function RecentChatRow({ item, active }: { item: RecentChatItem; active: boolean }) {
+function RecentChatRow({ item, active, onDeleted }: { item: RecentChatItem; active: boolean; onDeleted: () => void }) {
   const router = useRouter();
   const onNavigate = useSidebarNavigate();
   const [mode, setMode] = useState<'view' | 'rename' | 'confirm'>('view');
@@ -66,6 +68,7 @@ function RecentChatRow({ item, active }: { item: RecentChatItem; active: boolean
         return;
       }
       forgetConversation(item.id);
+      onDeleted();
       // Deleting the open conversation leaves an empty new chat.
       if (active) router.replace('/chat');
       router.refresh();

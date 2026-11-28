@@ -5,7 +5,13 @@ import type { ContextScope } from '@/server/ai/context-builder';
 import type { TurnEvent } from '@/server/chat/run-turn';
 
 export type ChatStreamStatus = 'idle' | 'streaming' | 'error';
-export type ChatSendInput = { conversationId?: string; message?: string; scope: ContextScope; regenerate?: boolean };
+export type ChatSendInput = {
+  conversationId?: string;
+  message?: string;
+  scope: ContextScope;
+  regenerate?: boolean;
+  thread?: { general: true } | { areaId: string };
+};
 export type ChatStreamHandlers = { onEvent(e: TurnEvent): void };
 
 const NETWORK_ERROR = 'Mất kết nối tới máy chủ. Thử lại.';

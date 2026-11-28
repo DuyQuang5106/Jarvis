@@ -312,10 +312,10 @@ export function WorkspaceView({
     setDocs((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
   }
 
-  /** `Tạo từ tài liệu`: a new conversation scoped to this area, opened with the preset command. */
+  /** `Tạo từ tài liệu`: the preset command, sent in this subject's thread. */
   function startFromDocuments() {
     queueChatPreset({ scope: { mode: 'item', areaId: details.area.id }, message: fromDocumentsMessage(details.area) });
-    router.push('/chat');
+    router.push(`/chat?area=${details.area.id}`);
   }
 
   function handleJumpToSection(target: 'tasks' | 'milestones') {

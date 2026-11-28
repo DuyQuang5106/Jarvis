@@ -47,8 +47,10 @@ test('thẻ định hướng: 3 việc ở đầu Chat, tải lại không sinh 
   await card(page).getByRole('button', { name: 'Bắt đầu việc 1' }).click();
   await expect(page.locator('[data-role="user"]')).toHaveText([`Giúp tôi bắt đầu: Việc 1 cho ${area} (${area})`]);
   await expect(page.locator('[data-role="assistant"]').last()).toContainText('MOCK_STATE');
-  await expect(page).toHaveURL(/\/chat\?c=[0-9a-f-]{36}/);
-  await expect(card(page)).toHaveCount(0);
+  // Sent in "Chung": its URL stays /chat.
+  await expect(page).toHaveURL(/\/chat$/);
+  // The card stays in "Hôm nay", folded away once the conversation has started.
+  await expect(card(page)).toBeHidden();
 });
 
 test('workspace trống: không có thẻ định hướng', async ({ page, request }) => {

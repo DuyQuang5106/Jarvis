@@ -1,6 +1,6 @@
 'use client';
 
-import { MessageSquare, PanelLeftClose, PanelLeftOpen, Pin, PinOff, SquarePenIcon, Table2 } from 'lucide-react';
+import { MessageSquare, PanelLeftClose, PanelLeftOpen, Pin, PinOff, Table2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
@@ -61,21 +61,9 @@ export function SidebarBody({ onNavigate, recentChats }: { onNavigate?: () => vo
             );
           })}
         </nav>
-        <section aria-label="Recent chats" className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="px-3 text-xs font-medium uppercase text-muted-foreground">Recent chats</h2>
-            <Link
-              href="/chat"
-              onClick={onNavigate}
-              className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-            >
-              <SquarePenIcon className="size-4" aria-hidden />
-              Chat mới
-            </Link>
-          </div>
-          <div data-testid="recent-chats" className="mt-1 min-h-0 flex-1 overflow-y-auto">
-            {recentChats}
-          </div>
+        <section aria-label="Ô chat" className="flex min-h-0 flex-1 flex-col">
+          <h2 className="px-3 pb-1 text-xs font-medium uppercase text-muted-foreground">Ô chat</h2>
+          {recentChats}
         </section>
         <div className="flex items-center justify-between gap-2">
           <SettingsDialog />

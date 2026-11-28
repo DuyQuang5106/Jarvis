@@ -79,8 +79,11 @@ export function rememberContextUrl(url: string) {
   }
 }
 
-/** The remembered Context view (once), else the list. Only same-site /context paths are accepted. */
-export function takeContextUrl(): string {
+/** Posted by the Context frame to the chat page when a subject is opened on the left. */
+export const CONTEXT_ITEM_MESSAGE = 'jarvis:context-item';
+
+/** The remembered Context view (once); else the open thread's subject, or the list. Only /context paths count. */
+export function takeContextUrl(areaId: string | null = null): string {
   try {
     const url = sessionStorage.getItem(CONTEXT_URL_KEY);
     sessionStorage.removeItem(CONTEXT_URL_KEY);
@@ -88,5 +91,5 @@ export function takeContextUrl(): string {
   } catch {
     // Fall through.
   }
-  return '/context';
+  return areaId ? `/context?item=${areaId}` : '/context';
 }

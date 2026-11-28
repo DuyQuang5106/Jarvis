@@ -46,6 +46,13 @@ export type PendingSource = (typeof PENDING_SOURCES)[number];
 export const REMINDER_STATUSES = ['pending', 'sent', 'done'] as const;
 export type ReminderStatus = (typeof REMINDER_STATUSES)[number];
 
+/**
+ * `general`: the one "Chung" thread. `area`: the one thread of a subject or project. `system`: written by Jarvis
+ * itself (weekly review). `legacy`: conversations from before threads (shown under "Lưu trữ").
+ */
+export const CONVERSATION_KINDS = ['general', 'area', 'system', 'legacy'] as const;
+export type ConversationKind = (typeof CONVERSATION_KINDS)[number];
+
 export const MESSAGE_ROLES = ['user', 'assistant'] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
 

@@ -54,8 +54,9 @@ test('buổi không có hoạt động: câu hỏi → trả lời → tin nhắ
   await expect(page.getByTestId('proposal-card')).toContainText('Algebra');
   await expect(card(page)).toHaveCount(0);
 
+  // Reopened: "Chung" now holds the exchange, and the answered check-in does not come back.
   await openChat(page);
-  await expect(page.getByTestId('suggested-prompts')).toBeVisible();
+  await expect(page.locator('[data-role="user"]').first()).toBeVisible();
   await page.waitForLoadState('networkidle');
   await expect(card(page)).toHaveCount(0);
 });
@@ -90,8 +91,9 @@ test('buổi có hoạt động: tóm tắt → tải lại không sinh lại �
   await expect(proposal).toContainText('Algebra');
   await expect(proposal.getByRole('button', { name: 'Approve' })).toBeVisible();
 
+  // Reopened: "Chung" now holds the exchange, and the answered check-in does not come back.
   await openChat(page);
-  await expect(page.getByTestId('suggested-prompts')).toBeVisible();
+  await expect(page.locator('[data-role="user"]').first()).toBeVisible();
   await expect(card(page)).toHaveCount(0);
 });
 
@@ -103,8 +105,9 @@ test('Bỏ qua thì không hỏi lại; tắt check-in trong Settings thì khôn
   await card(page).getByRole('button', { name: 'Bỏ qua' }).click();
   expect((await mark).status()).toBe(204);
   await expect(card(page)).toHaveCount(0);
+  // Reopened: a skipped check-in does not come back.
   await openChat(page);
-  await expect(page.getByTestId('suggested-prompts')).toBeVisible();
+  await expect(page.getByPlaceholder('Nhắn gì đó…')).toBeVisible();
   await expect(card(page)).toHaveCount(0);
 
   // A slot that ends later brings a new card, unless check-ins are turned off.

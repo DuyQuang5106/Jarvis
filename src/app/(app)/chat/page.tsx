@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
-import { ChatView, type ChatMessageView } from '@/components/chat/chat-view';
+import { ChatView, type ChatMessageView, type ChatThread } from '@/components/chat/chat-view';
 import { ChatWithContext } from '@/components/chat/context-side-panel';
 import { getDb } from '@/db/client';
 import type { MessageRow } from '@/db/schema';
@@ -12,7 +12,7 @@ import { getDailyBrief } from '@/server/brief/daily-brief';
 import { getPendingCheckin, loadCheckinConfig } from '@/server/checkin/checkin';
 import { getWeeklyReviewCard } from '@/server/review/weekly-review';
 import { getPortfolioSnapshot } from '@/server/queries/snapshot';
-import { getConversation } from '@/server/services/conversations';
+import { findAreaThread, findGeneralThread, getConversation } from '@/server/services/conversations';
 import { dueReminders } from '@/server/reminders/reminders';
 import { requestNow } from '@/server/request-now';
 
@@ -24,7 +24,7 @@ export const maxDuration = 60;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type SearchParams = Promise<{ c?: string | string[] }>;
+type SearchParams = Promise<{ c?: string | string[]; area?: string | string[] }>;
 
 export default function ChatPage({ searchParams }: { searchParams: SearchParams }) {
   // The page checks the owner itself: its segment can be fetched without running the layout's gate.
@@ -50,30 +50,44 @@ function toView(m: MessageRow): ChatMessageView | null {
 async function ChatContent({ searchParams }: { searchParams: SearchParams }) {
   await connection(); // request-time only: never read the session or the DB during `next build`
   await requireOwner();
-  const { c } = await searchParams;
+  const { c, area } = await searchParams;
   const id = typeof c === 'string' && UUID.test(c) ? c : null;
+  const areaId = !id && typeof area === 'string' && UUID.test(area) ? area : null;
   const db = await getDb();
   const now = new Date();
   const today = todayIn(APP_TZ, now);
-  // Only what is already stored: generating the brief and the check-in summary is left to the cards, so the
-  // page never waits for the AI. The check-in clock can be set by E2E runs (requestNow).
-  const clock = id ? null : requestNow(await headers());
-  const [found, snapshot, brief, checkin, weeklyReview, reminders] = await Promise.all([
-    id ? getConversation(db, id) : null,
-    getPortfolioSnapshot(db, now),
+  const snapshot = await getPortfolioSnapshot(db, now);
+
+  // Which conversation: `?c=` (any, an archived one included); `?area=` the subject's thread; else "Chung".
+  const areaRow = areaId ? snapshot.areas.find((a) => a.id === areaId) ?? null : null;
+  const conversationId =
+    id ?? (areaRow ? (await findAreaThread(db, areaRow.id))?.id ?? null : areaId ? null : (await findGeneralThread(db))?.id ?? null);
+  const found = conversationId ? await getConversation(db, conversationId) : null;
+  const kind = found?.conversation.kind ?? (areaRow ? 'area' : areaId || id ? null : 'general');
+  const threadArea = kind === 'area' ? (areaRow ?? snapshot.areas.find((a) => a.id === found?.conversation.areaId) ?? null) : null;
+  const thread: ChatThread | null =
+    kind === 'general' ? { kind: 'general' } : kind === 'area' && threadArea ? { kind: 'area', areaId: threadArea.id, name: threadArea.name } : null;
+
+  // The day's cards (reminders, check-in, weekly review, brief) belong to "Chung". Only what is already stored:
+  // generating the brief and the check-in summary is left to the cards, so the page never waits for the AI.
+  // The clock can be set by E2E runs (requestNow).
+  const clock = thread?.kind === 'general' ? requestNow(await headers()) : null;
+  const [brief, checkin, weeklyReview, reminders] = await Promise.all([
     getDailyBrief(db, today),
     clock ? loadCheckinConfig(db).then((cfg) => getPendingCheckin(db, clock, cfg)) : null,
     clock ? getWeeklyReviewCard(db, clock, APP_TZ) : null,
     clock ? dueReminders(db, clock) : [],
   ]);
   return (
-    <ChatWithContext>
+    <ChatWithContext contextItem={thread?.kind === 'area' ? thread.areaId : null}>
       <ChatView
+        key={id ?? (areaId ? `area:${areaId}` : 'general')}
         conversation={found ? { id: found.conversation.id, title: found.conversation.title } : null}
         messages={(found?.messages ?? []).map(toView).filter((m) => m !== null)}
         areas={snapshot.areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind, aiExcluded: a.aiExcluded }))}
         requestedId={typeof c === 'string' ? c : null}
-        brief={brief}
+        thread={thread}
+        brief={clock ? brief : null}
         checkin={checkin}
         weeklyReview={weeklyReview}
         today={today}

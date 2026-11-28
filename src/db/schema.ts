@@ -10,6 +10,7 @@ import {
   primaryKey,
   real,
   text,
+  uniqueIndex,
   time,
   timestamp,
   uuid,
@@ -35,6 +36,7 @@ import {
   TASK_STATUSES,
   TOPIC_STATUSES,
   REMINDER_STATUSES,
+  CONVERSATION_KINDS,
 } from './enums';
 
 const id = () => uuid('id').primaryKey().defaultRandom();
@@ -189,12 +191,23 @@ export const activityLogs = pgTable(
   ],
 ).enableRLS();
 
-export const conversations = pgTable('conversations', {
-  id: id(),
-  title: text('title').notNull(),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-}).enableRLS();
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: id(),
+    title: text('title').notNull(),
+    /** Rows from before threads (and code still running during a deploy) default to `legacy`. */
+    kind: text('kind', { enum: CONVERSATION_KINDS }).notNull().default('legacy'),
+    areaId: uuid('area_id').references(() => areas.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // One "Chung" thread, and one thread per subject.
+    uniqueIndex('conversations_one_general_idx').on(t.kind).where(sql`${t.kind} = 'general'`),
+    uniqueIndex('conversations_one_per_area_idx').on(t.areaId).where(sql`${t.kind} = 'area'`),
+  ],
+).enableRLS();
 
 export const messages = pgTable(
   'messages',

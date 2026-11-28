@@ -1,6 +1,7 @@
 'use client';
 
 import { RotateCcwIcon } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import type { ReminderView } from '@/server/reminders/reminders';
 import type { ChatMessageView } from './message-bubble';
 import { MessageList } from './message-list';
 import { touchConversation } from './recent-chats-store';
+import { touchThread } from './thread-events';
 import { ScopeSelector, type ChatAreaOption } from './scope-selector';
 import { SuggestedPrompts } from './suggested-prompts';
 import { useChatStream, type ChatSendInput } from './use-chat-stream';
@@ -28,6 +30,12 @@ export type { ChatAreaOption } from './scope-selector';
 export type { ChatMessageView } from './message-bubble';
 
 const AUTO: ContextScope = { mode: 'auto' };
+
+/** The thread this view shows: "Chung", a subject's (its context is that subject), or null for an archived chat. */
+export type ChatThread = { kind: 'general' } | { kind: 'area'; areaId: string; name: string };
+
+const scopeOf = (thread: ChatThread | null): ContextScope => (thread?.kind === 'area' ? { mode: 'item', areaId: thread.areaId } : AUTO);
+const threadKey = (thread: ChatThread) => (thread.kind === 'area' ? thread.areaId : 'general');
 /** Same cut as the server's title of a new conversation (run-turn). */
 const TITLE_LEN = 60;
 
@@ -52,7 +60,9 @@ export function ChatView({
   weeklyReview,
   today,
   reminders = [],
+  thread = null,
 }: {
+  thread?: ChatThread | null;
   /** Reminders whose time has come (shown on a new conversation). */
   reminders?: ReminderView[];
   conversation: { id: string; title: string } | null;
@@ -75,6 +85,7 @@ export function ChatView({
   const streaming = stream.status === 'streaming';
 
   const [conversationId, setConversationId] = useState<string | null>(conversation?.id ?? null);
+  const conversationIdRef = useRef<string | null>(conversation?.id ?? null);
   // Recent chats title: the server's, or (a new conversation) the first message cut like the server cuts it.
   // Later turns and regenerate never change it.
   const [title, setTitle] = useState<string | null>(conversation?.title ?? null);
@@ -83,11 +94,12 @@ export function ChatView({
   // Transient status (`Đang đọc N tài liệu…`) for the draft until its first text; never saved.
   const [draftStatus, setDraftStatus] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [scope, setScope] = useState<ContextScope>(AUTO);
+  const [scope, setScope] = useState<ContextScope>(scopeOf(thread));
   const [input, setInput] = useState('');
   const [pinKey, setPinKey] = useState(0);
   // Bumped by `Tổng kết tuần này`: the weekly review card reviews the current week.
   const [manualReview, setManualReview] = useState(0);
+  const [todayOpen, setTodayOpen] = useState(initialMessages.length === 0 || reminders.length > 0 || checkin !== null);
   // Bumped whenever the view switches conversation; events of an older turn are ignored.
   const [generation, setGeneration] = useState(0);
   const generationRef = useRef(0);
@@ -101,7 +113,7 @@ export function ChatView({
     setDraft(null);
     setDraftStatus(null);
     setNotice(null);
-    setScope(AUTO);
+    setScope(scopeOf(thread));
     setGeneration((g) => g + 1);
   }
 
@@ -151,11 +163,18 @@ export function ChatView({
           case 'meta': {
             metaSeen = true;
             setConversationId(e.conversationId);
-            // Recent chats: a new conversation appears, an existing one moves up (the server title wins).
+            conversationIdRef.current = e.conversationId;
+            if (pendingUserId) setMessages((ms) => ms.map((m) => (m.id === pendingUserId ? { ...m, id: e.userMessageId } : m)));
+            if (thread) {
+              // A thread keeps its URL (`/chat`, `/chat?area=`); the sidebar moves it up with its last line.
+              const line = body.message?.trim();
+              if (line) touchThread({ key: threadKey(thread), conversationId: e.conversationId, lastMessage: line, at: new Date().toISOString() });
+              break;
+            }
+            // Archived chat: it moves up in "Lưu trữ" (the server title wins).
             const t = title ?? firstChars(body.message?.trim() || messages.find((m) => m.role === 'user')?.content || '', TITLE_LEN);
             setTitle(t);
             touchConversation(e.conversationId, t);
-            if (pendingUserId) setMessages((ms) => ms.map((m) => (m.id === pendingUserId ? { ...m, id: e.userMessageId } : m)));
             if (new URLSearchParams(window.location.search).get('c') !== e.conversationId) {
               // Not a navigation: the view (and this stream) stays mounted. `null` data lets Next sync its
               // router (useSearchParams, later refreshes) to the new URL.
@@ -176,6 +195,8 @@ export function ChatView({
             break;
           case 'done':
             replaced.current = null;
+            // The sidebar shows a thread's last line: now the reply.
+            if (thread && text.trim()) touchThread({ key: threadKey(thread), conversationId: conversationIdRef.current ?? '', lastMessage: text.trim(), at: new Date().toISOString() });
             setDraft(null);
             setDraftStatus(null);
             setMessages((ms) => [
@@ -219,7 +240,16 @@ export function ChatView({
     const id = localId();
     setMessages((ms) => [...ms, { id, role: 'user', content: text }]);
     setInput('');
-    void runTurn({ conversationId: conversationId ?? undefined, message: text, scope }, id);
+    // The conversation takes over: fold the day's cards unless a reminder still waits.
+    if (reminders.length === 0) setTodayOpen(false);
+    void runTurn(sendBody(text, scope), id);
+  }
+
+  /** A new message: to the open conversation, or (none yet) to this view's thread, which the server creates. */
+  function sendBody(text: string, s: ContextScope): ChatSendInput {
+    if (conversationId) return { conversationId, message: text, scope: s };
+    if (thread) return { message: text, scope: s, thread: thread.kind === 'area' ? { areaId: thread.areaId } : { general: true } };
+    return { message: text, scope: s };
   }
 
   // A message queued by another screen (Context's `Tạo từ tài liệu`) opens this new conversation with its
@@ -228,9 +258,11 @@ export function ChatView({
   // aborted before this one starts.
   function startPreset(preset: ChatPreset) {
     const id = localId();
-    setScope(preset.scope);
-    setMessages([{ id, role: 'user', content: preset.message }]);
-    void runTurn({ message: preset.message, scope: preset.scope }, id);
+    // A subject's thread keeps its own context; elsewhere the preset's scope applies.
+    const s = thread?.kind === 'area' ? scope : preset.scope;
+    if (thread?.kind !== 'area') setScope(preset.scope);
+    setMessages((ms) => [...ms, { id, role: 'user', content: preset.message }]);
+    void runTurn(sendBody(preset.message, s), id);
   }
   useEffect(() => {
     if (urlId !== null) return;
@@ -280,9 +312,44 @@ export function ChatView({
 
   const missing = urlId !== null && !stale && conversation === null && conversationId === null;
 
+  // The day's cards live in "Chung" (the page passes none elsewhere): inline on an empty thread, else folded
+  // under "Hôm nay" above the transcript.
+  const todayCards = thread?.kind === 'general' ? (
+    <>
+      <ReminderCards initial={reminders} />
+      <WeeklyReviewCard initial={weeklyReview} manualRequest={manualReview} />
+      {checkin && (
+        <CheckinCard key={checkin.slots.map((s) => `${s.day}:${s.slot}`).join(',')} initial={checkin} onSend={sendMessage} disabled={streaming} />
+      )}
+      {/* Nothing the AI may read: no card, and no request for one. */}
+      {(brief || areas.some((a) => !a.aiExcluded)) && <DailyBriefCard initial={brief} today={today} onStart={sendMessage} disabled={streaming} />}
+    </>
+  ) : null;
+
   return (
     <div className="absolute inset-0 flex flex-col">
-      <h1 className="sr-only">Chat</h1>
+      <h1 className="sr-only">{thread?.kind === 'area' ? `Chat · ${thread.name}` : thread ? 'Chat · Chung' : 'Chat'}</h1>
+      {thread?.kind === 'area' && (
+        <div data-testid="thread-header" className="flex min-h-11 items-center gap-3 border-b px-4 pr-44 text-sm">
+          <span className="min-w-0 truncate font-medium">{thread.name}</span>
+          <Link href={`/context?item=${thread.areaId}`} className="shrink-0 text-primary underline-offset-4 hover:underline">
+            Xem môn
+          </Link>
+        </div>
+      )}
+      {todayCards && (
+        // One place for the day's cards, so they stay mounted (and keep what was answered) when the first message
+        // arrives. Open while the thread is empty or something is waiting (a reminder, a check-in).
+        <details
+          data-testid="today-cards"
+          open={todayOpen}
+          onToggle={(e) => setTodayOpen(e.currentTarget.open)}
+          className="border-b px-4 py-1 text-sm"
+        >
+          <summary className="flex min-h-11 cursor-pointer items-center text-muted-foreground">Hôm nay: nhắc việc, check-in, gợi ý</summary>
+          <div className="mx-auto flex max-h-[45dvh] w-full max-w-xl flex-col items-center gap-4 overflow-y-auto pb-3 text-center">{todayCards}</div>
+        </details>
+      )}
       <MessageList
         messages={messages}
         draft={draft}
@@ -293,15 +360,6 @@ export function ChatView({
           // Stale props (see above) are about to be replaced: no prompts to click in the meantime.
           !stale && (
             <div className="m-auto flex w-full max-w-xl flex-col items-center gap-4 py-4 text-center">
-              <ReminderCards initial={reminders} />
-              <WeeklyReviewCard initial={weeklyReview} manualRequest={manualReview} />
-              {checkin && (
-                <CheckinCard key={checkin.slots.map((s) => `${s.day}:${s.slot}`).join(',')} initial={checkin} onSend={sendMessage} disabled={streaming} />
-              )}
-              {/* Nothing the AI may read: no card, and no request for one. */}
-              {(brief || areas.some((a) => !a.aiExcluded)) && (
-                <DailyBriefCard initial={brief} today={today} onStart={sendMessage} disabled={streaming} />
-              )}
               {missing && <p className="text-sm text-muted-foreground">Không tìm thấy cuộc chat này. Bắt đầu cuộc chat mới bên dưới.</p>}
               <p className="text-lg font-medium">Hôm nay mình giúp gì được?</p>
               <SuggestedPrompts onPick={sendMessage} disabled={streaming} />
@@ -321,7 +379,13 @@ export function ChatView({
         onSubmit={() => sendMessage(input)}
         onStop={stop}
         streaming={streaming}
-        toolbar={<ScopeSelector scope={scope} areas={areas} onChange={setScope} />}
+        toolbar={
+          thread?.kind === 'area' ? (
+            <span data-testid="thread-scope" className="flex min-h-11 items-center px-2 text-sm text-muted-foreground">Ngữ cảnh: {thread.name}</span>
+          ) : (
+            <ScopeSelector scope={scope} areas={areas} onChange={setScope} />
+          )
+        }
       />
     </div>
   );

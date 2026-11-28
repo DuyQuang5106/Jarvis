@@ -89,7 +89,22 @@ test('duyệt đề xuất trong chat thì Context bên cạnh tải lại', asy
   await card.getByRole('button', { name: 'Approve' }).click();
   await expect(card).toContainText('Đã áp dụng');
   // A reload drops the marker set on the old document.
-  await expect.poll(() => frame.locator('body').evaluate(() => (window as unknown as { marker?: number }).marker ?? null)).toBeNull();
+  await expect
+    .poll(() => frame.locator('body').evaluate(() => (window as unknown as { marker?: number }).marker ?? null).catch(() => 'reloading'))
+    .toBeNull();
+});
+
+test('Context + Chat: mở một môn bên trái thì Chat bên phải chuyển sang ô của môn đó', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Chỉ có trên màn hình rộng');
+  await page.goto('/chat');
+  await page.getByRole('button', { name: 'Context bên cạnh' }).click();
+  const frame = page.frameLocator('iframe[title="Context"]');
+  await frame.getByRole('listitem').filter({ hasText: 'Database' }).first().click();
+  await expect(page).toHaveURL(/\/chat\?area=[0-9a-f-]{36}/);
+  await expect(page.getByTestId('thread-header')).toContainText('Database');
+  await expect(page.getByTestId('thread-scope')).toHaveText('Ngữ cảnh: Database');
+  // The left side stays on that subject.
+  await expect(frame.getByRole('dialog', { name: 'Database' })).toBeVisible();
 });
 
 test('điện thoại: không có Context bên cạnh', async ({ page, isMobile }) => {

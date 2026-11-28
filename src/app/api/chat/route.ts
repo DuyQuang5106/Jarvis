@@ -19,6 +19,7 @@ const bodySchema = z.object({
     z.object({ mode: z.literal('item'), areaId: z.uuid() }),
   ]),
   regenerate: z.boolean().optional(),
+  thread: z.union([z.object({ general: z.literal(true) }), z.object({ areaId: z.uuid() })]).optional(),
 });
 
 const badRequest = () => Response.json({ error: 'bad_request' }, { status: 400 });
