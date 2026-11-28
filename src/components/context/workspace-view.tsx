@@ -1,6 +1,6 @@
 'use client';
 
-import { MenuIcon, SearchIcon, XIcon } from 'lucide-react';
+import { FolderTreeIcon, MenuIcon, SearchIcon, SlidersHorizontalIcon, XIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition, type ComponentProps, type ReactNode } from 'react';
 import {
@@ -35,6 +35,7 @@ import { DocSearchDialog } from './doc-search-dialog';
 import { DocVersionsDialog } from './doc-versions-dialog';
 import { FileViewer } from './file-viewer';
 import { FolderExplorer } from './folder-explorer';
+import { SideRail } from './side-rail';
 import { MilestoneList } from './milestone-list';
 import { OperationalForm } from './operational-form';
 import { OverviewDirtyContext } from './overview-form';
@@ -476,9 +477,15 @@ export function WorkspaceView({
 
       {/* Desktop 3-column layout / Mobile single-pane */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="hidden w-72 shrink-0 overflow-y-auto border-r bg-muted/20 md:block">
+        <SideRail
+          id="explorer"
+          side="left"
+          label="Tài liệu"
+          icon={<FolderTreeIcon className="size-4" />}
+          className="hidden w-72 shrink-0 overflow-y-auto border-r bg-muted/20 md:block"
+        >
           {explorerNode}
-        </aside>
+        </SideRail>
 
         <main
           className={`min-h-0 min-w-0 flex-1 flex-col overflow-y-auto p-3 md:flex md:p-5 ${
@@ -488,13 +495,17 @@ export function WorkspaceView({
           {editorNode}
         </main>
 
-        <aside
+        <SideRail
+          id="ops"
+          side="right"
+          label="Vận hành"
+          icon={<SlidersHorizontalIcon className="size-4" />}
           className={`min-h-0 w-full shrink-0 flex-col border-l bg-background md:flex md:w-[25rem] lg:w-[28rem] ${
             mobilePane === 'ops' ? 'flex' : 'hidden'
           }`}
         >
           {operationalPanel}
-        </aside>
+        </SideRail>
       </div>
 
       {/* Mobile Explorer Sheet */}
