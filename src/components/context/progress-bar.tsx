@@ -20,7 +20,7 @@ export function ProgressBar({
   const { done, total } = progress;
   const bar = (
     <span className="block h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/15">
-      <span className="block h-full rounded-full bg-primary" style={{ width: `${(done / total) * 100}%` }} />
+      <span className="block h-full rounded-full bg-progress" style={{ width: `${(done / total) * 100}%` }} />
     </span>
   );
   return (

@@ -54,8 +54,8 @@ function StateBar({ area, metrics }: { area: AreaSummary; metrics: AreaMetrics }
   return (
     <span data-testid="progress" className="flex min-w-0 items-center gap-2 text-sm">
       <span aria-hidden data-testid="progress-bar" className="relative block h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/15">
-        <span className={cn('absolute inset-y-0 left-0 rounded-full', project ? 'bg-primary' : 'bg-primary/35')} style={{ width: `${(p.covered / p.total) * 100}%` }} />
-        {!project && <span className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${(p.masteryPoints / p.total) * 100}%` }} />}
+        <span className={cn('absolute inset-y-0 left-0 rounded-full', project ? 'bg-progress' : 'bg-progress/35')} style={{ width: `${(p.covered / p.total) * 100}%` }} />
+        {!project && <span className="absolute inset-y-0 left-0 rounded-full bg-progress" style={{ width: `${(p.masteryPoints / p.total) * 100}%` }} />}
       </span>
       <span className="shrink-0 tabular-nums text-muted-foreground">{label}</span>
     </span>
@@ -63,9 +63,9 @@ function StateBar({ area, metrics }: { area: AreaSummary; metrics: AreaMetrics }
 }
 
 const LEVEL: Record<TopicStatus, { label: string; dot: string }> = {
-  confident: { label: 'Vững', dot: 'bg-primary border-primary' },
-  practiced: { label: 'Đã luyện', dot: 'bg-primary/60 border-primary/60' },
-  familiar: { label: 'Đã học', dot: 'bg-primary/25 border-primary/40' },
+  confident: { label: 'Vững', dot: 'bg-progress border-progress' },
+  practiced: { label: 'Đã luyện', dot: 'bg-progress/60 border-progress/60' },
+  familiar: { label: 'Đã học', dot: 'bg-progress/25 border-progress/40' },
   not_started: { label: 'Chưa học', dot: 'bg-transparent border-foreground/40' },
 };
 
@@ -110,7 +110,7 @@ function GlancePanel({ area, glance, onOpen }: { area: AreaSummary; glance: Area
                   {count && (
                     <div className="flex items-center gap-2" data-testid="task-count">
                       <span aria-hidden className="relative block h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/15">
-                        <span className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${(Math.min(t.progressDone!, t.progressTotal!) / t.progressTotal!) * 100}%` }} />
+                        <span className="absolute inset-y-0 left-0 rounded-full bg-progress" style={{ width: `${(Math.min(t.progressDone!, t.progressTotal!) / t.progressTotal!) * 100}%` }} />
                       </span>
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
                     </div>
