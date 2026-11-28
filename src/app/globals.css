@@ -139,7 +139,8 @@
 
 /* Context shown beside the chat (ChatWithContext) runs in a frame: no app navigation inside it. */
 html[data-embedded] .app-sidebar,
-html[data-embedded] .app-mobile-header {
+html[data-embedded] .app-mobile-header,
+html[data-embedded] .app-embedded-hide {
   display: none !important;
 }
 

@@ -1,9 +1,11 @@
 'use client';
 
-import { SearchIcon } from 'lucide-react';
+import { MessageSquare, SearchIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { rememberContextUrl, setSplitOpen } from '@/lib/split-view';
 import { AddAreaDialog } from './add-area-dialog';
 import { QuickCapture } from './quick-capture';
 import type { TabId } from './use-context-params';
@@ -21,11 +23,22 @@ export function ContextHeader({
   onQuery: (q: string) => void;
   onSearchDocs: () => void;
 }) {
+  const router = useRouter();
+  // Opens "Context + Chat" with this very view on the left (wide screens; hidden inside the split's own frame).
+  const openWithChat = () => {
+    rememberContextUrl(window.location.pathname + window.location.search);
+    setSplitOpen(true);
+    router.push('/chat');
+  };
   return (
     <header className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Context</h1>
         <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" className="app-embedded-hide hidden min-h-11 gap-1.5 px-3 lg:inline-flex" onClick={openWithChat}>
+            <MessageSquare className="size-4" />
+            Chat bên cạnh
+          </Button>
           <Button type="button" variant="outline" className="min-h-11 gap-1.5 px-3" onClick={onSearchDocs}>
             <SearchIcon className="size-4" />
             Tìm tài liệu
