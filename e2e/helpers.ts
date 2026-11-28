@@ -15,6 +15,12 @@ export async function resetDb(
     weeklyReview?: boolean;
     activity?: { text: string; at: string }[];
     documents?: { area: string; title: string; body: string }[];
+    records?: {
+      area: string;
+      topics?: { title: string; status: 'not_started' | 'familiar' | 'practiced' | 'confident' }[];
+      tasks?: { title: string; dueInDays?: number; progressDone?: number; progressTotal?: number }[];
+      assessments?: { title: string; dueInDays: number }[];
+    }[];
   } = {},
 ): Promise<void> {
   const res = await request.post('/api/test/reset', { data: opts });

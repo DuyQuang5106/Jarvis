@@ -56,7 +56,8 @@ test('môn chưa có topic: lời mời → Tạo từ tài liệu → duyệt �
   // Back in Context: a bar with its count, the tentative exam and its countdown.
   await page.goto('/context');
   await expect(row(page).getByTestId('progress-bar')).toBeVisible();
-  await expect(row(page).getByTestId('progress')).toContainText('0/3 topic vững');
+  // Studied 1 of 3, mastered none: two numbers, never one blended percentage.
+  await expect(row(page).getByTestId('progress')).toContainText('Học 1/3 · Thành thạo 0/3');
   await expect(row(page).getByTestId('progress-empty')).toHaveCount(0);
   await expect(row(page).getByTestId('countdown')).toHaveText('Thi sau 14 ngày · Giữa kỳ (dự kiến)');
   await expect(row(page)).not.toContainText('%');

@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import type { AreaRow as ArchivedArea } from '@/db/schema';
 import { cn } from '@/lib/utils';
 import { AREA_SORT_LABEL, sortByAttention, type AreaSort } from '@/lib/progress';
+import type { AreaGlance, AreaMetrics } from '@/server/queries/area-metrics';
 import type { AreaSummary } from '@/server/queries/snapshot';
 import { AreaRow } from './area-row';
 import { NATIVE_SELECT } from './styles';
@@ -17,7 +18,11 @@ export function AreaList({
   kindLabel,
   searching,
   onOpen,
+  metrics = {},
+  glance = {},
 }: {
+  metrics?: Record<string, AreaMetrics>;
+  glance?: Record<string, AreaGlance>;
   areas: AreaSummary[];
   archived: ArchivedArea[];
   kindLabel: 'môn học' | 'dự án';
@@ -30,7 +35,12 @@ export function AreaList({
   const sortId = useId();
   const [sort, setSort] = useState<AreaSort>('attention');
   // `areas` arrives in the server's order (priority, then name): that is the `Ưu tiên` order.
-  const ordered = useMemo(() => (sort === 'attention' ? sortByAttention(areas) : areas), [areas, sort]);
+  // "Cần chú ý": off track, then at risk, then the usual order (nearest date, longest without update).
+  const ordered = useMemo(() => {
+    if (sort !== 'attention') return areas;
+    const rank = (a: AreaSummary) => ({ off_track: 0, at_risk: 1 } as Record<string, number>)[metrics[a.id]?.health?.level ?? ''] ?? 2;
+    return sortByAttention(areas).sort((a, b) => rank(a) - rank(b));
+  }, [areas, sort, metrics]);
 
   function restore(id: string) {
     setError(null);
@@ -60,7 +70,7 @@ export function AreaList({
       {areas.length > 0 ? (
         <ul aria-label="Danh sách mục" className="space-y-2">
           {ordered.map((a) => (
-            <AreaRow key={a.id} area={a} onOpen={onOpen} />
+            <AreaRow key={a.id} area={a} metrics={metrics[a.id]} glance={glance[a.id]} onOpen={onOpen} />
           ))}
         </ul>
       ) : (

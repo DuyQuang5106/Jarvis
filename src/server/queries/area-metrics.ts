@@ -1,4 +1,4 @@
-import { and, gte, isNull, ne } from 'drizzle-orm';
+import { and, asc, gte, isNull, ne } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import type { MilestoneStatus, TaskStatus, TopicStatus } from '@/db/enums';
 import { TOPIC_STATUSES } from '@/db/enums';
@@ -144,4 +144,40 @@ export async function getAreaMetrics(db: DbOrTx, now: Date, tz: string = APP_TZ)
     week.datesChanged += delta.datesChanged;
   }
   return { byArea, week };
+}
+
+/** What an expanded card shows: the area's topics in order and its open tasks (soonest due first, at most 5). */
+export type AreaGlance = {
+  topics: { id: string; title: string; status: TopicStatus }[];
+  tasks: { id: string; title: string; status: TaskStatus; dueDate: string | null; daysLeft: number | null; progressDone: number | null; progressTotal: number | null }[];
+};
+
+export const GLANCE_TASKS = 5;
+
+export async function getAreaGlance(db: DbOrTx, now: Date, tz: string = APP_TZ): Promise<Record<string, AreaGlance>> {
+  const today = todayIn(tz, now);
+  const [topicRows, taskRows] = await Promise.all([
+    db.select({ id: topics.id, areaId: topics.areaId, title: topics.title, status: topics.status }).from(topics).orderBy(asc(topics.sortOrder), asc(topics.createdAt)),
+    db
+      .select({
+        id: tasks.id, areaId: tasks.areaId, title: tasks.title, status: tasks.status, dueDate: tasks.dueDate,
+        progressDone: tasks.progressDone, progressTotal: tasks.progressTotal,
+      })
+      .from(tasks)
+      .where(ne(tasks.status, 'done' satisfies TaskStatus))
+      .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt)),
+  ]);
+  const out: Record<string, AreaGlance> = {};
+  const of = (areaId: string) => (out[areaId] ??= { topics: [], tasks: [] });
+  for (const { areaId, ...t } of topicRows) of(areaId).topics.push(t);
+  for (const { areaId, ...t } of taskRows) of(areaId).tasks.push({ ...t, daysLeft: t.dueDate ? daysUntil(t.dueDate, today) : null });
+  for (const g of Object.values(out)) {
+    // Dated tasks first, soonest (overdue) first; undated ones keep their manual order.
+    g.tasks = g.tasks
+      .map((t, i) => ({ t, i }))
+      .sort((a, b) => (a.t.daysLeft ?? Infinity) - (b.t.daysLeft ?? Infinity) || a.i - b.i)
+      .slice(0, GLANCE_TASKS)
+      .map(({ t }) => t);
+  }
+  return out;
 }

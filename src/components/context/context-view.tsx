@@ -4,7 +4,9 @@ import { useMemo, useState } from 'react';
 import type { AreaRow } from '@/db/schema';
 import type { AreaSummary } from '@/server/queries/snapshot';
 import type { AreaDetails, InboxNote } from '@/server/queries/area-details';
+import type { AreaGlance, MetricsReport } from '@/server/queries/area-metrics';
 import { AreaList } from './area-list';
+import { ContextOverview, type UpcomingItem } from './context-overview';
 import { ContextHeader } from './context-header';
 import { DocSearchDialog } from './doc-search-dialog';
 import { InboxList } from './inbox-list';
@@ -21,7 +23,14 @@ export function ContextView({
   details,
   inbox,
   actionMode = 'off',
+  metrics = { byArea: {}, week: { levelUps: 0, tasksDone: 0, milestonesDone: 0, datesChanged: 0 } },
+  glance = {},
+  upcoming = [],
 }: {
+  metrics?: MetricsReport;
+  glance?: Record<string, AreaGlance>;
+  /** Exams and open tasks within 7 days, overdue ones included. */
+  upcoming?: UpcomingItem[];
   areas: AreaSummary[];
   today: string;
   archived: Record<'academic' | 'project', AreaRow[]>;
@@ -41,6 +50,19 @@ export function ContextView({
     [areas, kind, query],
   );
   const stale = useMemo(() => areas.filter((a) => a.isStale), [areas]);
+  // Off track first, then at risk; within each, the nearest date.
+  const attention = useMemo(() => {
+    const rank = (id: string) => (metrics.byArea[id]?.health?.level === 'off_track' ? 0 : 1);
+    return areas
+      .filter((a) => ['off_track', 'at_risk'].includes(metrics.byArea[a.id]?.health?.level ?? ''))
+      .sort((a, b) => rank(a.id) - rank(b.id) || (a.nearestDate?.daysLeft ?? Infinity) - (b.nearestDate?.daysLeft ?? Infinity));
+  }, [areas, metrics]);
+  const focus = useMemo(() => {
+    const a = attention[0];
+    const health = a ? metrics.byArea[a.id]?.health : null;
+    if (!a || !health) return null;
+    return { areaId: a.id, areaName: a.name, action: a.nextAction?.trim() || glance[a.id]?.tasks[0]?.title || null, reason: health.reason };
+  }, [attention, metrics, glance]);
 
   return (
     <div className="space-y-4">
@@ -50,6 +72,16 @@ export function ContextView({
         </div>
       )}
       <ContextHeader tab={tab} onTab={setTab} query={query} onQuery={setQuery} onSearchDocs={() => setSearchOpen(true)} />
+      <ContextOverview
+        attention={attention.map((a) => ({ id: a.id, name: a.name }))}
+        upcoming={upcoming}
+        week={metrics.week}
+        focus={focus}
+        onOpen={(id) => {
+          const a = areas.find((x) => x.id === id);
+          if (a) openItem(a.id, KIND_TAB[a.kind]);
+        }}
+      />
       <InboxList notes={inbox} areas={areas} actionMode={actionMode} />
       <StaleStrip areas={stale} onOpen={(a) => openItem(a.id, KIND_TAB[a.kind])} />
       <AreaList
@@ -58,6 +90,8 @@ export function ContextView({
         kindLabel={kind === 'academic' ? 'môn học' : 'dự án'}
         searching={query.trim() !== ''}
         onOpen={(a) => openItem(a.id)}
+        metrics={metrics.byArea}
+        glance={glance}
       />
       <DocSearchDialog
         open={searchOpen}
