@@ -142,7 +142,7 @@ Bản đầu (27/11/2026) đặt Chat bên trái, Context là khung nhỏ bên p
 
 | Mục | Nội dung | Phụ thuộc | Trạng thái |
 |---|---|---|---|
-| R1 | Vòng lặp công cụ chỉ đọc (B3/D2): `list_area_documents`, `search_documents`, `read_document` tối đa 3 vòng, có trạng thái "Đang đọc …" | Đợt 1 | Not Started |
+| R1 | Vòng lặp công cụ chỉ đọc (B3/D2): `search_documents`, `read_documents` (≤3 tài liệu, ≤24.000 ký tự mỗi cái) tối đa 3 vòng, có trạng thái "Đang tìm/Đang đọc …" | Đợt 1 | Done |
 | R2 | Kỹ năng theo ngữ cảnh (C5/D3): đánh giá tiến độ ôn thi, lập kế hoạch tuần | R1, M2 | Not Started |
 | R3 | AI sắp xếp thư mục có duyệt (C4) | Đợt 1 | Not Started |
 | R4 | Deploy (Vercel + Supabase khuyến nghị, hoặc máy nhà; xem `docs/superpowers/plans/2026-11-27-deploy-and-push.md`) và chạy checklist 17 tiêu chí trên iPhone | Đợt 1 | Partially Done (27/11/2026: chạy trên Vercel `sin1` + Supabase Singapore, mỗi push lên `main` tự kiểm tra → migrate → build; app dùng Session pooler vì Transaction pooler treo. Còn: checklist 17 tiêu chí trên iPhone thật) |
