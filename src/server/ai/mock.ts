@@ -3,6 +3,7 @@ import { AiProviderError } from '../errors';
 import { normalizeVi } from './match-areas';
 import { CHECKIN_MESSAGE } from '@/lib/checkin-message';
 import { BRIEF_PROMPT_MARKER, CHECKIN_PROMPT_MARKER, WEEKLY_REVIEW_MARKER } from './prompt';
+import { TOOL_RESULTS_NOTE } from './doc-tools';
 import type { AiProvider, ProviderEvent, StreamRequest } from './provider';
 
 type MockState = {
@@ -183,10 +184,40 @@ function weeklyReview(state: MockState | null, system: string): { text: string; 
   };
 }
 
+/**
+ * R1: `MOCK_READ <query>` searches for the query, reads the first hit, then answers with its title and the
+ * start of its text. Without the read tools (or nothing found) it says so.
+ */
+async function* readMore(req: StreamRequest, u: string, toolResults: string | null): AsyncGenerator<ProviderEvent> {
+  const has = (name: string) => !!req.tools?.some((t) => t.name === name);
+  const block = toolResults ? /<tool_results>\n([\s\S]*?)\n<\/tool_results>/.exec(toolResults)?.[1] : undefined;
+  const results = (block ? JSON.parse(block) : []) as Record<string, unknown>[];
+  const search = results.find((r) => r.tool === 'search_documents') as { hits?: { documentId: string }[] } | undefined;
+  const read = results.find((r) => r.tool === 'read_documents') as { documents?: { title: string; content: string }[] } | undefined;
+  if (read?.documents?.length) {
+    const doc = read.documents[0];
+    yield { type: 'text', delta: `MOCK_READ_DONE: ${doc.title} — ${doc.content.slice(0, 80)}` };
+    return;
+  }
+  if (search?.hits?.length && has('read_documents')) {
+    yield { type: 'tool_call', name: 'read_documents', argsJson: JSON.stringify({ documentIds: [search.hits[0].documentId] }) };
+    return;
+  }
+  if (!toolResults && has('search_documents')) {
+    const query = u.slice(u.indexOf('MOCK_READ') + 'MOCK_READ'.length).trim() || 'tài liệu';
+    yield { type: 'tool_call', name: 'search_documents', argsJson: JSON.stringify({ query }) };
+    return;
+  }
+  yield { type: 'text', delta: 'MOCK_READ_NONE: không tìm thấy tài liệu phù hợp.' };
+}
+
 export function createMockProvider(): AiProvider {
   return {
     async *stream(req: StreamRequest): AsyncGenerator<ProviderEvent> {
-      const u = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+      const last = req.messages[req.messages.length - 1];
+      const toolResults = last?.role === 'user' && last.content.includes(TOOL_RESULTS_NOTE) ? last.content : null;
+      // The user's message, not the tool results that follow it in a reading round.
+      const u = [...req.messages].reverse().find((m) => m.role === 'user' && !m.content.includes(TOOL_RESULTS_NOTE))?.content ?? '';
       const checkinSystem = req.messages.find((m) => m.role === 'system')?.content ?? '';
       if (checkinSystem.includes(CHECKIN_PROMPT_MARKER)) {
         // Check-in summary (keyed on the system prompt: the activity in `u` may hold any MOCK_ word): one
@@ -217,6 +248,11 @@ export function createMockProvider(): AiProvider {
           await sleep(SLOW_STEP_MS, req.signal);
           yield { type: 'text', delta: `MOCK_SLOW_CHUNK_${i} ` };
         }
+        return;
+      }
+
+      if (u.includes('MOCK_READ')) {
+        yield* readMore(req, u, toolResults);
         return;
       }
 

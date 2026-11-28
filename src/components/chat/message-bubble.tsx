@@ -158,11 +158,17 @@ export function MessageBubble({
         ) : (
           <MarkdownContent text={message.content} />
         )}
-        {streaming && !(status && message.content === '') && (
+        {streaming && !status && (
           <span
             aria-hidden
             className="ml-0.5 inline-block h-[1.1em] w-2 translate-y-[0.2em] bg-foreground motion-safe:animate-pulse"
           />
+        )}
+        {/* Reading more documents after some text: the status goes under it. */}
+        {streaming && status && message.content !== '' && (
+          <p role="status" className="mt-2 text-sm text-muted-foreground motion-safe:animate-pulse">
+            {status}
+          </p>
         )}
       </div>
       {!streaming && (

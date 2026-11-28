@@ -183,7 +183,7 @@ export function ChatView({
             break;
           }
           case 'status':
-            if (text === '') setDraftStatus(e.message);
+            setDraftStatus(e.message);
             break;
           case 'text':
             text += e.delta;

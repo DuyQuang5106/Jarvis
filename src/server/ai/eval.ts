@@ -43,6 +43,8 @@ export type EvalCase = {
   /** Run the weekly review of the current week (`generateWeeklyReview`) instead of a chat turn; `question` is a label. */
   weeklyReview?: boolean;
   maxFirstTokenMs?: number;
+  /** R1: the model must have used the read tools (search/read) at least once in the turn. */
+  mustReadDocuments?: boolean;
 };
 
 export type EvalResult = {
@@ -78,6 +80,7 @@ const EvalCaseSchema = z
     contextMustNotInclude: strings,
     answerMustMatch: strings,
     answerMustNotMatch: strings,
+    mustReadDocuments: z.boolean().optional(),
     expectProposal: z.boolean().optional(),
     proposalMustInclude: strings,
     proposalMustNotInclude: strings,
@@ -186,6 +189,7 @@ async function runCase(deps: EvalDeps, c: EvalCase): Promise<EvalResult> {
   for (const needle of c.contextMustNotInclude ?? []) if (inContext(needle)) failures.push(`ngữ cảnh không được có "${needle}"`);
   for (const re of c.answerMustMatch ?? []) if (!new RegExp(re, 'i').test(reply)) failures.push(`câu trả lời không khớp /${re}/i`);
   for (const re of c.answerMustNotMatch ?? []) if (new RegExp(re, 'i').test(reply)) failures.push(`câu trả lời không được khớp /${re}/i`);
+  if (c.mustReadDocuments && !((timing as TurnTimingReport | null)?.readRounds ?? 0)) failures.push('cần tự đọc thêm tài liệu (search/read) nhưng không gọi');
   if (c.expectProposal === true && !proposed) failures.push('cần có đề xuất');
   if (c.expectProposal === false && proposed) failures.push('không được có đề xuất');
   if (pendingActionId && (c.proposalMustInclude?.length || c.proposalMustNotInclude?.length || c.areaPatchMustInclude || c.areaAliasesMustInclude?.length || c.actionFieldsMustInclude?.length || c.reminderAt || c.approveProposal || c.maxDocumentWrites !== undefined || c.proposalHeadingMustNotMatch?.length)) {

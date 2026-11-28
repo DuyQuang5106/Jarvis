@@ -96,7 +96,7 @@ test('thử lại sau lỗi không nhân đôi tin nhắn người dùng', async
   const first = await turn({ message: 'Hôm nay nên làm gì?' }, failing);
   const conversationId = cid(first);
   const retry = await turn({ conversationId, regenerate: true });
-  expect(retry.map((e) => e.type)).toEqual(['meta', 'status', 'text', 'text', 'done']);
+  expect(retry.map((e) => e.type)).toEqual(['meta', 'status', 'text', 'done']);
   expect((await rows()).map((m) => m.role)).toEqual(['user', 'assistant']);
   log.mockRestore();
 });

@@ -7,6 +7,7 @@ import { isFromDocumentsRequest } from '@/lib/from-documents';
 import { firstChars } from '@/lib/utils';
 import { buildContext, listAiExcludedAreas, type ContextRef, type ContextScope } from '../ai/context-builder';
 import { hiddenDocumentIds } from '../ai/document-visibility';
+import { AliasBook, DOC_TOOLS, MAX_READ_ROUNDS, isDocTool, roundMessages, runDocTools, type DocToolCall } from '../ai/doc-tools';
 import { aliasWorkspaceState, resolveProposalAliases } from '../ai/id-aliases';
 import { matchAreas } from '../ai/match-areas';
 import { WEEKLY_REVIEW_MAX_ACTIONS, buildSystemPrompt } from '../ai/prompt';
@@ -110,6 +111,9 @@ type TurnTiming = {
   /** Summed over the turn's provider calls; null when the provider reports no usage. */
   inputTokens: number | null;
   outputTokens: number | null;
+  /** R1: rounds of read tool calls and documents read through them (absent when none). */
+  readRounds?: number;
+  documentsRead?: number;
 };
 
 /** Shown under each assistant reply (saved in its metadata as `stats`). */
@@ -348,6 +352,8 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
     const allowed = allowsProposal(current.content) ? deps.actionMode : 'off';
     const actionMode = weekly && allowed === 'tools' ? 'json' : allowed;
     const aliased = aliasWorkspaceState(ctx.state);
+    // The read tools ride on native tool calls: offered when the provider takes tools, never for the weekly review.
+    const docTools = deps.actionMode === 'tools' && !weekly;
     const messages: ChatMessage[] = [
       {
         role: 'system',
@@ -355,6 +361,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
           stateJson: aliased.json,
           actionMode,
           fromDocuments: isFromDocumentsRequest(current.content),
+          docTools,
           ...(weekly ? { weeklyReview: { weekActivity: weekly.weekActivity } } : {}),
         }),
       },
@@ -362,36 +369,55 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
       { role: 'user', content: current.content },
     ];
     timing.promptChars = messages.reduce((n, m) => n + m.content.length, 0);
-    const tools = actionMode === 'tools' ? [PROPOSE_CHANGES_TOOL] : undefined;
+    const proposeTools = actionMode === 'tools' ? [PROPOSE_CHANGES_TOOL] : [];
     const filter = actionMode === 'json' ? new ProposalBlockFilter() : null;
+    const book = new AliasBook(aliased.aliasToReal);
+    const alreadyRead = new Set<string>();
     let reply = '';
     let rawProposal: string | null = null;
     try {
-      const events = deps.provider.stream({
-        messages,
-        tools,
-        maxOutputTokens: weekly ? WEEKLY_REVIEW_MAX_OUTPUT_TOKENS : (deps.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
-        signal: deps.signal,
-        onFinishReason: (reason) => {
-          timing.finishReason = reason;
-        },
-        onUsage: (u) => addUsage(timing, u),
-      });
-      for await (const e of events) {
-        timing.firstTokenMs ??= elapsed();
-        if (e.type === 'text') {
-          if (filter) {
-            const out = filter.push(e.delta);
+      // R1: the model may search and read more documents first, up to MAX_READ_ROUNDS rounds; the call after
+      // the last round has no read tools, so it has to answer.
+      for (let round = 0; ; round++) {
+        const tools = [...proposeTools, ...(docTools && round < MAX_READ_ROUNDS ? DOC_TOOLS : [])];
+        const events = deps.provider.stream({
+          messages,
+          tools: tools.length ? tools : undefined,
+          maxOutputTokens: weekly ? WEEKLY_REVIEW_MAX_OUTPUT_TOKENS : (deps.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS),
+          signal: deps.signal,
+          onFinishReason: (reason) => {
+            timing.finishReason = reason;
+          },
+          onUsage: (u) => addUsage(timing, u),
+        });
+        let roundText = '';
+        const reads: DocToolCall[] = [];
+        for await (const e of events) {
+          timing.firstTokenMs ??= elapsed();
+          if (e.type === 'text') {
+            const out = filter ? filter.push(e.delta) : e.delta;
             if (out) {
-              reply += out;
+              roundText += out;
               yield { type: 'text', delta: out };
             }
-          } else {
-            reply += e.delta;
-            yield { type: 'text', delta: e.delta };
+          } else if (e.type === 'tool_call' && e.name === PROPOSE_CHANGES_TOOL.name && rawProposal === null) {
+            rawProposal = e.argsJson;
+          } else if (e.type === 'tool_call' && isDocTool(e.name)) {
+            reads.push({ name: e.name, argsJson: e.argsJson });
           }
-        } else if (e.type === 'tool_call' && e.name === PROPOSE_CHANGES_TOOL.name && rawProposal === null) {
-          rawProposal = e.argsJson;
+        }
+        reply += roundText;
+        // A proposal ends the turn; so does a round without read calls (or past the limit).
+        if (rawProposal !== null || reads.length === 0 || round >= MAX_READ_ROUNDS) break;
+        const done = await runDocTools(db, reads, book, alreadyRead);
+        timing.readRounds = round + 1;
+        timing.documentsRead = (timing.documentsRead ?? 0) + done.read;
+        yield { type: 'status', message: done.status || 'Đang đọc tài liệu…' };
+        messages.push(...roundMessages(roundText, reads, done));
+        // What came before the reading stays on screen; the answer continues after a blank line.
+        if (reply.trim()) {
+          reply += '\n\n';
+          yield { type: 'text', delta: '\n\n' };
         }
       }
       if (filter) {
@@ -412,7 +438,7 @@ async function* turn(deps: TurnDeps, input: TurnInput, timing: TurnTiming, start
     }
     if (deps.signal?.aborted) return; // stopped: nothing of this reply is saved
 
-    const resolvedProposal = rawProposal !== null ? resolveProposalAliases(rawProposal, aliased.aliasToReal) : null;
+    const resolvedProposal = rawProposal !== null ? resolveProposalAliases(rawProposal, book.aliasToReal) : null;
     const parsed = resolvedProposal !== null ? keepWeeklyActions(parseProposal(resolvedProposal), !!weekly) : null;
     if (reply.trim() === '') {
       if (parsed?.ok) {

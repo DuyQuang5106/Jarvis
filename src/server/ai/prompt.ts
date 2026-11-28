@@ -1,4 +1,5 @@
 import { PROPOSE_CHANGES_TOOL } from '../proposals/schema';
+import { DOC_TOOL_RULES } from './doc-tools';
 
 export type PromptInput = {
   stateJson: string;
@@ -7,6 +8,8 @@ export type PromptInput = {
   fromDocuments?: boolean;
   /** The weekly review turn: its rules, and the `<week_activity>` block placed after `<workspace_state>`. */
   weeklyReview?: { weekActivity: string };
+  /** The read tools (`search_documents`, `read_documents`) are offered: adds the rules for them. */
+  docTools?: boolean;
 };
 
 const PROPOSAL_RULES_COMMON = `- Chỉ đề xuất điều người dùng đã nói rõ. Không suy diễn thêm trạng thái, deadline hay điểm số.
@@ -127,7 +130,9 @@ CẬP NHẬT NHANH
 export function buildSystemPrompt(input: PromptInput): string {
   // Function replacer: `$` sequences inside the state JSON must stay literal.
   return TEMPLATE
-    .replace('{{DATA}}', () => DATA_RULES)
+    .replace('{{DATA}}', () => (input.docTools ? `${DATA_RULES}
+
+${DOC_TOOL_RULES}` : DATA_RULES))
     .replace('{{PROPOSALS}}', () => proposalSection(input.actionMode, input.fromDocuments, !!input.weeklyReview))
     .replace('{{STATE}}', () => input.stateJson)
     .replace('{{EXTRA}}', () => (input.weeklyReview ? `\n\n${input.weeklyReview.weekActivity}` : ''));

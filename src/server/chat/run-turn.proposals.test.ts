@@ -85,7 +85,8 @@ test.each(['tools', 'json'] as const)('chế độ %s: câu hỏi thuần không
   const spy: AiProvider = { stream: (req) => { seen.push(req); return createMockProvider().stream(req); } };
   // The mock proposes for MOCK_BAD_PROPOSAL whenever it is offered the chance.
   const events = await turn(mode, { message: 'MOCK_BAD_PROPOSAL sao rồi?' }, spy);
-  expect(seen[0].tools).toBeUndefined();
+  // Only the read tools (R1, tools mode): never propose_changes.
+  expect((seen[0].tools ?? []).map((t) => t.name)).not.toContain('propose_changes');
   expect(seen[0].messages[0].content).not.toContain('<proposed_actions>');
   expect(events.some((e) => e.type === 'proposal')).toBe(false);
   expect(text(events)).not.toContain('proposed_');
