@@ -295,6 +295,8 @@ export const documentVersions = pgTable(
     bodyMd: text('body_md').notNull(),
     origin: text('origin', { enum: ORIGINS }).notNull(),
     batchId: uuid('batch_id'),
+    /** The text right before an approved AI rewrite (replace_section, e.g. the weekly compression): never pruned. */
+    pinned: boolean('pinned').notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [index('document_versions_document_id_revision_idx').on(t.documentId, t.revision)],

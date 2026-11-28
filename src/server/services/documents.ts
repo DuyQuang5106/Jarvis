@@ -65,11 +65,12 @@ async function loadActiveDoc(tx: Tx, id: string): Promise<DocumentRow> {
   return doc;
 }
 
+/** Keeps the newest MAX_VERSIONS_PER_DOC unpinned versions; pinned ones are kept on top of those, forever. */
 async function pruneVersions(tx: Tx, documentId: string): Promise<void> {
   const rows = await tx
     .select({ id: documentVersions.id, origin: documentVersions.origin })
     .from(documentVersions)
-    .where(eq(documentVersions.documentId, documentId))
+    .where(and(eq(documentVersions.documentId, documentId), eq(documentVersions.pinned, false)))
     .orderBy(asc(documentVersions.revision), asc(documentVersions.createdAt));
   if (rows.length <= MAX_VERSIONS_PER_DOC) return;
   let overflow = rows.length - MAX_VERSIONS_PER_DOC;
@@ -178,6 +179,8 @@ export const documentService = {
     expectedRevision: number,
     input: { title: string; bodyMd: string },
     meta: WriteMeta,
+    /** `keepPrevious`: pin the version being replaced so pruning never drops it (rewrites that summarise text). */
+    opts: { keepPrevious?: boolean } = {},
   ): Promise<DocumentRow> {
     const title = parseOrThrow(DocumentTitle, input.title);
     const bodyMd = parseOrThrow(DocumentBody, input.bodyMd);
@@ -195,8 +198,10 @@ export const documentService = {
       if (!kept) {
         await tx.insert(documentVersions).values({
           documentId: id, revision: current.revision, title: current.title, bodyMd: current.bodyMd,
-          origin: 'manual', batchId: null, createdAt: current.updatedAt,
+          origin: 'manual', batchId: null, createdAt: current.updatedAt, pinned: opts.keepPrevious === true,
         });
+      } else if (opts.keepPrevious) {
+        await tx.update(documentVersions).set({ pinned: true }).where(eq(documentVersions.id, kept.id));
       }
       const [updated] = await tx.update(documents).set({
         title, bodyMd, revision: current.revision + 1, updatedAt: now,

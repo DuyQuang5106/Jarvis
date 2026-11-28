@@ -99,7 +99,10 @@ export function DocVersionsDialog({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium">v{v.revision}</span>
-                      <Badge variant="outline">{ORIGIN_LABEL[v.origin]}</Badge>
+                      <span className="flex items-center gap-1.5">
+                        {v.pinned && <Badge variant="secondary" title="Bản trước một lần AI viết lại: không bao giờ bị xóa">Giữ vĩnh viễn</Badge>}
+                        <Badge variant="outline">{ORIGIN_LABEL[v.origin]}</Badge>
+                      </span>
                     </div>
                     <span className="text-xs text-muted-foreground">{formatDateTimeVi(v.createdAt)}</span>
                   </button>

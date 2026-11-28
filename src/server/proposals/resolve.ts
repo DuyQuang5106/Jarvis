@@ -140,7 +140,11 @@ export async function applyAction(tx: DbOrTx, action: ProposedAction, meta: Writ
       const target = await loadEditableDocument(tx, action.documentId);
       const edit = target && editDocument(target.doc, action);
       if (!target || !edit) throw new ValidationError('Không thể sửa tài liệu đích.');
-      await documentService.applyRevision(tx, target.doc.id, target.doc.revision, { title: edit.title, bodyMd: edit.body }, meta);
+      // A replaced section is gone from the document (the weekly review compresses progress lines this way):
+      // the text before it stays in the version history for good.
+      await documentService.applyRevision(tx, target.doc.id, target.doc.revision, { title: edit.title, bodyMd: edit.body }, meta, {
+        keepPrevious: action.type === 'replace_section',
+      });
       return;
     }
     case 'create_task': {

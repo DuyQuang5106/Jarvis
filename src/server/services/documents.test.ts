@@ -113,6 +113,24 @@ test('giới hạn tối đa version cho mỗi tài liệu', async () => {
   expect(versions).toHaveLength(MAX_VERSIONS_PER_DOC);
 });
 
+test('L0: bản trước một lần viết lại (replace_section) được giữ mãi, không bị cắt khi quá 50 phiên bản', async () => {
+  const doc = await documentService.create(db, { areaId, title: '04_STATE.md', bodyMd: '- 2026-11-20: Bạn học xong chương 1\n- 2026-11-21: Bạn học xong chương 2' }, manual, {
+    now: new Date('2026-11-23T00:00:00Z'),
+  });
+  const compressed = await documentService.applyRevision(db, doc.id, doc.revision, { title: doc.title, bodyMd: 'Tuần 47: xong chương 1–2.' }, aiMeta, { keepPrevious: true });
+  let rev = compressed.revision;
+  for (let i = 1; i <= MAX_VERSIONS_PER_DOC + 5; i += 1) {
+    const next = await documentService.updateBody(db, doc.id, `v${i}`, rev, manual, { now: new Date(Date.UTC(2026, 10, 24, 0, i * 10, 0)) });
+    rev = next.revision;
+  }
+  const versions = await db.select().from(documentVersions).where(eq(documentVersions.documentId, doc.id));
+  const pinned = versions.filter((v) => v.pinned);
+  expect(pinned).toHaveLength(1);
+  expect(pinned[0].bodyMd).toContain('Bạn học xong chương 2');
+  // The cap applies to the others only.
+  expect(versions).toHaveLength(MAX_VERSIONS_PER_DOC + 1);
+});
+
 test('xóa mềm, khôi phục tài liệu, khôi phục version và đổi thứ tự', async () => {
   const d1 = await documentService.create(db, { areaId, title: 'A', bodyMd: 'v1' }, manual);
   const d2 = await documentService.create(db, { areaId, title: 'B', bodyMd: 'b1' }, manual);
