@@ -35,3 +35,16 @@ test('không tràn ngang và viewport dùng viewport-fit=cover', async ({ page }
   }
   await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /viewport-fit=cover/);
 });
+
+test('điện thoại: menu có nhiều cuộc chat vẫn thấy Settings ở cuối, danh sách chat tự cuộn', async ({ page, request, isMobile }) => {
+  test.skip(!isMobile, 'Chỉ kiểm tra trên điện thoại');
+  await resetDb(request, { seed: true, conversations: 40 });
+  await page.goto('/chat');
+  await page.getByRole('button', { name: 'Mở menu' }).click();
+  const menu = page.getByRole('dialog');
+  await expect(menu.getByText('Cuộc chat 1', { exact: true })).toBeVisible();
+  // Without scrolling anything: the footer is on screen.
+  await expect(menu.getByRole('button', { name: 'Settings' })).toBeInViewport({ ratio: 1 });
+  const list = menu.getByTestId('recent-chats');
+  expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+});

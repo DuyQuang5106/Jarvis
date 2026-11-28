@@ -15,6 +15,7 @@ export async function resetDb(
     weeklyReview?: boolean;
     activity?: { text: string; at: string }[];
     documents?: { area: string; title: string; body: string }[];
+    conversations?: number;
     records?: {
       area: string;
       topics?: { title: string; status: 'not_started' | 'familiar' | 'practiced' | 'confident' }[];

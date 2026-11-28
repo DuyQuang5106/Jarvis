@@ -25,6 +25,7 @@ export async function POST(req: Request) {
   const raw: unknown = await req.json().catch(() => ({}));
   const body = (raw && typeof raw === 'object' ? raw : {}) as {
     seed?: unknown; onboarded?: unknown; checkins?: unknown; weeklyReview?: unknown; activity?: unknown; documents?: unknown; records?: unknown;
+    conversations?: unknown;
   };
   const seed = body.seed === true;
   const onboarded = body.onboarded !== false;
@@ -73,6 +74,9 @@ export async function POST(req: Request) {
     }
     for (const a of r.assessments ?? []) await assessmentService.create(db, { areaId: area.id, title: String(a.title), dueDate: day(a.dueInDays) }, manual);
   }
+  // `conversations: n`: n empty chats, to fill the Recent chats list.
+  const many = Math.min(Number(body.conversations) || 0, 100);
+  if (many > 0) await db.insert(conversations).values(Array.from({ length: many }, (_, i) => ({ title: `Cuộc chat ${i + 1}` })));
   if (activity.length > 0) {
     const [c] = await db.insert(conversations).values({ title: 'E2E activity' }).returning();
     await db.insert(messages).values(
