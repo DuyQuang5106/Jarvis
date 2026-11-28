@@ -25,6 +25,7 @@ import {
 } from '../services/entities';
 import { editDocument, loadDocumentArea, loadEditableDocument, sectionHash, stampDocumentAction, isDocumentAction } from './document-actions';
 import { DEADLINE_ROUTE_ERROR, hasDeadlineRoute } from './routing';
+import { createReminder } from '../reminders/reminders';
 import { mergeAliases } from './aliases';
 import { describeStored } from './describe';
 import {
@@ -120,6 +121,7 @@ async function lockTarget(tx: Tx, action: ProposedAction): Promise<void> {
       await tx.select({ id: areas.id }).from(areas).where(eq(areas.id, action.areaId)).for('update');
       return;
     case 'create_note':
+    case 'create_reminder':
       if (action.areaId) {
         await tx.select({ id: areas.id }).from(areas).where(eq(areas.id, action.areaId)).for('update');
       }
@@ -189,6 +191,10 @@ export async function applyAction(tx: DbOrTx, action: ProposedAction, meta: Writ
       return;
     case 'add_progress_log':
       await addProgressLog(tx, action.areaId, action.text, meta);
+      return;
+    case 'create_reminder':
+      // Not in the activity log and not undoable: the reminder card has its own "Xong".
+      await createReminder(tx, { text: action.text, remindAt: new Date(action.remindAt), areaId: action.areaId ?? null });
       return;
     case 'create_blocker': {
       const { type: _, ...input } = action;

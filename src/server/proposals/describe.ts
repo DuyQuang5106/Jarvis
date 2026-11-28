@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { areas, assessments, blockers, milestones, tasks, topics, type AreaRow } from '@/db/schema';
+import { formatDateTimeVi } from '@/lib/dates';
 import { FIELD_LABEL, formatFieldValue } from '../queries/describe-log';
 import { mergeAliases } from './aliases';
 import { describeDocumentAction, isDocumentAction } from './document-actions';
@@ -202,6 +203,22 @@ async function describeOne(db: DbOrTx, item: StoredAction): Promise<ActionPrevie
         areaName: area?.name ?? null,
         label: 'Thêm ghi chú',
         changes: [{ field: FIELD_LABEL.text, before: null, after: a.text }],
+        isCreate: true,
+        conflict: conflictFor(null, area, item.baseUpdatedAt, true, Boolean(a.areaId)),
+      };
+    }
+    case 'create_reminder': {
+      const area = a.areaId ? await loadArea(db, a.areaId) : null;
+      return {
+        key: item.key,
+        type: a.type,
+        areaId: a.areaId ?? null,
+        areaName: area?.name ?? null,
+        label: 'Nhắc việc',
+        changes: [
+          { field: 'Nội dung', before: null, after: a.text },
+          { field: 'Lúc', before: null, after: formatDateTimeVi(a.remindAt) },
+        ],
         isCreate: true,
         conflict: conflictFor(null, area, item.baseUpdatedAt, true, Boolean(a.areaId)),
       };

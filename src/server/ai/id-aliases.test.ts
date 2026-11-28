@@ -12,7 +12,7 @@ test('aliasWorkspaceState thay mọi UUID nhất quán và không còn chuỗi U
   const msId = '55555555-5555-4555-8555-555555555555';
 
   const state: WorkspaceState = {
-    now: { date: '2026-11-24', weekday: 'Thứ Ba', weekStart: '2026-11-23', weekEnd: '2026-11-29', timezone: 'Asia/Ho_Chi_Minh' },
+    now: { date: '2026-11-24', time: '09:00', weekday: 'Thứ Ba', weekStart: '2026-11-23', weekEnd: '2026-11-29', timezone: 'Asia/Ho_Chi_Minh' },
     termGoal: null,
     areas: [
       {
@@ -91,7 +91,7 @@ test('aliasWorkspaceState giữ nguyên content, docType, omitted và outline c�
   const areaId = '11111111-1111-4111-8111-111111111111';
   const base = { areaId, docRole: 'context' as const, updated_at: '2026-11-24T00:00:00Z', days_since_update: 0, origin: 'manual' as const, possibly_stale: false };
   const state: WorkspaceState = {
-    now: { date: '2026-11-24', weekday: 'Thứ Ba', weekStart: '2026-11-23', weekEnd: '2026-11-29', timezone: 'Asia/Ho_Chi_Minh' },
+    now: { date: '2026-11-24', time: '09:00', weekday: 'Thứ Ba', weekStart: '2026-11-23', weekEnd: '2026-11-29', timezone: 'Asia/Ho_Chi_Minh' },
     termGoal: null, areas: [], dueTasks: [], upcomingAssessments: [], staleAreaIds: [], details: [],
     documents: [
       { ...base, documentId: '22222222-2222-4222-8222-222222222222', title: '04_STATE.md', docType: 'state_snapshot', content: '# STATE\n\nĐang học Chương 5' },

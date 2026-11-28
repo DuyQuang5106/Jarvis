@@ -332,6 +332,18 @@ export function createMockProvider(): AiProvider {
         return;
       }
 
+      if (/nhắc tôi/i.test(u) && state) {
+        // Tomorrow 20:00 Vietnam time: always in the future, whatever hour the test runs.
+        const d = new Date(`${state.now.date}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + 1);
+        const day = d.toISOString().slice(0, 10);
+        yield* emitWithProposal(req, system, 'Mình đề xuất đặt lời nhắc.', {
+          summary: 'Nhắc việc',
+          actions: [{ type: 'create_reminder', text: 'Chốt nguồn tài liệu', remindAt: `${day}T20:00:00+07:00` }],
+        });
+        return;
+      }
+
       if (/hoàn thành|đã xong/i.test(u) && state) {
         const detail = state.details.find((d) => d.topics.length > 0);
         if (detail) {

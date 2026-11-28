@@ -34,6 +34,7 @@ import {
   SLOT_KEYS,
   TASK_STATUSES,
   TOPIC_STATUSES,
+  REMINDER_STATUSES,
 } from './enums';
 
 const id = () => uuid('id').primaryKey().defaultRandom();
@@ -355,6 +356,22 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
 }).enableRLS();
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
 
+/** "Nhắc tôi … lúc …" from chat (approved like every AI change). `sent`: pushed or shown; `done`: dismissed. */
+export const reminders = pgTable(
+  'reminders',
+  {
+    id: id(),
+    text: text('text').notNull(),
+    remindAt: tz('remind_at').notNull(),
+    areaId: uuid('area_id').references(() => areas.id, { onDelete: 'set null' }),
+    status: text('status', { enum: REMINDER_STATUSES }).notNull().default('pending'),
+    sentAt: tz('sent_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('reminders_status_remind_at_idx').on(t.status, t.remindAt)],
+).enableRLS();
+export type ReminderRow = typeof reminders.$inferSelect;
+
 /** Every table by its SQL name: the single source for TABLE_NAMES, export and RLS checks. */
 export const TABLES = {
   areas,
@@ -380,6 +397,7 @@ export const TABLES = {
   checkins,
   weekly_reviews: weeklyReviews,
   push_subscriptions: pushSubscriptions,
+  reminders,
 } as const;
 
 export const TABLE_NAMES: readonly string[] = Object.keys(TABLES);

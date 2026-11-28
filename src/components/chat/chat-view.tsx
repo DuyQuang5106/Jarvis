@@ -14,6 +14,8 @@ import { takeChatPreset, type ChatPreset } from './chat-preset';
 import { CheckinCard } from './checkin-card';
 import { Composer } from './composer';
 import { DailyBriefCard } from './daily-brief-card';
+import { ReminderCards } from './reminder-cards';
+import type { ReminderView } from '@/server/reminders/reminders';
 import type { ChatMessageView } from './message-bubble';
 import { MessageList } from './message-list';
 import { touchConversation } from './recent-chats-store';
@@ -49,7 +51,10 @@ export function ChatView({
   checkin,
   weeklyReview,
   today,
+  reminders = [],
 }: {
+  /** Reminders whose time has come (shown on a new conversation). */
+  reminders?: ReminderView[];
   conversation: { id: string; title: string } | null;
   messages: ChatMessageView[];
   areas: ChatAreaOption[];
@@ -288,6 +293,7 @@ export function ChatView({
           // Stale props (see above) are about to be replaced: no prompts to click in the meantime.
           !stale && (
             <div className="m-auto flex w-full max-w-xl flex-col items-center gap-4 py-4 text-center">
+              <ReminderCards initial={reminders} />
               <WeeklyReviewCard initial={weeklyReview} manualRequest={manualReview} />
               {checkin && (
                 <CheckinCard key={checkin.slots.map((s) => `${s.day}:${s.slot}`).join(',')} initial={checkin} onSend={sendMessage} disabled={streaming} />

@@ -64,6 +64,13 @@
       "when": 1795854127849,
       "tag": "0008_nebulous_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795854899410,
+      "tag": "0009_wise_starjammers",
+      "breakpoints": true
     }
   ]
 }

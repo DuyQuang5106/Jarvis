@@ -38,7 +38,7 @@ export type AreaDetailForAi = {
   recentLogs: { at: string; origin: Origin; title: string; changes: { field: string; before: string | null; after: string | null; summary?: string }[] }[];
 };
 export type WorkspaceState = {
-  now: { date: string; weekday: string; weekStart: string; weekEnd: string; timezone: string };
+  now: { date: string; time: string; weekday: string; weekStart: string; weekEnd: string; timezone: string };
   termGoal: string | null;
   areas: Omit<AreaSummary, 'aiExcluded' | 'nearestDate'>[];
   dueTasks: PortfolioSnapshot['dueTasks'];
@@ -225,6 +225,8 @@ export async function buildContext(
   const full: WorkspaceState = {
     now: {
       date: snapshot.today,
+      // HH:MM in the app timezone, for "nhắc tôi tối nay" and "còn mấy tiếng".
+      time: new Intl.DateTimeFormat('en-GB', { timeZone: snapshot.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(input.now),
       weekday: snapshot.weekday,
       weekStart: snapshot.week.start,
       weekEnd: snapshot.week.end,

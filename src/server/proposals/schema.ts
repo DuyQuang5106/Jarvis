@@ -123,6 +123,14 @@ const CreateNoteActionSchema = z.object({
   text: CreateNoteInput.shape.text,
 });
 
+/** "Nhắc tôi … lúc …": `remindAt` is an ISO date-time with its offset (Vietnam time is +07:00). */
+const CreateReminderActionSchema = z.object({
+  type: z.literal('create_reminder'),
+  text: z.string({ error: 'Nội dung nhắc phải là chuỗi.' }).trim().min(1, 'Nội dung nhắc không được trống.').max(300, 'Nội dung nhắc tối đa 300 ký tự.'),
+  remindAt: z.iso.datetime({ offset: true, error: 'Thời điểm nhắc phải là ngày giờ ISO kèm múi giờ.' }),
+  areaId: uuid('Mục').optional(),
+});
+
 const AddProgressLogActionSchema = z.object({
   type: z.literal('add_progress_log'),
   areaId: uuid('Mục'),
@@ -175,6 +183,7 @@ export const ProposedActionSchema = z.discriminatedUnion('type', [
   UpsertMilestoneActionSchema,
   UpsertAssessmentActionSchema,
   CreateNoteActionSchema,
+  CreateReminderActionSchema,
   AddProgressLogActionSchema,
   CreateBlockerActionSchema,
   ResolveBlockerActionSchema,

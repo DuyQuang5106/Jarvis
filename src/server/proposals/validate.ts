@@ -26,6 +26,16 @@ async function validateOne(
       if (area.archivedAt) return { ok: false, message: ARCHIVED_MSG };
       return { ok: true, baseUpdatedAt: null };
     }
+    case 'create_reminder': {
+      const at = new Date(action.remindAt).getTime();
+      // A few minutes of slack for the time the card waits before approval; at most a year ahead.
+      if (!(at > Date.now() - 10 * 60_000)) return { ok: false, message: 'Thời điểm nhắc đã qua.' };
+      if (at > Date.now() + 366 * 86_400_000) return { ok: false, message: 'Thời điểm nhắc quá xa (tối đa một năm).' };
+      if (!action.areaId) return { ok: true, baseUpdatedAt: null };
+      const area = await loadArea(db, action.areaId);
+      if (!area) return { ok: false, message: 'Không tìm thấy mục.' };
+      return { ok: true, baseUpdatedAt: null };
+    }
     case 'add_progress_log': {
       const area = await loadArea(db, action.areaId);
       if (!area) return { ok: false, message: 'Không tìm thấy mục.' };

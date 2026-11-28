@@ -13,6 +13,7 @@ import { getPendingCheckin, loadCheckinConfig } from '@/server/checkin/checkin';
 import { getWeeklyReviewCard } from '@/server/review/weekly-review';
 import { getPortfolioSnapshot } from '@/server/queries/snapshot';
 import { getConversation } from '@/server/services/conversations';
+import { dueReminders } from '@/server/reminders/reminders';
 import { requestNow } from '@/server/request-now';
 
 export const metadata = { title: 'Chat' };
@@ -57,12 +58,13 @@ async function ChatContent({ searchParams }: { searchParams: SearchParams }) {
   // Only what is already stored: generating the brief and the check-in summary is left to the cards, so the
   // page never waits for the AI. The check-in clock can be set by E2E runs (requestNow).
   const clock = id ? null : requestNow(await headers());
-  const [found, snapshot, brief, checkin, weeklyReview] = await Promise.all([
+  const [found, snapshot, brief, checkin, weeklyReview, reminders] = await Promise.all([
     id ? getConversation(db, id) : null,
     getPortfolioSnapshot(db, now),
     getDailyBrief(db, today),
     clock ? loadCheckinConfig(db).then((cfg) => getPendingCheckin(db, clock, cfg)) : null,
     clock ? getWeeklyReviewCard(db, clock, APP_TZ) : null,
+    clock ? dueReminders(db, clock) : [],
   ]);
   return (
     <ChatWithContext>
@@ -75,6 +77,7 @@ async function ChatContent({ searchParams }: { searchParams: SearchParams }) {
         checkin={checkin}
         weeklyReview={weeklyReview}
         today={today}
+        reminders={reminders}
       />
     </ChatWithContext>
   );

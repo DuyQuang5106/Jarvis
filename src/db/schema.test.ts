@@ -3,11 +3,11 @@ import { expect, test } from 'vitest';
 import { areas, documents, documentVersions, tasks, TABLE_NAMES } from './schema';
 import { createTestDb, rowsOf } from './testing';
 
-test('có đúng 23 bảng', async () => {
+test('có đúng 24 bảng', async () => {
   const db = await createTestDb();
   const rows = await db.execute(sql`select tablename from pg_tables where schemaname = 'public' and tablename not like '__drizzle%' order by tablename`);
   expect(rowsOf(rows).map((r) => r.tablename)).toEqual([...TABLE_NAMES].sort());
-  expect(TABLE_NAMES).toHaveLength(23);
+  expect(TABLE_NAMES).toHaveLength(24);
 });
 
 test('mọi bảng đều bật RLS (criterion 13)', async () => {

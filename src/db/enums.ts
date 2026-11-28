@@ -43,6 +43,9 @@ export type PendingStatus = (typeof PENDING_STATUSES)[number];
 export const PENDING_SOURCES = ['chat', 'capture'] as const;
 export type PendingSource = (typeof PENDING_SOURCES)[number];
 
+export const REMINDER_STATUSES = ['pending', 'sent', 'done'] as const;
+export type ReminderStatus = (typeof REMINDER_STATUSES)[number];
+
 export const MESSAGE_ROLES = ['user', 'assistant'] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
 
