@@ -141,6 +141,31 @@ function TaskItem({ task, milestones }: { task: TaskRow; milestones: MilestoneRo
             className="h-11"
           />
         </div>
+        <fieldset className="space-y-1">
+          {/* A countable task (10 buổi luyện): both numbers or neither. Clearing the total clears the count. */}
+          <legend className="text-xs text-muted-foreground">Đếm được (đã làm / tổng)</legend>
+          <div className="flex items-center gap-1.5">
+            <SyncedInput
+              aria-label="Đã làm"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={task.progressDone === null ? '' : String(task.progressDone)}
+              onSave={(v) => update(v.trim() === '' ? { progressDone: task.progressTotal === null ? null : 0 } : { progressDone: Number(v), ...(task.progressTotal === null ? { progressTotal: Math.max(Number(v), 1) } : {}) })}
+              className="h-11 min-w-0"
+            />
+            <span aria-hidden className="text-muted-foreground">/</span>
+            <SyncedInput
+              aria-label="Tổng số phần"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              value={task.progressTotal === null ? '' : String(task.progressTotal)}
+              onSave={(v) => update(v.trim() === '' ? { progressTotal: null, progressDone: null } : { progressTotal: Number(v), ...(task.progressDone === null ? { progressDone: 0 } : {}) })}
+              className="h-11 min-w-0"
+            />
+          </div>
+        </fieldset>
         {milestones && (
           <div className="space-y-1">
             <label htmlFor={`${uid}-ms`} className="text-xs text-muted-foreground">Milestone</label>

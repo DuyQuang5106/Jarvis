@@ -128,3 +128,21 @@ test('Enter hai lần nhanh khi thêm topic chỉ tạo một topic', async ({ p
   await page.reload();
   await expect(page.getByRole('dialog').getByRole('listitem')).toHaveCount(1);
 });
+
+test('task đếm được: nhập tổng và số đã làm, thẻ xem nhanh hiện thanh nhỏ', async ({ page, isMobile }) => {
+  const drawer = await openNew(page, 'Academic', 'Mạng máy tính', isMobile);
+  await drawer.getByRole('tab', { name: 'Tasks' }).click();
+  await drawer.getByPlaceholder('Thêm task…').fill('Chương trình luyện bài tập');
+  await page.keyboard.press('Enter');
+  const item = drawer.getByRole('listitem').filter({ hasText: 'Chương trình luyện bài tập' });
+  await item.getByLabel('Tổng số phần').fill('10');
+  await item.getByLabel('Tổng số phần').blur();
+  await expect(item.getByLabel('Đã làm')).toHaveValue('0');
+  await item.getByLabel('Đã làm').fill('3');
+  await item.getByLabel('Đã làm').blur();
+  await expect(drawer.locator('[aria-busy="true"]')).toHaveCount(0);
+  await page.goto('/context');
+  const row = page.getByRole('main').getByRole('listitem').filter({ hasText: 'Mạng máy tính' }).first();
+  await row.getByRole('button', { name: 'Xem nhanh Mạng máy tính' }).click();
+  await expect(row.getByTestId('task-count')).toHaveText('3/10');
+});
