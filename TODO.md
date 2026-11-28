@@ -6,6 +6,33 @@
 
 ---
 
+## Hàng đợi — thứ tự làm (xếp lại 28/11/2026, owner sửa thứ tự ở đây)
+
+Mọi việc chưa xong, gom về một chỗ. Chi tiết và tiêu chí của từng mục nằm ở bảng của đợt tương ứng bên dưới. Cỡ: S ≈ nửa ngày, M ≈ 1–2 ngày, L ≈ 3 ngày trở lên.
+
+| # | Mục | Việc | Vì sao đặt ở đây | Cỡ | Phụ thuộc |
+|---|---|---|---|---|---|
+| 1 | V1 | Chế độ Context + Chat trên laptop: 50:50, Context trái, Chat phải, thanh bên tự ẩn | Dùng hằng ngày, nhỏ, owner vừa yêu cầu | S | — |
+| 2 | P1 | Chỉ số trạng thái: Bao phủ, Thành thạo, Sức khỏe, task đếm được, Thay đổi tuần này | Bắt buộc phải có (P0); là nền cho màn Context mới | M | — |
+| 3 | P2 | Màn Context ba tầng theo mockup đã duyệt (laptop và iPhone) | Biến P1 thành thứ nhìn thấy được | M | P1 |
+| 4 | L0 | Giữ vĩnh viễn phiên bản trước mỗi lần nén của tổng kết tuần | Mất rồi không lấy lại được; việc nhỏ | S | — |
+| 5 | N3a | Hạ tầng thông báo iPhone: bật thông báo, nút gửi thử | Owner muốn có thông báo; nền cho N3b và N4 | M | — |
+| 6 | N4 | Nhắc việc từ chat ("nhắc tôi 8h tối mai…") qua thẻ duyệt | Dùng được ngay khi có N3a | M | N3a |
+| 7 | N3b | Thông báo theo lịch: cuối buổi (check-in), tối Chủ nhật (tổng kết), hạn sắp tới | Jarvis tự "gõ cửa" khi bạn quên mở app | M | N3a |
+| 8 | H1 + H2 | Mỗi môn một ô chat; lịch sử gửi AI theo thời gian | Hợp với V1: mở môn nào bên trái thì chat bên phải theo môn đó | L | P2 |
+| 9 | U1 + U2 | Phần còn lại của giao diện điện thoại (Chat, Cài đặt, điều hướng tab dưới) | Màn Context điện thoại đã nằm trong P2 | L | P2, H1 |
+| 10 | M2 | Cờ dự kiến/chính thức cho lịch thi (thay cho chữ "(dự kiến)" trong tên) | Nhỏ, chèn vào lúc nào cũng được | S | — |
+| 11 | R4 | Chạy checklist 17 tiêu chí trên iPhone thật | Việc của owner, lúc nào cũng được | S | — |
+| 12 | R1 | AI tự đọc thêm tài liệu khi ngữ cảnh thiếu (tối đa 3 vòng) | Cải thiện chất lượng trả lời | M | — |
+| 13 | R2 | Kỹ năng: đánh giá tiến độ ôn thi, lập kế hoạch tuần | Dùng chỉ số P1 | M | R1, P1 |
+| 14 | H3 | Nhiều chủ đề trong một ô chat | Chỉ làm nếu H1–H2 chưa đủ | M | H2 |
+| 15 | R3 | AI sắp xếp thư mục có duyệt | Ít cần với một người dùng | M | — |
+| 16 | L1–L4 | Trí nhớ dài hạn: kho ký ức, tự nhớ lại, trích nguồn, hiểu thói quen | Xa; cần L0 và R1 trước | L | L0, R1 |
+
+Việc lặt vặt còn treo: case `ai:eval` cho thẻ định hướng hằng ngày (M5); dữ liệu môn Tư tưởng còn topic "Soạn đề cương ôn tập" tạo sai trước bản sửa 27/11 (owner xóa tay rồi nhờ Jarvis tạo lại thành task).
+
+---
+
 ## Điểm nghẽn và lộ trình (26/11/2026)
 
 ### Điểm nghẽn, xếp theo mức ảnh hưởng (đo trên bản sao dữ liệu thật)
@@ -103,6 +130,14 @@ Lý do: lịch sử hiện là danh sách cuộc chat đặt tên theo câu đ�
 
 **Thứ tự khuyến nghị:** P1 (logic, có test) → U1 mockup Context + điện thoại để duyệt → P2 + U2 (+ H1) → (e) của P1. Màn Chat/Context cạnh nhau (laptop) và vuốt (iPhone) đã làm 27/11/2026.
 
+### Đợt 2e — Chế độ Context + Chat trên laptop (P1, yêu cầu 28/11/2026)
+
+Bản đầu (27/11/2026) đặt Chat bên trái, Context là khung nhỏ bên phải (42%), mở từ nút "Context bên cạnh" trong màn Chat. Owner muốn đảo lại: Context là phần quan sát chính, Chat là chỗ thao tác để chỉnh Context.
+
+| Mục | Nội dung | Phụ thuộc | Tiêu chí chấp nhận | Trạng thái |
+|---|---|---|---|---|
+| V1 | **Context trái, Chat phải, chia 50:50**: đổi vị trí hai bên, mỗi bên một nửa chiều rộng; vẫn bật/tắt được và nhớ lựa chọn. **Thanh bên của app (Chat, Context, Recent chats) mặc định ẩn trong chế độ này**, hiện ra khi con trỏ tới gần mép trái (khoảng 16 px) và ẩn lại khi chuột rời đi; bàn phím vẫn mở được (Tab vào hoặc phím tắt) và có nút ghim để giữ nó mở. Duyệt thẻ trong Chat thì Context tự tải lại như bản đầu. Màn hình hẹp (dưới 1024 px) giữ cách cũ: một màn, vuốt để chuyển | — | Hai bên đúng 50:50 ở 1280 và 1920 px; thanh bên không chiếm chỗ cho tới khi chuột tới mép trái, không nhảy khi gõ chat; mở được bằng bàn phím; e2e desktop | Not Started |
+
 ### Đợt 3 — Trợ lý tự đào sâu và có kỹ năng (P1)
 
 | Mục | Nội dung | Phụ thuộc | Trạng thái |
@@ -110,7 +145,7 @@ Lý do: lịch sử hiện là danh sách cuộc chat đặt tên theo câu đ�
 | R1 | Vòng lặp công cụ chỉ đọc (B3/D2): `list_area_documents`, `search_documents`, `read_document` tối đa 3 vòng, có trạng thái "Đang đọc …" | Đợt 1 | Not Started |
 | R2 | Kỹ năng theo ngữ cảnh (C5/D3): đánh giá tiến độ ôn thi, lập kế hoạch tuần | R1, M2 | Not Started |
 | R3 | AI sắp xếp thư mục có duyệt (C4) | Đợt 1 | Not Started |
-| R4 | Deploy (Vercel + Supabase khuyến nghị, hoặc máy nhà; xem `docs/superpowers/plans/2026-11-27-deploy-and-push.md`) và chạy checklist 17 tiêu chí trên iPhone | Đợt 1 | Not Started |
+| R4 | Deploy (Vercel + Supabase khuyến nghị, hoặc máy nhà; xem `docs/superpowers/plans/2026-11-27-deploy-and-push.md`) và chạy checklist 17 tiêu chí trên iPhone | Đợt 1 | Partially Done (27/11/2026: chạy trên Vercel `sin1` + Supabase Singapore, mỗi push lên `main` tự kiểm tra → migrate → build; app dùng Session pooler vì Transaction pooler treo. Còn: checklist 17 tiêu chí trên iPhone thật) |
 
 ---
 
