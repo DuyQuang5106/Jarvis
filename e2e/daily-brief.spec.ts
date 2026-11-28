@@ -6,7 +6,8 @@ test.beforeEach(async ({ request }) => { await resetDb(request, { seed: true });
 const card = (page: Page) => page.getByTestId('daily-brief');
 const tasks = (page: Page) => card(page).getByTestId('daily-brief-task');
 
-test('thẻ định hướng: 3 việc ở đầu Chat, tải lại không sinh lại, "Bắt đầu việc 1" gửi tin nhắn', async ({ page }) => {
+test('thẻ định hướng: 3 việc ở đầu Chat, tải lại không sinh lại, "Bắt đầu việc 1" gửi tin nhắn', async ({ isMobile, page }) => {
+  test.skip(isMobile, 'Điện thoại: các thẻ này nằm ở tab Hôm nay (today.spec.ts)');
   await page.goto('/chat');
   await expect(card(page)).toContainText('Định hướng hôm nay');
   await expect(tasks(page)).toHaveCount(3);

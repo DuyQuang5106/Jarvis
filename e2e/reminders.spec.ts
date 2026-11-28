@@ -11,7 +11,8 @@ function tomorrowAt(hhmm: string): string {
   return d.toISOString();
 }
 
-test('nhắc việc từ chat: thẻ duyệt, đến giờ thẻ nhắc hiện, nhắc lại sau và xong', async ({ page }) => {
+test('nhắc việc từ chat: thẻ duyệt, đến giờ thẻ nhắc hiện, nhắc lại sau và xong', async ({ isMobile, page }) => {
+  test.skip(isMobile, 'Điện thoại: các thẻ này nằm ở tab Hôm nay (today.spec.ts)');
   await page.goto('/chat');
   await page.getByPlaceholder('Nhắn gì đó…').fill('Nhắc tôi chốt nguồn tài liệu khi đến tối');
   await page.getByRole('button', { name: 'Gửi' }).click();

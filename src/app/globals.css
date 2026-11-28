@@ -140,6 +140,7 @@
 /* Context shown beside the chat (ChatWithContext) runs in a frame: no app navigation inside it. */
 html[data-embedded] .app-sidebar,
 html[data-embedded] .app-mobile-header,
+html[data-embedded] .app-tabbar,
 html[data-embedded] .app-embedded-hide {
   display: none !important;
 }
@@ -150,6 +151,13 @@ html[data-embedded] * {
 }
 html[data-embedded] *::-webkit-scrollbar {
   display: none;
+}
+
+/* Phone tab bar (BottomTabs): it holds the home-indicator inset, so the page above does not add it again. */
+@media (max-width: 767px) {
+  html[data-tabbar] main {
+    padding-bottom: 1rem;
+  }
 }
 
 /* iOS Safari zooms the page when a focused field is under 16px. */

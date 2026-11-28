@@ -26,7 +26,8 @@ async function openChat(page: Page, now = SUNDAY_EVENING) {
   await page.goto('/chat');
 }
 
-test('tổng kết tuần: thẻ tự sinh → mở → duyệt replace_section → tài liệu đổi, khôi phục được bản cũ', async ({ page, request }) => {
+test('tổng kết tuần: thẻ tự sinh → mở → duyệt replace_section → tài liệu đổi, khôi phục được bản cũ', async ({ isMobile, page, request }) => {
+  test.skip(isMobile, 'Điện thoại: thẻ tổng kết nằm ở tab Hôm nay (today.spec.ts)');
   await resetDb(request, {
     seed: true,
     weeklyReview: true,
@@ -82,7 +83,8 @@ test('tổng kết tuần: thẻ tự sinh → mở → duyệt replace_section 
   await expect(reviewCard(page)).toHaveCount(0);
 });
 
-test('"Tổng kết tuần này" dùng được bất kỳ ngày nào; tuần không có hoạt động thì không tự mời', async ({ page, request }) => {
+test('"Tổng kết tuần này" dùng được bất kỳ ngày nào; tuần không có hoạt động thì không tự mời', async ({ isMobile, page, request }) => {
+  test.skip(isMobile, 'Điện thoại: thẻ tổng kết nằm ở tab Hôm nay (today.spec.ts)');
   await resetDb(request, { seed: true, weeklyReview: true });
   await openChat(page, '2025-03-12T05:00:00.000Z'); // Wednesday
   await expect(page.getByTestId('suggested-prompts')).toBeVisible();

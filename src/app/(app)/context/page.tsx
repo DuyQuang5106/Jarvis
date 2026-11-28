@@ -7,6 +7,7 @@ import { getConfig } from '@/server/config';
 import { getAreaDetails, listArchivedAreas, listInboxNotes } from '@/server/queries/area-details';
 import { getAreaGlance, getAreaMetrics } from '@/server/queries/area-metrics';
 import { getPortfolioSnapshot } from '@/server/queries/snapshot';
+import { upcomingWeek } from '@/lib/overview';
 
 export const metadata = { title: 'Context' };
 
@@ -37,14 +38,7 @@ async function ContextContent({ searchParams }: { searchParams: Promise<{ item?:
     getAreaMetrics(db, now),
     getAreaGlance(db, now),
   ]);
-  const areaName = new Map(snapshot.areas.map((a) => [a.id, a.name]));
-  const upcoming = [
-    ...snapshot.upcomingAssessments.filter((a) => a.daysLeft <= 7).map((a) => ({ key: `a-${a.id}`, title: a.title, areaId: a.areaId, daysLeft: a.daysLeft })),
-    ...snapshot.dueTasks.filter((t) => t.daysLeft <= 7 && t.status !== 'done').map((t) => ({ key: `t-${t.id}`, title: t.title, areaId: t.areaId, daysLeft: t.daysLeft })),
-  ]
-    .filter((u) => areaName.has(u.areaId))
-    .map(({ areaId, ...u }) => ({ ...u, areaName: areaName.get(areaId)! }))
-    .sort((a, b) => a.daysLeft - b.daysLeft);
+  const upcoming = upcomingWeek(snapshot);
   return (
     <ContextView
       areas={snapshot.areas}

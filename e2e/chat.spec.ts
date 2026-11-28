@@ -10,6 +10,14 @@ async function send(page: Page, text: string) {
 const lastAssistant = (page: Page) => page.locator('[data-role="assistant"]').last();
 // Scoped to <main>: Next's route announcer (`#__next-route-announcer__`) is also a role="alert" on every page.
 const chatAlert = (page: Page) => page.getByRole('main').getByRole('alert');
+/** Old chats: the Chat tab's page on a phone, the folded "Lưu trữ" of the sidebar on wide screens. */
+async function openArchive(page: Page, isMobile: boolean) {
+  if (isMobile) {
+    await page.goto('/threads');
+    return;
+  }
+  await page.getByRole('button', { name: /Lưu trữ · \d+ cuộc chat/ }).click();
+}
 
 test('cuộc chat mới có đúng năm prompt gợi ý', async ({ page }) => {
   await page.goto('/chat');
@@ -38,12 +46,12 @@ test('hỏi về một môn: trả lời từ DB, hiện thời gian thay cho ng
   await expect(lastAssistant(page)).toContainText('detail:Database');
   await expect(page).toHaveURL(chatUrl);
   await expect(page.locator('[data-role="user"]')).toHaveText(['Mobile Programming đang ở tình trạng nào?', 'còn Database thì sao?']);
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  const general = page.getByTestId('threads').getByRole('link').first();
+  if (isMobile) await page.goto('/threads');
+  const general = page.getByTestId(isMobile ? 'thread-list' : 'threads').getByRole('link').first();
   await expect(general).toContainText('Chung');
   // The thread's last line: here the reply to the last question.
   await expect(general).toContainText('detail:Database');
-  await expect(general).toHaveAttribute('aria-current', 'page');
+  if (!isMobile) await expect(general).toHaveAttribute('aria-current', 'page');
 });
 
 test('sửa bằng UI rồi mở chat mới vẫn đọc state mới (criterion 6)', async ({ page, isMobile }) => {
@@ -95,8 +103,7 @@ test('tải lại giữ nguyên hội thoại; xóa cuộc chat cũ trong Lưu t
   await page.reload();
   await expect(page.locator('[data-role="user"]')).toHaveText(['xin chào']);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await page.getByRole('button', { name: /Lưu trữ · 1 cuộc chat/ }).click();
+  await openArchive(page, isMobile);
   const item = page.getByTestId('recent-chats').getByRole('link', { name: 'Cuộc chat 1' });
   await item.hover();
   await page.getByRole('button', { name: 'Tùy chọn cuộc chat' }).first().click();
@@ -182,8 +189,7 @@ test('câu trả lời chạm trần độ dài: báo bị cắt, còn sau khi t
 test('đổi tên cuộc chat cũ qua menu trong Lưu trữ, còn sau khi tải lại', async ({ page, request, isMobile }) => {
   await resetDb(request, { seed: true, conversations: 1 });
   await page.goto('/chat');
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await page.getByRole('button', { name: /Lưu trữ · 1 cuộc chat/ }).click();
+  await openArchive(page, isMobile);
   const list = page.getByTestId('recent-chats');
   await expect(list.getByRole('link', { name: 'Cuộc chat 1' })).toBeVisible();
   await list.getByRole('button', { name: 'Tùy chọn cuộc chat' }).first().click();
@@ -193,8 +199,7 @@ test('đổi tên cuộc chat cũ qua menu trong Lưu trữ, còn sau khi tải 
   await input.press('Enter');
   await expect(list.getByRole('link', { name: 'Lời chào' })).toBeVisible();
   await page.reload();
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await page.getByRole('button', { name: /Lưu trữ · 1 cuộc chat/ }).click();
+  await openArchive(page, isMobile);
   await expect(page.getByTestId('recent-chats').getByRole('link', { name: 'Lời chào' })).toBeVisible();
 });
 
@@ -256,8 +261,8 @@ test('scope được giữ trong cuộc chat và gửi kèm mỗi lượt', asyn
 
 test('mỗi môn một ô chat: ngữ cảnh khóa vào môn, tin sau vào đúng ô, sidebar đưa ô lên đầu', async ({ page, isMobile }) => {
   await page.goto('/chat');
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await page.getByTestId('threads').getByRole('link', { name: /Database/ }).click();
+  if (isMobile) await page.goto('/threads');
+  await page.getByTestId(isMobile ? 'thread-list' : 'threads').getByRole('link', { name: /Database/ }).click();
   await expect(page).toHaveURL(/\/chat\?area=[0-9a-f-]{36}/);
   await expect(page.getByTestId('thread-header')).toContainText('Database');
   await expect(page.getByTestId('thread-scope')).toHaveText('Ngữ cảnh: Database');
@@ -271,8 +276,8 @@ test('mỗi môn một ô chat: ngữ cảnh khóa vào môn, tin sau vào đún
   await expect(page.locator('[data-role="user"]')).toHaveText(['tình hình thế nào']);
   await expect(page).toHaveURL(url);
   // Back in "Chung", the subject's messages are not there.
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  const links = page.getByTestId('threads').getByRole('link');
+  if (isMobile) await page.goto('/threads');
+  const links = page.getByTestId(isMobile ? 'thread-list' : 'threads').getByRole('link');
   await expect(links.nth(1)).toContainText('Database');
   await expect(links.nth(1)).toContainText('detail:Database');
   await links.first().click();

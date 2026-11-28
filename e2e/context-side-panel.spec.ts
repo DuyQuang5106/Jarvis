@@ -130,10 +130,10 @@ async function swipe(page: import('@playwright/test').Page, x1: number, x2: numb
   }, { x1, x2, y });
 }
 
-test('điện thoại: vuốt trái ở Chat mở Context, vuốt phải ở Context về Chat', async ({ page, isMobile }) => {
+test('điện thoại: vuốt giữa các tab, vuốt phải trong một ô chat để quay lại danh sách', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Chỉ có trên điện thoại');
-  await page.goto('/chat');
-  await expect(page.getByPlaceholder('Nhắn gì đó…')).toBeVisible();
+  await page.goto('/threads');
+  await expect(page.getByTestId('thread-list')).toBeVisible();
   // The swipe listener attaches after hydration: retry the first swipe until it lands.
   await expect(async () => {
     await swipe(page, 300, 60);
@@ -146,6 +146,12 @@ test('điện thoại: vuốt trái ở Chat mở Context, vuốt phải ở Con
   await expect(page).toHaveURL(/\/context/);
   await expect(async () => {
     await swipe(page, 60, 300);
-    await expect(page).toHaveURL(/\/chat/, { timeout: 1000 });
+    await expect(page).toHaveURL(/\/threads/, { timeout: 1000 });
+  }).toPass();
+  await page.goto('/chat');
+  await expect(page.getByPlaceholder('Nhắn gì đó…')).toBeVisible();
+  await expect(async () => {
+    await swipe(page, 60, 300);
+    await expect(page).toHaveURL(/\/threads/, { timeout: 1000 });
   }).toPass();
 });

@@ -3,10 +3,15 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-/** Chat is on the left, Context on the right: swiping left on Chat opens Context, swiping right goes back. */
+/**
+ * The tabs in their order (Hôm nay · Chat · Môn & dự án): swiping left goes to the next tab, right to the previous.
+ * Inside a chat, swiping right goes back to the list of chats.
+ */
 const NEXT: Record<string, { left?: string; right?: string }> = {
-  '/chat': { left: '/context' },
-  '/context': { right: '/chat' },
+  '/today': { left: '/threads' },
+  '/threads': { left: '/context', right: '/today' },
+  '/context': { right: '/threads' },
+  '/chat': { right: '/threads' },
 };
 
 const MIN_DISTANCE = 80;

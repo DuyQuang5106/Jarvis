@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { firstChars } from '@/lib/utils';
+import { cn, firstChars } from '@/lib/utils';
 import type { ContextScope } from '@/server/ai/context-builder';
 import type { DailyBrief } from '@/server/brief/daily-brief';
 import type { PendingCheckin } from '@/server/checkin/checkin';
@@ -329,14 +329,24 @@ export function ChatView({
   return (
     <div className="absolute inset-0 flex flex-col">
       <h1 className="sr-only">{thread?.kind === 'area' ? `Chat · ${thread.name}` : thread ? 'Chat · Chung' : 'Chat'}</h1>
-      {thread?.kind === 'area' && (
-        <div data-testid="thread-header" className="flex min-h-11 items-center gap-3 border-b px-4 pr-44 text-sm">
-          <span className="min-w-0 truncate font-medium">{thread.name}</span>
-          <Link href={`/context?item=${thread.areaId}`} className="shrink-0 text-primary underline-offset-4 hover:underline">
+      {/* Phone: every chat has a header with the way back to the list (the tab bar is hidden here). Wide screens
+          show it for a subject only: the sidebar is the list. */}
+      <div
+        data-testid="thread-header"
+        className={cn('flex min-h-11 items-center gap-2 border-b px-2 text-sm md:px-4 md:pr-44', thread?.kind !== 'area' && 'md:hidden')}
+      >
+        <Link href="/threads" aria-label="Về danh sách ô chat" className="flex size-11 shrink-0 items-center justify-center text-xl md:hidden">
+          ‹
+        </Link>
+        <span className="min-w-0 flex-1 truncate font-medium">
+          {thread?.kind === 'area' ? thread.name : thread ? 'Chung' : (title ?? 'Cuộc chat cũ')}
+        </span>
+        {thread?.kind === 'area' && (
+          <Link href={`/context?item=${thread.areaId}`} className="shrink-0 px-2 py-3 text-primary underline-offset-4 hover:underline">
             Xem môn
           </Link>
-        </div>
-      )}
+        )}
+      </div>
       {todayCards && (
         // One place for the day's cards, so they stay mounted (and keep what was answered) when the first message
         // arrives. Open while the thread is empty or something is waiting (a reminder, a check-in).
@@ -344,7 +354,8 @@ export function ChatView({
           data-testid="today-cards"
           open={todayOpen}
           onToggle={(e) => setTodayOpen(e.currentTarget.open)}
-          className="border-b px-4 py-1 text-sm"
+          // The phone has its own "Hôm nay" tab.
+          className="hidden border-b px-4 py-1 text-sm md:block"
         >
           <summary className="flex min-h-11 cursor-pointer items-center text-muted-foreground">Hôm nay: nhắc việc, check-in, gợi ý</summary>
           <div className="mx-auto flex max-h-[45dvh] w-full max-w-xl flex-col items-center gap-4 overflow-y-auto pb-3 text-center">{todayCards}</div>

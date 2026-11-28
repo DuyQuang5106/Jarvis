@@ -4,8 +4,7 @@ import { resetDb } from './helpers';
 test('đổi ngưỡng cũ và tải export', async ({ page, request, isMobile }) => {
   await resetDb(request, { seed: true });
   await page.goto('/context');
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: isMobile ? 'Cài đặt' : 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await dialog.getByLabel('Coi là cũ sau (ngày)').fill('10');
   await dialog.getByRole('button', { name: 'Lưu', exact: true }).click();
@@ -20,8 +19,7 @@ test('đổi ngưỡng cũ và tải export', async ({ page, request, isMobile }
 
 async function openSettings(page: import('@playwright/test').Page, isMobile: boolean) {
   await page.goto('/context');
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: isMobile ? 'Cài đặt' : 'Settings' }).click();
   return page.getByRole('dialog', { name: 'Settings' });
 }
 
@@ -43,7 +41,6 @@ for (const bad of ['0', '100']) {
 test('tải cài đặt lỗi: báo lỗi và Thử lại hoạt động', async ({ page, request, isMobile }) => {
   await resetDb(request, { seed: true });
   await page.goto('/context');
-  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click();
   let failed = false;
   await page.route('**/context**', async (route) => {
     const req = route.request();
@@ -53,7 +50,7 @@ test('tải cài đặt lỗi: báo lỗi và Thử lại hoạt động', async
     }
     return route.continue();
   });
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: isMobile ? 'Cài đặt' : 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await expect(dialog.getByRole('alert')).toBeVisible();
   await expect(dialog.getByLabel('Coi là cũ sau (ngày)')).toBeDisabled();

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { CONTEXT_ITEM_MESSAGE } from '@/lib/split-view';
+import { attentionAreas, focusItem } from '@/lib/overview';
 import type { AreaRow } from '@/db/schema';
 import type { AreaSummary } from '@/server/queries/snapshot';
 import type { AreaDetails, InboxNote } from '@/server/queries/area-details';
@@ -57,18 +58,8 @@ export function ContextView({
   );
   const stale = useMemo(() => areas.filter((a) => a.isStale), [areas]);
   // Off track first, then at risk; within each, the nearest date.
-  const attention = useMemo(() => {
-    const rank = (id: string) => (metrics.byArea[id]?.health?.level === 'off_track' ? 0 : 1);
-    return areas
-      .filter((a) => ['off_track', 'at_risk'].includes(metrics.byArea[a.id]?.health?.level ?? ''))
-      .sort((a, b) => rank(a.id) - rank(b.id) || (a.nearestDate?.daysLeft ?? Infinity) - (b.nearestDate?.daysLeft ?? Infinity));
-  }, [areas, metrics]);
-  const focus = useMemo(() => {
-    const a = attention[0];
-    const health = a ? metrics.byArea[a.id]?.health : null;
-    if (!a || !health) return null;
-    return { areaId: a.id, areaName: a.name, action: a.nextAction?.trim() || glance[a.id]?.tasks[0]?.title || null, reason: health.reason };
-  }, [attention, metrics, glance]);
+  const attention = useMemo(() => attentionAreas(areas, metrics.byArea), [areas, metrics]);
+  const focus = useMemo(() => focusItem(attention, metrics.byArea, glance), [attention, metrics, glance]);
 
   return (
     <div className="space-y-4">

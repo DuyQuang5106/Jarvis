@@ -23,7 +23,12 @@ type Form = {
   daySlots: DaySlots;
 };
 
-export function SettingsDialog() {
+/** `trigger`: the sidebar's "Settings" button, or a tab of the phone's tab bar. */
+/** Shared with the tab bar's links so the four tabs look the same. */
+export const TAB_CLASS =
+  'flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] text-muted-foreground outline-none focus-visible:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground';
+
+export function SettingsDialog({ trigger = 'sidebar' }: { trigger?: 'sidebar' | 'tab' } = {}) {
   const uid = useId();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
@@ -104,10 +109,17 @@ export function SettingsDialog() {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="ghost" className="min-h-11 flex-1 justify-start gap-2">
-          <Settings className="size-4" aria-hidden />
-          Settings
-        </Button>
+        {trigger === 'tab' ? (
+          <button type="button" className={TAB_CLASS}>
+            <Settings className="size-5" aria-hidden />
+            Cài đặt
+          </button>
+        ) : (
+          <Button variant="ghost" className="min-h-11 flex-1 justify-start gap-2">
+            <Settings className="size-4" aria-hidden />
+            Settings
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>

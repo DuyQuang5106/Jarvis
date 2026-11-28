@@ -19,15 +19,15 @@ async function openChat(page: Page) {
 /** Under load the first tap can land before hydration and the menu never opens: retry until Settings opens. */
 async function openSettings(page: Page, isMobile: boolean) {
   await expect(async () => {
-    const settings = page.getByRole('button', { name: 'Settings' });
-    if (isMobile && !(await settings.isVisible())) await page.getByRole('button', { name: 'Mở menu' }).click();
-    await settings.click({ timeout: 2000 });
+    // Phone: the "Cài đặt" tab; wide screens: the sidebar's "Settings".
+    await page.getByRole('button', { name: isMobile ? 'Cài đặt' : 'Settings' }).click({ timeout: 2000 });
   }).toPass({ timeout: 15_000 });
 }
 
 const marked = (page: Page) => page.waitForResponse((r) => r.url().endsWith('/api/checkin') && r.request().method() === 'POST');
 
-test('buổi không có hoạt động: câu hỏi → trả lời → tin nhắn đi qua Chat → tải lại không còn thẻ', async ({ page, request }) => {
+test('buổi không có hoạt động: câu hỏi → trả lời → tin nhắn đi qua Chat → tải lại không còn thẻ', async ({ isMobile, page, request }) => {
+  test.skip(isMobile, 'Điện thoại: các thẻ này nằm ở tab Hôm nay (today.spec.ts)');
   await resetDb(request, { seed: true, checkins: true });
   let gets = 0;
   page.on('request', (r) => { if (r.url().endsWith('/api/checkin') && r.method() === 'GET') gets++; });
@@ -61,7 +61,8 @@ test('buổi không có hoạt động: câu hỏi → trả lời → tin nhắ
   await expect(card(page)).toHaveCount(0);
 });
 
-test('buổi có hoạt động: tóm tắt → tải lại không sinh lại → "Ghi lại" → thẻ đề xuất', async ({ page, request }) => {
+test('buổi có hoạt động: tóm tắt → tải lại không sinh lại → "Ghi lại" → thẻ đề xuất', async ({ isMobile, page, request }) => {
+  test.skip(isMobile, 'Điện thoại: các thẻ này nằm ở tab Hôm nay (today.spec.ts)');
   await resetDb(request, {
     seed: true,
     checkins: true,
@@ -98,6 +99,7 @@ test('buổi có hoạt động: tóm tắt → tải lại không sinh lại �
 });
 
 test('Bỏ qua thì không hỏi lại; tắt check-in trong Settings thì không có thẻ', async ({ page, request, isMobile }) => {
+  test.skip(isMobile, 'Điện thoại: các thẻ này nằm ở tab Hôm nay (today.spec.ts)');
   await resetDb(request, { seed: true, checkins: true });
   await openChat(page);
   await expect(page.getByTestId('daily-brief-task')).toHaveCount(3, { timeout: 15_000 }); // generated after hydration
